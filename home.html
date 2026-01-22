@@ -22,7 +22,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        // PASTE YOUR CONFIG HERE
+        // PASTE YOUR FIREBASE CONFIG HERE
         const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "SENDER_ID", appId: "APP_ID" };
         const app = initializeApp(firebaseConfig); window.db = getDatabase(app); window.fb = { get, ref, child };
     </script>
@@ -71,31 +71,28 @@
 
             const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
 
-            // --- RESTRUCTURED NAVIGATION LOGIC ---
+            // --- CORRECTED NAVIGATION LOGIC ---
             const handleNav = (moduleId) => {
                 const module = MODULES.find(m => m.id === moduleId);
                 
                 // 1. Permission Check
                 if (module.admin && session.role !== 'Owner') { alert("Access Denied: Owner permissions required."); return; }
 
-                // 2. Routing with Context
+                // 2. Routing (CLEAN LINKS)
                 switch(moduleId) {
                     case 'incidents':
-                        // --- UPDATED: No URL Parameter ---
-                        // This allows the user to select the site freely inside the module
-                        window.location.href = 'incidents.html'; 
+                        window.location.href = 'incidents.html'; // No URL parameters!
                         break;
                     case 'sites':
-                        window.location.href = 'sites.html'; // Admin tool
+                        window.location.href = 'sites.html'; 
                         break;
                     case 'users':
-                        window.location.href = 'users.html'; // Admin tool
+                        window.location.href = 'users.html';
                         break;
                     case 'risk':
-                        window.location.href = `risk.html?site=${selectedSite}`; // Passes Context
+                        window.location.href = `risk.html?site=${selectedSite}`; // Risk still needs context
                         break;
                     default:
-                        // Placeholder for unbuilt modules
                         alert(`${module.label} module is coming soon.`);
                 }
             };
@@ -106,14 +103,11 @@
             return (
                 <div className="flex flex-col h-screen bg-slate-950 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
-                    {/* HEADER */}
                     <header className="h-16 px-6 flex items-center justify-between z-20 backdrop-blur-sm bg-slate-900/50 border-b border-white/5">
                         <div className="flex items-center gap-4">
                             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg"><i className="fas fa-shield-halved"></i></div>
                             <h1 className="text-base font-bold text-white hidden md:block">ISO 45001 Hub</h1>
                             <div className="h-6 w-[1px] bg-slate-700 mx-2 hidden md:block"></div>
-                            
-                            {/* Site Switcher */}
                             <div className="relative" ref={dropdownRef}>
                                 <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="flex items-center gap-2 text-xs font-bold bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:text-white hover:border-blue-500 transition-all w-48 justify-between">
                                     <span className="flex items-center gap-2 truncate"><i className="fas fa-location-dot text-emerald-400"></i>{selectedSite === 'GLOBAL' ? 'Global View' : (data.sites.find(s=>s.code===selectedSite)?.name || selectedSite)}</span>
@@ -135,10 +129,7 @@
                         </div>
                     </header>
                     <main className="flex-1 overflow-y-auto p-8 z-10 max-w-7xl mx-auto w-full">
-                        <div className="mb-8">
-                            <h2 className="text-3xl font-bold text-white mb-2">Enterprise Modules</h2>
-                            <p className="text-slate-400 text-sm">Context: <span className="text-emerald-400 font-bold px-2 py-0.5 bg-emerald-400/10 rounded border border-emerald-400/20">{selectedSite === 'GLOBAL' ? 'Global Organization' : selectedSite}</span></p>
-                        </div>
+                        <div className="mb-8"><h2 className="text-3xl font-bold text-white mb-2">Enterprise Modules</h2><p className="text-slate-400 text-sm">Context: <span className="text-emerald-400 font-bold px-2 py-0.5 bg-emerald-400/10 rounded border border-emerald-400/20">{selectedSite === 'GLOBAL' ? 'Global Organization' : selectedSite}</span></p></div>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                             {MODULES.map(module => <NavCard key={module.id} module={module} onClick={() => handleNav(module.id)} />)}
                         </div>
