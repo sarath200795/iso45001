@@ -32,6 +32,9 @@
         .animate-delay-2 { animation-delay: 0.2s; opacity: 0; }
         .animate-delay-3 { animation-delay: 0.3s; opacity: 0; }
         .animate-delay-4 { animation-delay: 0.4s; opacity: 0; }
+        
+        /* Custom Select Styling */
+        select option { background-color: #0f172a; color: white; }
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen">
@@ -42,6 +45,12 @@
 
         const Dashboard = () => {
             const [session, setSession] = useState(null);
+            
+            // Site Context State
+            // Defaults to localStorage value or 'HQ' if nothing is set
+            const [activeSite, setActiveSite] = useState(localStorage.getItem('siteId') || 'HQ');
+            const [availableSites, setAvailableSites] = useState(['HQ']);
+
             const [stats, setStats] = useState({
                 totalDocs: 0,
                 draftDocs: 0,
@@ -51,8 +60,8 @@
                 totalUsers: 0,
                 totalSites: 0
             });
-            const [recentActivity, setRecentActivity] = useState([]);
 
+            // 1. Initialize Data
             useEffect(() => {
                 // Auth Check
                 const sessInfo = sessionStorage.getItem('isoSession');
@@ -63,10 +72,21 @@
                 const sess = JSON.parse(sessInfo);
                 setSession(sess);
 
-                // Load Stats
+                // Load Database to get Sites
                 const dbKey = `ISO_DB_${sess.orgId}`;
                 const db = JSON.parse(localStorage.getItem(dbKey) || '{}');
+                
+                // Populate Sites Dropdown
+                // If sites exist in DB, use them, otherwise keep default ['HQ']
+                if (db.sites && db.sites.length > 0) {
+                    const siteCodes = db.sites.map(s => s.code);
+                    // Ensure HQ is always an option or strictly use DB sites? 
+                    // Usually HQ is implicit, but let's append if not present or just use DB.
+                    // For safety, we'll merge 'HQ' if the list is empty, otherwise use list.
+                    setAvailableSites(['HQ', ...siteCodes.filter(s => s !== 'HQ')]);
+                }
 
+                // Load operational data
                 const docs = JSON.parse(localStorage.getItem('isoDocuments')) || [];
                 const incidents = JSON.parse(localStorage.getItem('isoIncidents')) || [];
                 const audits = JSON.parse(localStorage.getItem('isoAudits')) || [];
@@ -84,13 +104,19 @@
                     totalSites: (db.sites || []).length
                 });
 
-                // Build recent activity
-                const activities = [];
-                incidents.slice(0, 3).forEach(i => activities.push({ type: 'incident', text: `${i.type} reported at ${i.location}`, time: i.date, icon: 'fa-exclamation-triangle', color: 'text-red-500 bg-red-50' }));
-                audits.slice(0, 2).forEach(a => activities.push({ type: 'audit', text: `${a.type} audit: ${a.area}`, time: a.date, icon: 'fa-clipboard-check', color: 'text-blue-500 bg-blue-50' }));
-                setRecentActivity(activities.slice(0, 5));
+                // Ensure localStorage is synced immediately with the default/active site
+                localStorage.setItem('siteId', activeSite);
 
             }, []);
+
+            // 2. Handle Site Switch
+            const handleSiteChange = (e) => {
+                const newSite = e.target.value;
+                setActiveSite(newSite);
+                // CRITICAL: Save to localStorage so other pages (index4/5) read this value
+                localStorage.setItem('siteId', newSite);
+                // Optional: Reload logic here if stats depend on site specific data
+            };
 
             const handleLogout = () => {
                 sessionStorage.removeItem('isoSession');
@@ -136,51 +162,71 @@
                     
                     {/* Header */}
                     <header className="bg-slate-900 text-white">
-                        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                            <div className="flex items-center gap-4">
+                        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                            
+                            {/* Logo & Org */}
+                            <div className="flex items-center gap-4 w-full md:w-auto">
                                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center font-bold text-sm shadow-lg shadow-blue-500/20">ISO</div>
                                 <div>
                                     <h1 className="text-lg font-bold tracking-tight">{session.orgName || 'OH&S Management'}</h1>
                                     <p className="text-xs text-slate-400 font-mono">{session.orgId}</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-6">
-                                <div className="text-right hidden md:block">
-                                    <div className="text-sm font-medium text-slate-200">{session.user}</div>
-                                    <div className="text-xs text-blue-400 font-mono">{session.role}</div>
+
+                            {/* Site Selector & User Profile */}
+                            <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+                                
+                                {/* SITE SELECTOR */}
+                                <div className="flex items-center gap-2 bg-slate-800/80 rounded-lg p-1 border border-slate-700">
+                                    <div className="px-3 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                        <i className="fas fa-location-dot mr-1"></i> Site:
+                                    </div>
+                                    <select 
+                                        value={activeSite} 
+                                        onChange={handleSiteChange}
+                                        className="bg-transparent text-white text-sm font-bold focus:outline-none cursor-pointer py-1 pr-2"
+                                    >
+                                        {availableSites.map(site => (
+                                            <option key={site} value={site}>{site}</option>
+                                        ))}
+                                    </select>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <button className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
-                                        <i className="fas fa-bell"></i>
-                                    </button>
-                                    <button onClick={handleLogout} className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors">
-                                        <i className="fas fa-right-from-bracket"></i>
-                                    </button>
+
+                                <div className="flex items-center gap-4">
+                                    <div className="text-right hidden md:block">
+                                        <div className="text-sm font-medium text-slate-200">{session.user}</div>
+                                        <div className="text-xs text-blue-400 font-mono">{session.role}</div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={handleLogout} className="w-9 h-9 bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors border border-slate-700">
+                                            <i className="fas fa-right-from-bracket text-xs"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
                         {/* Sub-nav */}
                         <div className="bg-slate-800/50 border-t border-slate-700/50">
-                            <div className="max-w-7xl mx-auto px-6 py-3 flex gap-8">
-                                <a href="home.html" className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                            <div className="max-w-7xl mx-auto px-6 py-3 flex gap-8 overflow-x-auto">
+                                <a href="home.html" className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
                                     <i className="fas fa-home"></i> Dashboard
                                 </a>
-                                <a href="index5.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
+                                <a href="index5.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
                                     <i className="fas fa-users-cog"></i> Leadership
                                 </a>
-                                <a href="archive.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
+                                <a href="archive.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
                                     <i className="fas fa-folder-open"></i> Documents
                                 </a>
-                                <a href="index6.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
+                                <a href="index6.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
                                     <i className="fas fa-chart-line"></i> Performance
                                 </a>
                                 {session.role === 'Owner' && (
                                     <>
-                                        <a href="users.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
+                                        <a href="users.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
                                             <i className="fas fa-users"></i> Users
                                         </a>
-                                        <a href="sites.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors">
+                                        <a href="sites.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
                                             <i className="fas fa-building"></i> Sites
                                         </a>
                                     </>
@@ -195,10 +241,15 @@
                         {/* Welcome Banner */}
                         <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 mb-8 text-white relative overflow-hidden animate-fade-up">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-                            <div className="relative">
+                            <div className="relative z-10">
                                 <p className="text-blue-400 text-sm font-medium mb-1">Welcome back,</p>
                                 <h2 className="text-2xl font-bold mb-2">{session.user}</h2>
-                                <p className="text-slate-400 text-sm max-w-lg">Manage your organization's occupational health and safety system. Track incidents, audits, and continuous improvements.</p>
+                                <p className="text-slate-400 text-sm max-w-lg mb-4">Manage your organization's occupational health and safety system.</p>
+                                
+                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full border border-white/10 text-xs font-mono">
+                                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                                    Active Context: <span className="text-white font-bold">{session.orgId} - {activeSite}</span>
+                                </div>
                             </div>
                         </div>
 
@@ -279,7 +330,7 @@
                         <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
                             <div className="mb-6 md:mb-0">
                                 <h3 className="text-xl font-bold mb-2">Quick Actions</h3>
-                                <p className="text-slate-400 text-sm max-w-md">Report hazards immediately or create new procedures to keep your team safe.</p>
+                                <p className="text-slate-400 text-sm max-w-md">Actions performed here will be tagged with: <strong>{activeSite}</strong></p>
                             </div>
                             <div className="flex gap-4">
                                 <a href="index6.html" className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-lg flex items-center gap-2">
@@ -299,7 +350,7 @@
                             <p>
                                 <span className="inline-flex items-center gap-1">
                                     <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                                    System Online
+                                    System Online: {session.orgId} / {activeSite}
                                 </span>
                             </p>
                         </div>
