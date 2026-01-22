@@ -34,6 +34,8 @@
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         #google-map { width: 100%; height: 100%; border-radius: 0.75rem; }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; } 
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="min-h-screen flex flex-col overflow-hidden">
@@ -46,8 +48,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, set, update, remove, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, get, set, update, remove, child, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
+        // --- FIREBASE CONFIG ---
         const firebaseConfig = {
             apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
             authDomain: "ohsms-fa534.firebaseapp.com",
@@ -60,7 +63,7 @@
 
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
-        window.fb = { get, ref, set, update, remove, child };
+        window.fb = { get, ref, set, update, remove, child, push };
     </script>
 
     <script type="text/babel">
@@ -84,7 +87,6 @@
             const mapContainerRef = useRef(null);
             const [selectedLocation, setSelectedLocation] = useState(null);
             const [mapInstance, setMapInstance] = useState(null);
-            const [markerInstance, setMarkerInstance] = useState(null);
             const [loadingLoc, setLoadingLoc] = useState(false);
 
             useEffect(() => {
@@ -117,28 +119,20 @@
                 const lng = latLng.lng();
                 const loc = { lat, lng };
 
-                // Handle Marker - using a simpler approach for React/Google Maps closure
-                // We clear ALL markers from the map instance by clearing the previous one stored in ref if possible, 
-                // but since we are re-rendering, let's just create a new one and let the user see it update.
-                // For a robust app, we'd store marker in a useRef to clear it.
-                // Here we use a query selector hack to clear visual clutter if needed, or just let the user move it.
-                
-                // Better approach: remove old marker using state logic
-                if (window.currentMarker) window.currentMarker.setMap(null); // Global temp hack for this component instance
+                if (window.currentMarker) window.currentMarker.setMap(null);
                 
                 const newMarker = new google.maps.Marker({
                     position: loc,
                     map: map,
                     animation: google.maps.Animation.DROP
                 });
-                window.currentMarker = newMarker; // Store ref globally for this session
+                window.currentMarker = newMarker;
 
                 const geocoder = new google.maps.Geocoder();
                 geocoder.geocode({ location: loc }, (results, status) => {
                     const addr = (status === "OK" && results[0]) ? results[0].formatted_address : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
                     setSelectedLocation({ lat, lng, address: addr });
                 });
-                
                 map.panTo(latLng);
             };
 
@@ -147,23 +141,14 @@
                     setLoadingLoc(true);
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
-                            const pos = {
-                                lat: position.coords.latitude,
-                                lng: position.coords.longitude,
-                            };
-                            const latLng = new google.maps.LatLng(pos.lat, pos.lng);
+                            const latLng = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
                             placeMarkerAndPanTo(latLng, mapInstance);
                             mapInstance.setZoom(15);
                             setLoadingLoc(false);
                         },
-                        () => {
-                            alert("Error: The Geolocation service failed.");
-                            setLoadingLoc(false);
-                        }
+                        () => { alert("Geolocation failed."); setLoadingLoc(false); }
                     );
-                } else {
-                    alert("Error: Your browser doesn't support geolocation.");
-                }
+                } else { alert("Browser doesn't support geolocation."); }
             };
 
             return (
@@ -176,7 +161,6 @@
                         <div className="flex-1 relative bg-slate-800">
                             <div ref={mapContainerRef} id="google-map"></div>
                             
-                            {/* Overlay Controls */}
                             <div className="absolute bottom-6 left-6 right-6 z-[100] flex justify-between items-end pointer-events-none">
                                 <div className="flex gap-4 items-end w-full">
                                     <div className="bg-slate-900/90 backdrop-blur p-4 rounded-xl border border-slate-700 shadow-xl pointer-events-auto flex-1 max-w-md">
@@ -190,27 +174,129 @@
                                             <div className="text-slate-500 text-sm italic">Click map or use 'My Location'</div>
                                         )}
                                     </div>
-
                                     <div className="flex gap-2 pointer-events-auto">
-                                        <button 
-                                            onClick={handleCurrentLocation} 
-                                            className="h-12 w-12 rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-xl flex items-center justify-center transition-all border border-slate-600"
-                                            title="Use Current Location"
-                                        >
+                                        <button onClick={handleCurrentLocation} className="h-12 w-12 rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-xl flex items-center justify-center border border-slate-600">
                                             {loadingLoc ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-crosshairs"></i>}
                                         </button>
-                                        <button 
-                                            onClick={() => selectedLocation && onConfirm(selectedLocation)} 
-                                            disabled={!selectedLocation} 
-                                            className={`px-6 h-12 rounded-xl font-bold shadow-xl transition-all flex items-center ${selectedLocation ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
-                                        >
-                                            Confirm <i className="fas fa-check ml-2"></i>
-                                        </button>
+                                        <button onClick={() => selectedLocation && onConfirm(selectedLocation)} disabled={!selectedLocation} className={`px-6 h-12 rounded-xl font-bold shadow-xl transition-all ${selectedLocation ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>Confirm <i className="fas fa-check ml-2"></i></button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
+            );
+        };
+
+        // --- NAV CARD COMPONENT ---
+        const NavCard = ({ module, onClick }) => (
+            <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group cursor-pointer flex flex-col h-40 justify-between">
+                <div className="card-glow"></div>
+                <div className="relative z-10 flex justify-between items-start">
+                    <div className={`w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-lg shadow-lg ${module.color}`}><i className={`fas ${module.icon}`}></i></div>
+                    {module.admin && <span className="text-[9px] font-bold uppercase bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Admin</span>}
+                </div>
+                <div className="relative z-10">
+                    <h3 className="text-base font-bold text-white mb-0.5 group-hover:text-blue-400 transition-colors">{module.label}</h3>
+                    <p className="text-[10px] text-slate-400">{module.desc}</p>
+                </div>
+            </div>
+        );
+
+        // --- SITE SELECTOR MODAL ---
+        const SiteSelectorModal = ({ sites, onSelect, onClose }) => (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                <div className="bg-slate-900 border border-slate-700 p-8 rounded-2xl max-w-lg w-full shadow-2xl relative">
+                    <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white"><i className="fas fa-times"></i></button>
+                    <div className="text-center mb-6">
+                        <div className="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl"><i className="fas fa-location-dot"></i></div>
+                        <h2 className="text-xl font-bold text-white">Select a Site</h2>
+                        <p className="text-sm text-slate-400 mt-2">Select a site to access this module.</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto pr-2">
+                        {sites.map(s => (
+                            <button key={s.code} onClick={() => onSelect(s.code)}
+                                className="w-full text-left p-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-500 transition-all group">
+                                <div className="flex justify-between items-center">
+                                    <span className="font-bold text-white group-hover:text-blue-400">{s.name}</span>
+                                    <span className="text-xs bg-slate-900 px-2 py-1 rounded text-slate-400 font-mono">{s.code}</span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1">{s.locationName}</p>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+
+        // --- USER MANAGEMENT MODULE ---
+        const UserModule = ({ session, users, sites, requests, refresh }) => {
+            if(session.role !== 'Owner') return <div className="p-10 text-center text-red-400">Access Denied</div>;
+            const [tab, setTab] = useState('active');
+            const [selected, setSelected] = useState(null);
+
+            const handleApprove = async (reqId, reqData) => {
+                const updates = {};
+                updates[`organizations/${session.orgId}/users/${reqData.uid}/role`] = reqData.requestedRole;
+                updates[`organizations/${session.orgId}/users/${reqData.uid}/assignedSite`] = reqData.requestedSite;
+                updates[`organizations/${session.orgId}/users/${reqData.uid}/status`] = 'Active';
+                updates[`organizations/${session.orgId}/accessRequests/${reqId}`] = null;
+                await window.fb.update(window.fb.ref(window.db), updates);
+                refresh();
+            };
+
+            const updateUser = async (uid, role, site) => {
+                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/users/${uid}`), { role, assignedSite: site });
+                refresh(); setSelected(null);
+            };
+
+            return (
+                <div className="animate-fade-in space-y-6">
+                    <div className="flex gap-4 border-b border-slate-700 pb-2">
+                        <button onClick={() => setTab('active')} className={`text-sm font-bold pb-2 ${tab === 'active' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400'}`}>Directory</button>
+                        <button onClick={() => setTab('requests')} className={`text-sm font-bold pb-2 flex items-center gap-2 ${tab === 'requests' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400'}`}>
+                            Requests {requests.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{requests.length}</span>}
+                        </button>
+                    </div>
+                    {tab === 'requests' && (
+                        <div className="space-y-3">
+                            {requests.length === 0 && <p className="text-slate-500 text-sm">No pending requests.</p>}
+                            {requests.map(req => (
+                                <div key={req.id} className="glass-panel p-4 rounded-xl flex justify-between items-center border-l-4 border-orange-400">
+                                    <div><h4 className="font-bold text-sm">{req.userName}</h4><p className="text-xs text-slate-400">Wants: <span className="text-white">{req.requestedRole}</span> at <span className="text-white">{req.requestedSite || 'Global'}</span></p></div>
+                                    <button onClick={() => handleApprove(req.id, req)} className="px-3 py-1 bg-blue-600 rounded text-xs font-bold hover:bg-blue-500">Approve</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {tab === 'active' && (
+                        <div className="glass-panel p-6 rounded-2xl">
+                            <table className="w-full text-left text-sm">
+                                <thead className="text-xs uppercase text-slate-500 border-b border-slate-700"><tr><th className="pb-3">User</th><th className="pb-3">Role</th><th className="pb-3">Site</th><th className="pb-3 text-right">Edit</th></tr></thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {users.map(u => (
+                                        <tr key={u.id}>
+                                            <td className="py-3 font-bold">{u.name}<div className="text-[10px] text-slate-500 font-normal">{u.email}</div></td>
+                                            <td className="py-3"><span className="bg-slate-800 px-2 py-1 rounded text-xs">{u.role}</span></td>
+                                            <td className="py-3 text-slate-400">{u.assignedSite || 'Global'}</td>
+                                            <td className="py-3 text-right"><button onClick={()=>setSelected(u)} className="text-blue-400 hover:text-white"><i className="fas fa-pen"></i></button></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    {selected && (
+                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                            <div className="glass-panel bg-slate-900 p-6 rounded-2xl w-80">
+                                <h3 className="font-bold mb-4">Edit {selected.name}</h3>
+                                <select id="role" className="w-full bg-slate-800 mb-3 p-2 rounded text-white text-sm">{['Worker','Supervisor','Manager','Auditor'].map(r=><option key={r} value={r}>{r}</option>)}</select>
+                                <select id="site" className="w-full bg-slate-800 mb-4 p-2 rounded text-white text-sm"><option value="">Global</option>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select>
+                                <button onClick={() => updateUser(selected.id, document.getElementById('role').value, document.getElementById('site').value)} className="w-full bg-blue-600 py-2 rounded font-bold text-sm">Save</button>
+                                <button onClick={() => setSelected(null)} className="w-full mt-2 text-slate-400 text-xs">Cancel</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -298,49 +384,11 @@
             );
         };
 
-        const NavCard = ({ module, onClick }) => (
-            <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group cursor-pointer flex flex-col h-40 justify-between">
-                <div className="card-glow"></div>
-                <div className="relative z-10 flex justify-between items-start">
-                    <div className={`w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-lg shadow-lg ${module.color}`}><i className={`fas ${module.icon}`}></i></div>
-                    {module.admin && <span className="text-[9px] font-bold uppercase bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Admin</span>}
-                </div>
-                <div className="relative z-10">
-                    <h3 className="text-base font-bold text-white mb-0.5 group-hover:text-blue-400 transition-colors">{module.label}</h3>
-                    <p className="text-[10px] text-slate-400">{module.desc}</p>
-                </div>
-            </div>
-        );
-
-        const SiteSelectorModal = ({ sites, onSelect, onClose }) => (
-            <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-                <div className="bg-slate-900 border border-slate-700 p-8 rounded-2xl max-w-lg w-full shadow-2xl relative">
-                    <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white"><i className="fas fa-times"></i></button>
-                    <div className="text-center mb-6">
-                        <div className="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl"><i className="fas fa-location-dot"></i></div>
-                        <h2 className="text-xl font-bold text-white">Select a Site</h2>
-                        <p className="text-sm text-slate-400 mt-2">Select a site to access this module.</p>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto pr-2">
-                        {sites.map(s => (
-                            <button key={s.code} onClick={() => onSelect(s.code)}
-                                className="w-full text-left p-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-500 transition-all group">
-                                <div className="flex justify-between items-center">
-                                    <span className="font-bold text-white group-hover:text-blue-400">{s.name}</span>
-                                    <span className="text-xs bg-slate-900 px-2 py-1 rounded text-slate-400 font-mono">{s.code}</span>
-                                </div>
-                                <p className="text-xs text-slate-500 mt-1">{s.locationName}</p>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        );
-
+        // --- ROOT APP ---
         const App = () => {
             const [session, setSession] = useState(null);
             const [view, setView] = useState('hub');
-            const [data, setData] = useState({ sites: [] });
+            const [data, setData] = useState({ sites: [], users: [], requests: [] });
             const [selectedSite, setSelectedSite] = useState('GLOBAL');
             const [promptModal, setPromptModal] = useState(null);
             const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -353,6 +401,7 @@
                 setSession(sess);
                 if(sess.role !== 'Owner' && sess.assignedSite) setSelectedSite(sess.assignedSite);
                 fetchData(sess.orgId);
+
                 const handleClickOutside = (event) => {
                     if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                         setIsDropdownOpen(false);
@@ -367,27 +416,53 @@
                 const snapshot = await window.fb.get(window.fb.child(dbRef, `organizations/${orgId}`));
                 if (snapshot.exists()) {
                     const val = snapshot.val();
-                    setData({ sites: val.sites ? Object.values(val.sites) : [] });
+                    setData({
+                        sites: val.sites ? Object.values(val.sites) : [],
+                        users: val.users ? Object.values(val.users) : [],
+                        requests: val.accessRequests ? Object.entries(val.accessRequests).map(([k,v]) => ({id:k, ...v})) : []
+                    });
                 }
             };
 
             const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
 
+            // --- SMART NAVIGATION LOGIC ---
             const handleNav = (moduleId) => {
                 const module = MODULES.find(m => m.id === moduleId);
+                
+                // Dashboard is always safe
                 if (moduleId === 'dashboard') { setView(moduleId); return; }
+
+                // Check permissions
                 if (session.role === 'Owner' && selectedSite === 'GLOBAL' && !module.allowGlobal) {
                     setPromptModal(moduleId);
                     return;
                 }
                 if (session.role !== 'Owner' && !session.assignedSite) { alert("Access Denied: No Site Assigned."); return; }
+
+                // *** CONNECTION TO INCIDENTS PAGE ***
+                if (moduleId === 'incidents') {
+                    // Pass the context if needed via query params or session storage (not needed if using same storage)
+                    window.location.href = 'incidents.html';
+                    return;
+                }
+
+                // Internal Modules
                 setView(moduleId);
             };
 
             const handleSiteSelect = (siteCode) => {
                 setSelectedSite(siteCode);
                 setIsDropdownOpen(false);
-                if (promptModal) { setView(promptModal); setPromptModal(null); }
+                if (promptModal) {
+                    // If prompted for incidents, navigate now
+                    if(promptModal === 'incidents') {
+                        window.location.href = 'incidents.html';
+                    } else {
+                        setView(promptModal);
+                    }
+                    setPromptModal(null);
+                }
             };
 
             if (!session) return null;
@@ -448,7 +523,9 @@
                             </div>
                         )}
                         {view === 'sites' && <SiteModule session={session} sites={data.sites} refresh={() => fetchData(session.orgId)} />}
-                        {view !== 'hub' && view !== 'sites' && (
+                        {view === 'users' && <UserModule session={session} users={data.users} sites={data.sites} requests={data.requests} refresh={() => fetchData(session.orgId)} />}
+                        
+                        {view !== 'hub' && view !== 'sites' && view !== 'users' && (
                             <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
                                 <div className="w-20 h-20 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-6 text-3xl text-slate-600"><i className={`fas ${MODULES.find(m=>m.id===view).icon}`}></i></div>
                                 <h2 className="text-2xl font-bold text-white mb-2">{MODULES.find(m=>m.id===view).label}</h2>
@@ -463,6 +540,5 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
-    <style>.animate-fade-in { animation: fadeIn 0.4s ease-out; } @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }</style>
 </body>
 </html>
