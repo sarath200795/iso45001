@@ -29,11 +29,6 @@
         .glass-panel:hover { border-color: rgba(59, 130, 246, 0.3); transform: translateY(-2px); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); }
         .card-glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.1), transparent 70%); opacity: 0; transition: opacity 0.3s; }
         .glass-panel:hover .card-glow { opacity: 1; }
-        
-        /* Dropdown Animation */
-        .dropdown-enter { opacity: 0; transform: translateY(-10px); }
-        .dropdown-enter-active { opacity: 1; transform: translateY(0); transition: opacity 200ms, transform 200ms; }
-        
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
@@ -64,20 +59,16 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- MODULE CONFIGURATION ---
         const MODULES = [
             { id: 'dashboard', label: 'Dashboard', desc: 'KPIs & Stats', icon: 'fa-chart-pie', color: 'text-purple-400', allowGlobal: true },
             { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
             { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
             { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' },
             { id: 'improvement', label: 'Improvement', desc: 'CAPA Tracking', icon: 'fa-chart-line', color: 'text-blue-400' },
-            { id: 'consultation', label: 'Participation', desc: 'Committees', icon: 'fa-comments', color: 'text-teal-400' },
-            { id: 'doc_gen', label: 'Doc Gen', desc: 'Reports', icon: 'fa-file-signature', color: 'text-indigo-400' },
             { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true, allowGlobal: true },
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true, allowGlobal: true },
         ];
 
-        // --- COMPONENT: NAV CARD ---
         const NavCard = ({ module, onClick }) => (
             <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group cursor-pointer flex flex-col h-40 justify-between">
                 <div className="card-glow"></div>
@@ -94,7 +85,6 @@
             </div>
         );
 
-        // --- MAIN APP ---
         const App = () => {
             const [session, setSession] = useState(null);
             const [data, setData] = useState({ sites: [] });
@@ -102,88 +92,73 @@
             const [isDropdownOpen, setIsDropdownOpen] = useState(false);
             const dropdownRef = useRef(null);
 
-            // 1. Auth Check & Data Load
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if (!s) { window.location.href = "index.html"; return; }
                 const sess = JSON.parse(s);
                 setSession(sess);
+                if(sess.role !== 'Owner' && sess.assignedSite) setSelectedSite(sess.assignedSite);
                 
-                // Set default site context
-                if(sess.role !== 'Owner' && sess.assignedSite) {
-                    setSelectedSite(sess.assignedSite);
-                }
-                
-                // Fetch Sites from Firebase
                 const dbRef = window.fb.ref(window.db);
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}`)).then((snap) => {
                     if (snap.exists()) {
                         const val = snap.val();
-                        setData({ 
-                            sites: val.sites ? Object.values(val.sites) : [] 
-                        });
+                        setData({ sites: val.sites ? Object.values(val.sites) : [] });
                     }
                 });
 
-                // Close dropdown on outside click
                 document.addEventListener("mousedown", (e) => {
-                    if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-                        setIsDropdownOpen(false);
-                    }
+                    if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsDropdownOpen(false);
                 });
             }, []);
 
             const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
 
-            // 2. Navigation Logic (The Connector)
+            // --- NAVIGATION LOGIC (FIXED) ---
             const handleNav = (moduleId) => {
                 const module = MODULES.find(m => m.id === moduleId);
                 
-                // A. Admin Permission Check
-                if (module.admin && session.role !== 'Owner') {
-                    alert("Access Denied: You need Owner permissions for this module.");
+                // 1. Check if Owner needs to select a site
+                if (session.role === 'Owner' && selectedSite === 'GLOBAL' && !module.allowGlobal) {
+                    alert("Please select a specific Site from the dropdown above to enter this module.");
                     return;
                 }
 
-                // B. Context Check (If Owner tries to open operational module while in Global view)
-                if (session.role === 'Owner' && selectedSite === 'GLOBAL' && !module.allowGlobal) {
-                    alert("⚠️ Action Required:\n\nPlease select a specific Site from the top dropdown to enter this module.");
+                // 2. Check if user has permission
+                if (module.admin && session.role !== 'Owner') {
+                    alert("Access Denied: Owner permissions required.");
                     return;
                 }
-                
-                // C. Redirects to External Pages
-                switch(moduleId) {
-                    case 'sites':
-                        window.location.href = 'sites.html';
-                        break;
-                    case 'users':
-                        window.location.href = 'users.html';
-                        break;
-                    case 'incidents':
-                        window.location.href = `incidents.html?site=${selectedSite}`;
-                        break;
-                    case 'risk':
-                        window.location.href = `risk.html?site=${selectedSite}`; // Placeholder if risk.html exists
-                        break;
-                    case 'dashboard':
-                        // Stay here (Dashboard view to be built later inside Home)
-                        alert("Dashboard View coming soon!");
-                        break;
-                    default:
-                        alert(`Module "${module.label}" is currently under construction.`);
+
+                // 3. REDIRECTION LOGIC
+                if (moduleId === 'incidents') {
+                    // Force browser to load the new file
+                    window.location.href = `incidents.html?site=${selectedSite}`;
+                    return;
                 }
+                if (moduleId === 'sites') {
+                    window.location.href = 'sites.html';
+                    return;
+                }
+                if (moduleId === 'users') {
+                    window.location.href = 'users.html';
+                    return;
+                }
+                if (moduleId === 'risk') {
+                    window.location.href = `risk.html?site=${selectedSite}`;
+                    return;
+                }
+
+                // 4. Fallback for internal views
+                alert(`${module.label} module is currently under construction.`);
             };
 
             if (!session) return null;
 
-            // Logic: Owners see ALL sites. Users see ONLY assigned sites.
-            const visibleSites = session.role === 'Owner' 
-                ? data.sites 
-                : data.sites.filter(s => s.code === session.assignedSite || (session.accessibleSites && session.accessibleSites.includes(s.code)));
+            const visibleSites = session.role === 'Owner' ? data.sites : data.sites.filter(s => s.code === session.assignedSite);
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 relative overflow-hidden">
-                    {/* Background Decor */}
                     <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
                     {/* HEADER */}
@@ -193,15 +168,10 @@
                                 <i className="fas fa-shield-halved"></i>
                             </div>
                             <h1 className="text-base font-bold text-white hidden md:block">ISO 45001 Hub</h1>
-                            
                             <div className="h-6 w-[1px] bg-slate-700 mx-2 hidden md:block"></div>
                             
-                            {/* SITE DROPDOWN */}
                             <div className="relative" ref={dropdownRef}>
-                                <button 
-                                    onClick={() => setIsDropdownOpen(!isDropdownOpen)} 
-                                    className="flex items-center gap-2 text-xs font-bold bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:text-white hover:border-blue-500 transition-all w-48 justify-between"
-                                >
+                                <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="flex items-center gap-2 text-xs font-bold bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:text-white hover:border-blue-500 transition-all w-48 justify-between">
                                     <span className="flex items-center gap-2 truncate">
                                         <i className="fas fa-location-dot text-emerald-400"></i>
                                         {selectedSite === 'GLOBAL' ? 'Global View' : (data.sites.find(s=>s.code===selectedSite)?.name || selectedSite)}
@@ -212,20 +182,13 @@
                                 {isDropdownOpen && (
                                     <div className="absolute top-full left-0 mt-2 w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
                                         {session.role === 'Owner' && (
-                                            <button 
-                                                onClick={()=>{setSelectedSite('GLOBAL'); setIsDropdownOpen(false)}} 
-                                                className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-800 text-blue-400 border-b border-slate-800"
-                                            >
+                                            <button onClick={()=>{setSelectedSite('GLOBAL'); setIsDropdownOpen(false)}} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-800 text-blue-400 border-b border-slate-800">
                                                 Global (All Sites)
                                             </button>
                                         )}
                                         <div className="max-h-60 overflow-y-auto">
                                             {visibleSites.map(s => (
-                                                <button 
-                                                    key={s.code} 
-                                                    onClick={()=>{setSelectedSite(s.code); setIsDropdownOpen(false)}} 
-                                                    className="w-full text-left px-4 py-3 text-xs hover:bg-slate-800 text-slate-400 hover:text-white border-b border-slate-800 last:border-0"
-                                                >
+                                                <button key={s.code} onClick={()=>{setSelectedSite(s.code); setIsDropdownOpen(false)}} className="w-full text-left px-4 py-3 text-xs hover:bg-slate-800 text-slate-400 hover:text-white border-b border-slate-800 last:border-0">
                                                     <div className="font-bold">{s.name}</div>
                                                     <div className="text-[10px] text-slate-600 font-mono">{s.code}</div>
                                                 </button>
@@ -237,7 +200,6 @@
                             </div>
                         </div>
 
-                        {/* USER PROFILE */}
                         <div className="flex items-center gap-4">
                             <div className="text-right hidden md:block">
                                 <p className="text-xs font-bold text-white">{session.user}</p>
@@ -252,7 +214,7 @@
                         </div>
                     </header>
 
-                    {/* MAIN CONTENT */}
+                    {/* DASHBOARD */}
                     <main className="flex-1 overflow-y-auto p-8 z-10 max-w-7xl mx-auto w-full">
                         <div className="mb-8 animate-fade-in">
                             <h2 className="text-3xl font-bold text-white mb-2">Enterprise Modules</h2>
@@ -263,11 +225,7 @@
 
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in">
                             {MODULES.map(module => (
-                                <NavCard 
-                                    key={module.id} 
-                                    module={module} 
-                                    onClick={() => handleNav(module.id)} 
-                                />
+                                <NavCard key={module.id} module={module} onClick={() => handleNav(module.id)} />
                             ))}
                         </div>
                     </main>
