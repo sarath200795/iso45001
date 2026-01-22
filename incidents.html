@@ -3,27 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Incident Report & Investigation</title>
+    <title>Incident Report</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    fontFamily: { 'sans': ['Inter', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] },
                     colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
                 }
             }
         }
     </script>
     <style>
-        body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
         
         /* DIAGRAM STYLES */
         .fishbone-container { position: relative; padding: 20px 0; overflow-x: auto; }
@@ -37,7 +35,6 @@
         .ribs-top .rib-box::after { content: ''; position: absolute; bottom: -40px; left: 50%; width: 2px; height: 40px; background: #64748b; transform: skewX(-20deg); transform-origin: top; }
         .ribs-bottom .rib-box::before { content: ''; position: absolute; top: -40px; left: 50%; width: 2px; height: 40px; background: #64748b; transform: skewX(20deg); transform-origin: bottom; }
 
-        /* TREE STYLES */
         .tree ul { padding-top: 20px; position: relative; display: flex; justify-content: center; }
         .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; }
         .tree li::before, .tree li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #64748b; width: 50%; height: 20px; }
@@ -50,38 +47,26 @@
         .tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #64748b; width: 0; height: 20px; }
         .tree-node { display: inline-block; padding: 8px 12px; border-radius: 6px; background: #1e293b; border: 1px solid #475569; color: white; min-width: 120px; z-index: 10; position: relative; }
 
-        /* PRINT / PDF GENERATION STYLES */
+        /* PRINT STYLES */
         @media print {
-            @page { size: A4; margin: 15mm; }
+            @page { size: A4; margin: 10mm; }
             body { background: white; color: black; -webkit-print-color-adjust: exact; }
             .no-print { display: none !important; }
-            
-            /* Layout Reset */
-            .main-container { width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
-            .section-card { border: 1px solid #ccc !important; background: white !important; color: black !important; box-shadow: none !important; margin-bottom: 20px; page-break-inside: avoid; }
-            
-            /* Input Reset */
-            input, textarea, select { background: transparent !important; border: 1px solid #ddd !important; color: black !important; padding: 5px !important; }
-            .bg-slate-900, .bg-slate-800, .bg-slate-950 { background: white !important; color: black !important; }
+            .section-card { border: 1px solid #000 !important; background: white !important; color: black !important; box-shadow: none !important; margin-bottom: 20px; page-break-inside: avoid; }
+            input, textarea, select { background: transparent !important; border: 1px solid #ccc !important; color: black !important; }
+            .bg-slate-900, .bg-slate-800 { background: white !important; color: black !important; border: 1px solid #ccc !important; }
             
             /* Diagram Print Fixes */
-            .fishbone-container { overflow: visible; width: 100%; }
-            .rib-box { background: white !important; border: 1px solid black !important; color: black !important; }
-            .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before { background: black !important; border-left-color: black !important; }
+            .rib-box, .tree-node { background: white !important; border: 1px solid black !important; color: black !important; }
+            .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-left-color: black !important; border-color: black !important; }
             .head { background: white !important; color: black !important; border-color: black !important; }
             
-            .tree-node { background: white !important; border: 1px solid black !important; color: black !important; }
-            .tree li::before, .tree li::after, .tree ul ul::before { border-color: black !important; }
-            
-            /* Force Visibility of All Tabs */
-            .tab-content { display: block !important; margin-bottom: 30px; border-top: 2px solid #000; padding-top: 10px; }
-            .tab-header { display: block !important; font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; color: black !important; }
+            .tab-content { display: block !important; margin-bottom: 30px; }
+            .tab-header { display: block !important; font-weight: bold; font-size: 1.2rem; margin-bottom: 10px; border-bottom: 2px solid black; }
         }
         
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .print-only-header { display: none; }
-        @media print { .print-only-header { display: block; } }
     </style>
 </head>
 <body class="min-h-screen">
@@ -89,27 +74,23 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, set, update, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
         const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
-        window.fb = { get, ref, set, update, push };
+        window.fb = { ref, push };
     </script>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- COMPONENTS ---
-        
-        // 1. Fault Tree Node
         const FaultTreeNode = ({ node, onUpdate }) => {
             const addChild = () => onUpdate({ ...node, children: [...(node.children||[]), { id: Date.now(), label: 'Cause', type: 'AND', children: [] }] });
-            const addSibling = () => { /* Logic handled by parent */ };
             return (
                 <li>
                     <div className="tree-node group">
                         <div className="flex justify-between items-center mb-1 no-print">
-                            <button onClick={addChild} className="text-[9px] bg-blue-600 px-1 rounded text-white hover:bg-blue-500">+</button>
+                            <button onClick={addChild} className="text-[9px] bg-blue-600 px-1 rounded text-white">+</button>
                             <span onClick={()=>onUpdate({...node, type: node.type==='AND'?'OR':'AND'})} className="text-[8px] cursor-pointer bg-slate-700 px-1 rounded border border-slate-600">{node.type}</span>
                         </div>
                         <input value={node.label} onChange={e=>onUpdate({...node, label:e.target.value})} className="bg-transparent text-center text-xs font-bold w-full outline-none" />
@@ -120,11 +101,9 @@
             );
         };
 
-        // 2. Fishbone Diagram
         const Fishbone = ({ data, onChange }) => {
             const update = (cat, i, val) => { const arr=[...data[cat]]; arr[i]=val; onChange({...data, [cat]:arr}); };
             const add = (cat) => onChange({...data, [cat]: [...data[cat], '']});
-            
             const RibBox = ({ title, cat }) => (
                 <div className="rib-box">
                     <div className="flex justify-between mb-1 border-b border-slate-600 pb-1">
@@ -134,23 +113,20 @@
                     {data[cat].map((v, i) => <input key={i} value={v} onChange={e=>update(cat, i, e.target.value)} className="w-full bg-transparent text-[10px] border-b border-slate-700 mb-1 outline-none text-white print:text-black" />)}
                 </div>
             );
-
             return (
                 <div className="fishbone-container mt-8">
-                    <div className="spine"></div>
-                    <div className="head">INCIDENT</div>
+                    <div className="spine"></div><div className="head">INCIDENT</div>
                     <div className="ribs-top"><RibBox title="Man" cat="man"/><RibBox title="Machine" cat="machine"/><RibBox title="Material" cat="material"/></div>
                     <div className="ribs-bottom"><RibBox title="Method" cat="method"/><RibBox title="Environment" cat="environment"/><div style={{width:'18%'}}></div></div>
                 </div>
             );
         };
 
-        // --- MAIN FORM ---
-        const IncidentApp = () => {
+        const App = () => {
             const [step, setStep] = useState(1);
             const [session, setSession] = useState(null);
+            const [isGlobal, setIsGlobal] = useState(false);
             
-            // Initial Data
             const [data, setData] = useState({
                 id: '', siteId: '', date: new Date().toISOString().split('T')[0], time: '', type: 'Near Miss', description: '',
                 investigation: { fiveWhys: ['','','','',''], fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, faultTree: { id:1, label:'Incident', type:'OR', children:[] }, rootCause: '' },
@@ -158,185 +134,121 @@
             });
 
             useEffect(() => {
-                // 1. Auth Check
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
                 const sess = JSON.parse(s);
                 setSession(sess);
 
-                // 2. Capture Site Context from URL
+                // URL Params Logic
                 const params = new URLSearchParams(window.location.search);
-                const ctxSite = params.get('site');
+                let ctxSite = params.get('site');
                 
-                // 3. Generate ID
-                const seq = Math.floor(Math.random()*9999);
-                const newId = `${sess.orgId}-${ctxSite || 'GEN'}-${seq}`;
-                
-                setData(prev => ({ 
-                    ...prev, 
-                    id: newId, 
-                    siteId: (ctxSite && ctxSite !== 'GLOBAL') ? ctxSite : 'GLOBAL (No Site Selected)' 
-                }));
+                // Handling GLOBAL vs Specific
+                if (!ctxSite || ctxSite === 'GLOBAL') {
+                    setIsGlobal(true); // Enable editing
+                    ctxSite = ''; // Empty so user can type
+                } else {
+                    setIsGlobal(false); // Read-only
+                }
 
+                const seq = Math.floor(Math.random()*9999);
+                setData(prev => ({ ...prev, id: `${sess.orgId}-${ctxSite || 'GEN'}-${seq}`, siteId: ctxSite }));
             }, []);
 
             const saveData = async () => {
+                if(!data.siteId) { alert("Please enter a Site ID"); return; }
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/incidents`), data);
-                alert("Report Saved Successfully!");
+                alert("Saved!");
                 window.location.href = 'home.html';
             };
-
-            const handlePrint = () => window.print();
 
             if(!session) return null;
 
             return (
-                <div className="main-container max-w-5xl mx-auto p-6">
+                <div className="max-w-5xl mx-auto p-6">
                     
-                    {/* NAV HEADER (Screen Only) */}
+                    {/* Header */}
                     <div className="flex justify-between items-center mb-8 no-print">
                         <div className="flex items-center gap-4">
-                            <a href="home.html" className="text-slate-400 hover:text-white transition-colors"><i className="fas fa-arrow-left"></i> Back</a>
-                            <h1 className="text-xl font-bold text-white">New Incident Report</h1>
+                            <a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a>
+                            <h1 className="text-xl font-bold text-white">Incident Report</h1>
                         </div>
                         <div className="flex gap-2">
-                            {[1,2,3,4].map(n => (
-                                <button key={n} onClick={()=>setStep(n)} className={`w-8 h-8 rounded-full font-bold text-sm ${step===n ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>{n}</button>
-                            ))}
+                            {[1,2,3,4].map(n => <button key={n} onClick={()=>setStep(n)} className={`w-8 h-8 rounded-full font-bold text-sm ${step===n ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>{n}</button>)}
                         </div>
-                        <button onClick={handlePrint} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2">
-                            <i className="fas fa-file-pdf"></i> Generate PDF
-                        </button>
+                        <button onClick={()=>window.print()} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i className="fas fa-file-pdf"></i> PDF</button>
                     </div>
 
-                    {/* PDF HEADER */}
-                    <div className="print-only-header text-center border-b-2 border-black pb-4 mb-6">
+                    {/* Print Header */}
+                    <div className="hidden print:block text-center border-b-2 border-black pb-4 mb-6">
                         <h1 className="text-2xl font-bold uppercase">Incident Investigation Report</h1>
-                        <div className="flex justify-between mt-2 text-sm font-mono">
-                            <span>ID: {data.id}</span>
-                            <span>Date: {data.date}</span>
-                            <span>Org: {session.orgId}</span>
-                        </div>
+                        <p className="text-sm font-mono mt-1">ID: {data.id} | Org: {session.orgId}</p>
                     </div>
 
-                    {/* STEP 1: INITIAL */}
+                    {/* Step 1 */}
                     <div className={`tab-content ${step===1?'active':''} section-card`}>
-                        <div className="tab-header hidden print:block">1. Initial Information</div>
+                        <div className="hidden print:block tab-header">1. Initial Information</div>
                         <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
                             <div className="grid grid-cols-2 gap-6 mb-4">
                                 <div>
-                                    <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site Location</label>
-                                    <div className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-emerald-400 font-mono font-bold">
-                                        <i className="fas fa-map-marker-alt mr-2"></i> {data.siteId}
-                                    </div>
+                                    <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site Location ID</label>
+                                    {/* TOGGLE: Input if Global/Empty, Text if Fixed */}
+                                    {isGlobal ? (
+                                        <input 
+                                            className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" 
+                                            placeholder="Enter Site Code (e.g. BLR-01)"
+                                            value={data.siteId} 
+                                            onChange={e=>setData({...data, siteId:e.target.value})} 
+                                        />
+                                    ) : (
+                                        <div className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-emerald-400 font-mono font-bold">
+                                            {data.siteId}
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Type</label>
-                                    <select className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" value={data.type} onChange={e=>setData({...data, type:e.target.value})}>
-                                        <option>Near Miss</option><option>Accident</option><option>Hazard</option>
-                                    </select>
+                                    <select className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" value={data.type} onChange={e=>setData({...data, type:e.target.value})}><option>Near Miss</option><option>Accident</option><option>Hazard</option></select>
                                 </div>
-                                <div>
-                                    <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Date</label>
-                                    <input type="date" className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" value={data.date} onChange={e=>setData({...data, date:e.target.value})} />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Time</label>
-                                    <input type="time" className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" value={data.time} onChange={e=>setData({...data, time:e.target.value})} />
-                                </div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Date</label><input type="date" className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" value={data.date} onChange={e=>setData({...data, date:e.target.value})} /></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Time</label><input type="time" className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" value={data.time} onChange={e=>setData({...data, time:e.target.value})} /></div>
                             </div>
-                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Description of Incident</label>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Description</label>
                             <textarea className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white h-32" value={data.description} onChange={e=>setData({...data, description:e.target.value})}></textarea>
                         </div>
                     </div>
 
-                    {/* STEP 2: INVESTIGATION */}
+                    {/* Step 2 */}
                     <div className={`tab-content ${step===2?'active':''} section-card`}>
-                        <div className="tab-header hidden print:block">2. Root Cause Analysis</div>
+                        <div className="hidden print:block tab-header">2. Investigation</div>
                         <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700 space-y-8">
-                            
-                            {/* Fishbone */}
-                            <div>
-                                <h3 className="font-bold text-blue-400 mb-2">Fishbone Diagram</h3>
-                                <Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} />
-                            </div>
-
-                            {/* Fault Tree */}
-                            <div>
-                                <h3 className="font-bold text-orange-400 mb-2">Fault Tree Analysis</h3>
-                                <div className="tree overflow-x-auto pb-4">
-                                    <ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} /></ul>
-                                </div>
-                            </div>
-
-                            {/* 5 Whys */}
-                            <div>
-                                <h3 className="font-bold text-purple-400 mb-2">5 Whys</h3>
-                                {data.investigation.fiveWhys.map((w,i) => (
-                                    <div key={i} className="flex gap-2 mb-2">
-                                        <span className="text-slate-500 font-mono text-sm w-16 pt-2">Why {i+1}?</span>
-                                        <input className="flex-1 bg-slate-900 border-b border-slate-700 p-2 text-sm text-white outline-none focus:border-blue-500" value={w} onChange={e=>{const arr=[...data.investigation.fiveWhys]; arr[i]=e.target.value; setData({...data, investigation:{...data.investigation, fiveWhys:arr}})}} />
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Conclusion */}
-                            <div>
-                                <label className="text-xs font-bold text-emerald-400 uppercase">Final Root Cause</label>
-                                <textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-3 rounded-lg text-white mt-1" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})}></textarea>
-                            </div>
+                            <div><h3 className="font-bold text-blue-400 mb-2">Fishbone</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} /></div>
+                            <div><h3 className="font-bold text-orange-400 mb-2">Fault Tree</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} /></ul></div></div>
+                            <div><h3 className="font-bold text-purple-400 mb-2">5 Whys</h3>{data.investigation.fiveWhys.map((w,i) => (<div key={i} className="flex gap-2 mb-2"><span className="text-slate-500 font-mono text-sm w-16 pt-2">Why {i+1}?</span><input className="flex-1 bg-slate-900 border-b border-slate-700 p-2 text-sm text-white" value={w} onChange={e=>{const arr=[...data.investigation.fiveWhys]; arr[i]=e.target.value; setData({...data, investigation:{...data.investigation, fiveWhys:arr}})}} /></div>))}</div>
+                            <div><label className="text-xs font-bold text-emerald-400 uppercase">Root Cause</label><textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-3 rounded-lg text-white mt-1" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})}></textarea></div>
                         </div>
                     </div>
 
-                    {/* STEP 3: CAPA */}
+                    {/* Step 3 */}
                     <div className={`tab-content ${step===3?'active':''} section-card`}>
-                        <div className="tab-header hidden print:block">3. Corrective Actions</div>
+                        <div className="hidden print:block tab-header">3. CAPA</div>
                         <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
-                            <div className="grid grid-cols-4 gap-2 mb-4 no-print">
-                                <input id="act" placeholder="Action" className="col-span-2 bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white"/>
-                                <input id="own" placeholder="Owner" className="bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white"/>
-                                <input id="due" type="date" className="bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white"/>
-                            </div>
-                            <button onClick={()=>{
-                                const act=document.getElementById('act').value, own=document.getElementById('own').value, due=document.getElementById('due').value;
-                                if(act){ setData({...data, capa:[...data.capa, {act, own, due, status:'Open'}]}); document.getElementById('act').value=''; }
-                            }} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold w-full mb-6 no-print">+ Add Action</button>
-
-                            <table className="w-full text-left text-sm text-slate-300">
-                                <thead className="border-b border-slate-600 text-xs uppercase"><tr><th className="pb-2">Action</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead>
-                                <tbody className="divide-y divide-slate-700">
-                                    {data.capa.map((c,i)=>(<tr key={i}><td className="py-2">{c.act}</td><td>{c.own}</td><td>{c.due}</td><td>{c.status}</td></tr>))}
-                                </tbody>
-                            </table>
+                            <div className="grid grid-cols-4 gap-2 mb-4 no-print"><input id="act" placeholder="Action" className="col-span-2 bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white"/><input id="own" placeholder="Owner" className="bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white"/><input id="due" type="date" className="bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white"/></div>
+                            <button onClick={()=>{const act=document.getElementById('act').value, own=document.getElementById('own').value, due=document.getElementById('due').value; if(act){ setData({...data, capa:[...data.capa, {act, own, due, status:'Open'}]}); document.getElementById('act').value=''; }}} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold w-full mb-6 no-print">+ Add Action</button>
+                            <table className="w-full text-left text-sm text-slate-300"><thead className="border-b border-slate-600 text-xs uppercase"><tr><th className="pb-2">Action</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody className="divide-y divide-slate-700">{data.capa.map((c,i)=>(<tr key={i}><td className="py-2">{c.act}</td><td>{c.own}</td><td>{c.due}</td><td>{c.status}</td></tr>))}</tbody></table>
                         </div>
                     </div>
 
-                    {/* STEP 4: REVIEW */}
+                    {/* Step 4 */}
                     <div className={`tab-content ${step===4?'active':''} section-card`}>
-                        <div className="tab-header hidden print:block">4. Review & Approval</div>
+                        <div className="hidden print:block tab-header">4. Review</div>
                         <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
-                            
-                            {/* RISK LINK */}
                             <div className="flex justify-between items-center bg-slate-900 p-4 rounded-lg border border-slate-700 mb-6 no-print">
-                                <div>
-                                    <h4 className="font-bold text-white">Update Risk Assessment</h4>
-                                    <p className="text-xs text-slate-400">Does this incident require updating the HIRA for {data.siteId}?</p>
-                                </div>
-                                <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded font-bold text-sm flex items-center gap-2">
-                                    Open Risk Module <i className="fas fa-external-link-alt"></i>
-                                </a>
+                                <div><h4 className="font-bold text-white">Update Risk Assessment</h4><p className="text-xs text-slate-400">Update HIRA for {data.siteId || 'this site'}?</p></div>
+                                <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm">Open Risk Module</a>
                             </div>
-
-                            <div className="flex gap-3 items-center mb-8 p-4 border border-slate-700 rounded-lg">
-                                <input type="checkbox" className="w-5 h-5" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} />
-                                <label className="text-sm font-bold text-white">I confirm that the Risk Assessment has been reviewed and controls updated if necessary.</label>
-                            </div>
-
-                            <div className="flex justify-end no-print">
-                                <button onClick={saveData} className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold px-8 py-3 rounded-xl shadow-lg hover:shadow-emerald-500/20 transition-all">
-                                    Submit & Close Report
-                                </button>
-                            </div>
+                            <div className="flex gap-3 items-center mb-8 p-4 border border-slate-700 rounded-lg"><input type="checkbox" className="w-5 h-5" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} /><label className="text-sm font-bold text-white">Confirmed Risk Update</label></div>
+                            <div className="flex justify-end no-print"><button onClick={saveData} className="bg-emerald-600 text-white font-bold px-8 py-3 rounded-xl">Submit</button></div>
                         </div>
                     </div>
 
