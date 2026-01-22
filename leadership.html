@@ -2,196 +2,251 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ISO 45001 | Leadership Workstation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISO 45001 | Policy Workstation</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Space Grotesk', sans-serif; }</style>
 </head>
-<body class="bg-slate-50 min-h-screen font-sans">
+<body class="bg-slate-100 min-h-screen">
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect } = React;
 
         const App = () => {
+            const [session, setSession] = useState(null);
             const [formData, setFormData] = useState({
                 orgName: '',
                 siteCode: '',
                 preamble: '',
-                conditions: '', // Point A
-                objectives: '', // Point B
-                legal: '',      // Point C
-                hazard: '',     // Point D
-                improvement: '',// Point E
-                workers: '',    // Point F
+                conditions: '',
+                objectives: '',
+                legal: '',
+                hazard: '',
+                improvement: '',
+                workers: '',
                 approvedBy: '',
                 date: new Date().toLocaleDateString()
             });
 
-            // Sync with local storage
             useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if (!s) { window.location.href = "index.html"; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+
+                // Load saved draft
                 const saved = localStorage.getItem('isoPolicyDraft');
-                if (saved) setFormData(JSON.parse(saved));
+                if (saved) {
+                    setFormData(JSON.parse(saved));
+                } else {
+                    setFormData(prev => ({
+                        ...prev,
+                        orgName: sess.orgName || '',
+                        siteCode: sess.assignedSite || 'HQ'
+                    }));
+                }
             }, []);
 
             useEffect(() => {
-                localStorage.setItem('isoPolicyDraft', JSON.stringify(formData));
-            }, [formData]);
+                if (session) {
+                    localStorage.setItem('isoPolicyDraft', JSON.stringify(formData));
+                }
+            }, [formData, session]);
 
             const exportPolicyPDF = () => {
                 const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pW = pdf.internal.pageSize.getWidth();
-                
+
                 // Header
-                pdf.setFillColor(30, 41, 59); pdf.rect(0, 0, pW, 30, 'F');
-                pdf.setTextColor(255); pdf.setFontSize(18); pdf.setFont("helvetica", "bold");
-                pdf.text("OCCUPATIONAL HEALTH & SAFETY POLICY", pW/2, 18, {align: 'center'});
-                
-                // Body
-                pdf.setTextColor(0); pdf.setFontSize(12);
-                pdf.text(`${formData.orgName || '[ORGANIZATION NAME]'}`, 20, 45);
-                pdf.setFont("helvetica", "normal");
-                
-                let y = 55;
-                const points = [
-                    { t: "Working Conditions:", v: formData.conditions },
-                    { t: "Objectives Framework:", v: formData.objectives },
-                    { t: "Legal Compliance:", v: formData.legal },
-                    { t: "Hazard Elimination:", v: formData.hazard },
-                    { t: "Continual Improvement:", v: formData.improvement },
-                    { t: "Worker Consultation:", v: formData.workers }
+                pdf.setFillColor(30, 41, 59);
+                pdf.rect(0, 0, pW, 35, 'F');
+                pdf.setTextColor(255);
+                pdf.setFontSize(20);
+                pdf.setFont("helvetica", "bold");
+                pdf.text("OCCUPATIONAL HEALTH & SAFETY POLICY", pW / 2, 20, { align: 'center' });
+                pdf.setFontSize(10);
+                pdf.text(formData.orgName || '[ORGANIZATION NAME]', pW / 2, 28, { align: 'center' });
+
+                pdf.setTextColor(0);
+                pdf.setFontSize(11);
+                let y = 50;
+
+                const sections = [
+                    { title: "5.2(a) Safe & Healthy Working Conditions", text: formData.conditions },
+                    { title: "5.2(b) Objectives Framework", text: formData.objectives },
+                    { title: "5.2(c) Legal Compliance", text: formData.legal },
+                    { title: "5.2(d) Hazard Elimination & Risk Reduction", text: formData.hazard },
+                    { title: "5.2(e) Continual Improvement", text: formData.improvement },
+                    { title: "5.2(f) Worker Consultation & Participation", text: formData.workers }
                 ];
 
-                points.forEach(p => {
-                    pdf.setFont("helvetica", "bold"); pdf.text(p.t, 20, y);
+                sections.forEach(s => {
+                    if (y > 250) { pdf.addPage(); y = 30; }
+                    pdf.setFont("helvetica", "bold");
+                    pdf.text(s.title, 20, y);
+                    y += 7;
                     pdf.setFont("helvetica", "normal");
-                    const lines = pdf.splitTextToSize(p.v || "No commitment entered.", pW - 40);
-                    pdf.text(lines, 20, y + 7);
-                    y += (lines.length * 7) + 12;
+                    const lines = pdf.splitTextToSize(s.text || "No commitment entered.", pW - 40);
+                    pdf.text(lines, 20, y);
+                    y += (lines.length * 6) + 10;
                 });
 
-                // Footer
-                pdf.line(20, 270, 100, 270);
-                pdf.text("Authorized Signature", 20, 275);
-                pdf.text(`Date: ${formData.date}`, pW - 50, 275);
+                // Signature
+                y = Math.max(y, 240);
+                pdf.line(20, y, 90, y);
+                pdf.text("Authorized Signature", 20, y + 5);
+                pdf.text(`Date: ${formData.date}`, pW - 50, y + 5);
 
                 pdf.save(`${formData.siteCode || 'SITE'}-OH&S-Policy.pdf`);
             };
 
-            const InputGroup = ({ label, id, placeholder, icon }) => (
+            const saveToArchive = () => {
+                const arc = JSON.parse(localStorage.getItem('isoArchive')) || { drafts: [], approved: [] };
+                arc.drafts.unshift({
+                    ...formData,
+                    companyName: formData.orgName,
+                    version: 'DRAFT',
+                    author: session?.user || 'Unknown',
+                    role: session?.role || 'System',
+                    timestamp: new Date().toLocaleString()
+                });
+                localStorage.setItem('isoArchive', JSON.stringify(arc));
+                alert("Policy Draft saved to Archive!");
+            };
+
+            if (!session) return null;
+
+            const PolicyInput = ({ label, id, icon, placeholder }) => (
                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                         <i className={`fas ${icon} text-blue-500`}></i> {label}
                     </label>
-                    <textarea 
-                        className="w-full border-2 p-4 rounded-2xl bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition-all text-sm h-24 shadow-inner"
+                    <textarea
+                        className="w-full border-2 border-slate-200 p-4 rounded-xl bg-white focus:border-blue-500 outline-none transition-colors h-28 resize-none"
                         placeholder={placeholder}
                         value={formData[id]}
-                        onChange={(e) => setFormData({...formData, [id]: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, [id]: e.target.value })}
                     />
                 </div>
             );
 
             return (
-                <div className="flex flex-col min-h-screen">
-                    {/* Navigation matching your system architecture */}
-                    <nav className="bg-slate-900 text-white px-8 py-5 flex justify-between shadow-xl items-center border-b-4 border-blue-600">
-                        <div className="flex items-center gap-4">
-                            <a href="home.html" className="text-slate-400 hover:text-white transition text-lg"><i className="fas fa-house"></i></a>
-                            <div className="font-black text-xl italic tracking-tighter uppercase">Clause 5 <span className="text-blue-500">Leadership</span></div>
+                <div className="flex h-screen overflow-hidden">
+                    {/* Sidebar */}
+                    <aside className="w-72 bg-slate-900 text-white flex flex-col shadow-2xl">
+                        <div className="p-6 border-b border-slate-700/50">
+                            <div className="flex items-center gap-3 mb-4">
+                                <a href="home.html" className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+                                    <i className="fas fa-home text-sm"></i>
+                                </a>
+                                <div>
+                                    <h1 className="text-lg font-bold">Policy Workstation</h1>
+                                    <p className="text-[10px] text-blue-400 font-mono uppercase">Clause 5.2</p>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex gap-8 text-xs font-bold uppercase tracking-widest">
-                            <a href="home.html" className="hover:text-blue-400">Home</a>
-                            <a href="leadership.html" className="text-blue-400 border-b-2 border-blue-400 pb-1">Generator</a>
-                            <a href="archive.html" className="hover:text-blue-400">Repository</a>
-                        </div>
-                    </nav>
 
-                    <div className="flex flex-1 overflow-hidden">
-                        {/* Sidebar */}
-                        <aside className="w-80 bg-slate-900 text-white p-6 space-y-6 shadow-2xl overflow-y-auto">
-                            <div className="space-y-4">
-                                <input 
-                                    className="w-full bg-slate-800 border-0 p-3 rounded-xl text-xs font-bold uppercase"
+                        <div className="p-6 space-y-4 flex-1">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Organization</label>
+                                <input
+                                    className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-sm focus:border-blue-500 outline-none"
                                     placeholder="Organization Name"
                                     value={formData.orgName}
-                                    onChange={e => setFormData({...formData, orgName: e.target.value})}
+                                    onChange={e => setFormData({ ...formData, orgName: e.target.value })}
                                 />
-                                <input 
-                                    className="w-full bg-slate-800 border-0 p-3 rounded-xl text-xs font-bold uppercase"
-                                    placeholder="Site Code"
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Site Code</label>
+                                <input
+                                    className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-sm font-mono uppercase focus:border-blue-500 outline-none"
+                                    placeholder="SITE-01"
                                     value={formData.siteCode}
-                                    onChange={e => setFormData({...formData, siteCode: e.target.value.toUpperCase()})}
+                                    onChange={e => setFormData({ ...formData, siteCode: e.target.value.toUpperCase() })}
                                 />
                             </div>
-                            
-                            <div className="pt-10 space-y-3">
-                                <button onClick={exportPolicyPDF} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-lg shadow-blue-900/40">
-                                    <i className="fas fa-file-pdf mr-2"></i> Export Policy
-                                </button>
-                                <button onClick={() => {
-                                    const arc = JSON.parse(localStorage.getItem('isoArchive')) || { drafts: [], approved: [] };
-                                    arc.drafts.unshift({...formData, version: 'DRAFT', companyName: formData.orgName, timestamp: new Date().toLocaleString()});
-                                    localStorage.setItem('isoArchive', JSON.stringify(arc));
-                                    alert("Policy Draft Saved to Repository!");
-                                }} className="w-full bg-orange-600 hover:bg-orange-500 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-lg shadow-orange-900/40">
-                                    <i className="fas fa-save mr-2"></i> Submit to Archive
-                                </button>
+                        </div>
+
+                        <div className="p-6 border-t border-slate-700/50 space-y-3">
+                            <button onClick={exportPolicyPDF} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 transition-colors">
+                                <i className="fas fa-file-pdf"></i> Export Policy PDF
+                            </button>
+                            <button onClick={saveToArchive} className="w-full bg-orange-600 hover:bg-orange-500 py-4 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 transition-colors">
+                                <i className="fas fa-save"></i> Save to Archive
+                            </button>
+                            <a href="archive.html" className="block text-center py-2 text-[10px] text-slate-500 hover:text-white transition-colors">
+                                View Archive →
+                            </a>
+                        </div>
+                    </aside>
+
+                    {/* Main Content */}
+                    <main className="flex-1 overflow-y-auto bg-slate-50 p-8">
+                        <div className="max-w-4xl mx-auto">
+                            <div className="mb-8">
+                                <h2 className="text-2xl font-bold text-slate-800">OH&S Policy Drafting</h2>
+                                <p className="text-slate-500 text-sm mt-1">Define your organization's safety commitments aligned with ISO 45001 Clause 5.2 requirements.</p>
                             </div>
-                        </aside>
 
-                        {/* Main Workstation */}
-                        <main className="flex-1 p-10 overflow-y-auto bg-white m-6 rounded-[3rem] shadow-inner border border-slate-200">
-                            <div className="max-w-4xl mx-auto space-y-10">
-                                <div className="border-b-8 border-slate-100 pb-6">
-                                    <h2 className="text-4xl font-black text-slate-800 italic uppercase tracking-tighter">OH&S Policy Drafting</h2>
-                                    <p className="text-slate-400 font-bold uppercase text-[10px] mt-2 tracking-widest">Requirement Mapping: ISO 45001 Clause 5.2</p>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <InputGroup 
-                                        label="Safe & Healthy Conditions (a)" 
-                                        id="conditions" 
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <PolicyInput
+                                        label="5.2(a) Safe & Healthy Conditions"
+                                        id="conditions"
                                         icon="fa-heart-pulse"
-                                        placeholder="Commitment to prevent injury/ill health appropriate to size/context..." 
+                                        placeholder="Commitment to provide safe and healthy working conditions for the prevention of work-related injury and ill health..."
                                     />
-                                    <InputGroup 
-                                        label="Objectives Framework (b)" 
-                                        id="objectives" 
+                                    <PolicyInput
+                                        label="5.2(b) Objectives Framework"
+                                        id="objectives"
                                         icon="fa-bullseye"
-                                        placeholder="How the policy supports the setting of safety objectives..." 
+                                        placeholder="How the policy provides a framework for setting OH&S objectives..."
                                     />
-                                    <InputGroup 
-                                        label="Legal Requirements (c)" 
-                                        id="legal" 
+                                    <PolicyInput
+                                        label="5.2(c) Legal Compliance"
+                                        id="legal"
                                         icon="fa-scale-balanced"
-                                        placeholder="Commitment to fulfill legal and other requirements..." 
+                                        placeholder="Commitment to fulfill legal requirements and other requirements..."
                                     />
-                                    <InputGroup 
-                                        label="Hazard & Risk Reduction (d)" 
-                                        id="hazard" 
+                                    <PolicyInput
+                                        label="5.2(d) Hazard Elimination"
+                                        id="hazard"
                                         icon="fa-triangle-exclamation"
-                                        placeholder="Commitment to eliminate hazards (Ref 8.1.2)..." 
+                                        placeholder="Commitment to eliminate hazards and reduce OH&S risks (refer to 8.1.2)..."
                                     />
-                                    <InputGroup 
-                                        label="Continual Improvement (e)" 
-                                        id="improvement" 
+                                    <PolicyInput
+                                        label="5.2(e) Continual Improvement"
+                                        id="improvement"
                                         icon="fa-chart-line"
-                                        placeholder="Commitment to enhance OHSMS performance..." 
+                                        placeholder="Commitment to continual improvement of the OH&S management system..."
                                     />
-                                    <InputGroup 
-                                        label="Consultation & Participation (f)" 
-                                        id="workers" 
+                                    <PolicyInput
+                                        label="5.2(f) Consultation & Participation"
+                                        id="workers"
                                         icon="fa-comments"
-                                        placeholder="Commitment to involve workers and representatives..." 
+                                        placeholder="Commitment to consultation and participation of workers, and representatives..."
                                     />
                                 </div>
+
+                                <div className="pt-6 border-t border-slate-100">
+                                    <div className="flex items-center justify-between text-sm text-slate-500">
+                                        <span>Auto-saved to local storage</span>
+                                        <span className="flex items-center gap-2">
+                                            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                            Draft saved
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
-                        </main>
-                    </div>
+                        </div>
+                    </main>
                 </div>
             );
         };

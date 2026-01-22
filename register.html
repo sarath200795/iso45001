@@ -9,19 +9,44 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'display': ['Space Grotesk', 'sans-serif'],
+                        'mono': ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .glass-panel { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        body { font-family: 'Space Grotesk', sans-serif; }
+        .glass-panel { 
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
+            backdrop-filter: blur(20px); 
+            border: 1px solid rgba(59, 130, 246, 0.15);
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+        }
+        .animate-float { animation: float 8s ease-in-out infinite; }
+        .animate-float-delayed { animation: float 8s ease-in-out infinite 3s; }
     </style>
 </head>
-<body class="bg-slate-900 h-screen flex items-center justify-center overflow-hidden relative">
+<body class="bg-slate-950 min-h-screen flex items-center justify-center overflow-hidden relative py-8">
 
-    <div class="absolute inset-0 z-0">
-        <div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px]"></div>
-        <div class="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-[120px]"></div>
+    <!-- Animated Background -->
+    <div class="absolute inset-0 z-0 overflow-hidden">
+        <div class="absolute top-[-15%] left-[-5%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[140px] animate-float"></div>
+        <div class="absolute bottom-[-15%] right-[-5%] w-[600px] h-[600px] bg-blue-600/15 rounded-full blur-[150px] animate-float-delayed"></div>
+        <div class="absolute inset-0" style="background-image: radial-gradient(circle at 1px 1px, rgba(59, 130, 246, 0.03) 1px, transparent 0); background-size: 50px 50px;"></div>
     </div>
 
-    <div id="root" class="z-10 w-full max-w-6xl p-6"></div>
+    <div id="root" class="z-10 w-full max-w-6xl px-6"></div>
 
     <script type="text/babel">
         const { useState } = React;
@@ -36,13 +61,12 @@
                 confirmPass: ''
             });
             const [loading, setLoading] = useState(false);
+            const [step, setStep] = useState(1);
 
-            // Auto-generate Org ID
             const handleNameChange = (e) => {
                 const name = e.target.value;
-                // Generate simple ID: First 3 chars + random number
                 const idSuggestion = name.length > 2 
-                    ? (name.substring(0, 3).toUpperCase() + Math.floor(100 + Math.random() * 900)) 
+                    ? (name.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, '') + Math.floor(100 + Math.random() * 900)) 
                     : '';
                 setFormData({ ...formData, orgName: name, orgId: formData.orgId || idSuggestion });
             };
@@ -52,133 +76,238 @@
                 setLoading(true);
 
                 setTimeout(() => {
-                    // 1. Validation
                     if (formData.password !== formData.confirmPass) {
-                        alert("Passwords do not match."); setLoading(false); return;
+                        alert("Passwords do not match."); 
+                        setLoading(false); 
+                        return;
+                    }
+                    
+                    if (formData.password.length < 6) {
+                        alert("Password must be at least 6 characters.");
+                        setLoading(false);
+                        return;
                     }
                     
                     const cleanId = formData.orgId.toUpperCase().replace(/[^A-Z0-9-]/g, '');
                     const dbKey = `ISO_DB_${cleanId}`;
 
-                    // 2. Check if Org already exists
                     if (localStorage.getItem(dbKey)) {
-                        alert("Organization ID already exists! Please choose a unique ID.");
+                        alert("Organization ID already exists!");
                         setLoading(false);
                         return;
                     }
 
-                    // 3. Construct Initial Database Structure
                     const newOrgDB = {
                         meta: {
                             name: formData.orgName,
                             created: new Date().toISOString(),
                             plan: 'Enterprise'
                         },
-                        users: [
-                            {
-                                id: 'USR-001',
-                                name: formData.ownerName,
-                                email: formData.email,
-                                password: formData.password, // In production, hash this!
-                                role: 'Owner', // ROLE SET AS OWNER
-                                status: 'Active'
-                            }
-                        ],
+                        users: [{
+                            id: 'USR-001',
+                            name: formData.ownerName,
+                            email: formData.email,
+                            password: formData.password,
+                            role: 'Owner',
+                            assignedSite: '',
+                            status: 'Active'
+                        }],
+                        sites: [],
+                        accessRequests: [],
                         approvedDocs: [],
                         drafts: []
                     };
 
-                    // 4. Save to Local Storage
                     localStorage.setItem(dbKey, JSON.stringify(newOrgDB));
+                    localStorage.setItem('orgId', cleanId);
+                    localStorage.setItem('companyName', formData.orgName);
 
                     alert(`System Initialized!\nOrganization ID: ${cleanId}\nOwner: ${formData.ownerName}`);
                     window.location.href = "index.html";
-                    
-                }, 1500);
+                }, 1200);
             };
 
+            const FeatureCard = ({ icon, title, desc }) => (
+                <div className="p-5 rounded-2xl bg-slate-800/30 border border-slate-700/50 hover:border-blue-500/30 transition-all group">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3 group-hover:bg-blue-500/20 transition-colors">
+                        <i className={`fas ${icon} text-blue-400`}></i>
+                    </div>
+                    <h3 className="text-white font-bold text-sm mb-1">{title}</h3>
+                    <p className="text-slate-400 text-xs leading-relaxed">{desc}</p>
+                </div>
+            );
+
             return (
-                <div className="flex w-full h-[700px] glass-panel rounded-[3rem] shadow-2xl overflow-hidden">
+                <div className="flex w-full glass-panel rounded-3xl shadow-2xl overflow-hidden border border-slate-700/30">
                     
-                    {/* Left: Info */}
-                    <div className="w-1/3 bg-slate-950/50 p-12 flex flex-col justify-between border-r border-white/5">
-                        <div>
-                            <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-blue-500/20">
-                                <i className="fas fa-server text-2xl text-white"></i>
+                    {/* Left Panel - Info */}
+                    <div className="w-2/5 bg-gradient-to-br from-slate-900 to-slate-800 p-10 flex flex-col justify-between relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl"></div>
+                        
+                        <div className="relative">
+                            <div className="flex items-center gap-3 mb-8">
+                                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                                    <i className="fas fa-server text-xl text-white"></i>
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-bold text-white">System Init</h1>
+                                    <p className="text-blue-400 text-[10px] font-mono uppercase tracking-wider">ISO 45001 Platform</p>
+                                </div>
                             </div>
-                            <h1 className="text-3xl font-black italic uppercase text-white tracking-tighter mb-2">System Init</h1>
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest leading-relaxed">
-                                Deploy a new ISO 45001 Management Instance.
-                            </p>
+                            
+                            <div className="space-y-4">
+                                <FeatureCard 
+                                    icon="fa-crown"
+                                    title="Owner Access"
+                                    desc="Full administrative control over users, sites, and documentation."
+                                />
+                                <FeatureCard 
+                                    icon="fa-database"
+                                    title="Data Isolation"
+                                    desc="Your data is securely keyed to your unique Organization ID."
+                                />
+                                <FeatureCard 
+                                    icon="fa-shield-check"
+                                    title="ISO Compliant"
+                                    desc="Built-in templates and workflows aligned with ISO 45001 requirements."
+                                />
+                            </div>
                         </div>
-                        <div className="space-y-4">
-                            <div className="p-4 rounded-xl bg-blue-900/20 border border-blue-500/30">
-                                <h3 className="text-blue-400 font-bold uppercase text-[10px] tracking-widest mb-1">Owner Role</h3>
-                                <p className="text-slate-300 text-xs">You will be assigned full administrative control over this workspace.</p>
-                            </div>
-                            <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
-                                <h3 className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mb-1">Data Isolation</h3>
-                                <p className="text-slate-500 text-xs">Your data is keyed securely to your Organization ID.</p>
-                            </div>
-                        </div>
-                        <a href="index.html" className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition">
-                            <i className="fas fa-arrow-left"></i> Return to Login
+                        
+                        <a href="index.html" className="text-slate-500 hover:text-white text-sm font-medium flex items-center gap-2 transition-colors mt-8">
+                            <i className="fas fa-arrow-left"></i> Back to Login
                         </a>
                     </div>
 
-                    {/* Right: Form */}
-                    <div className="w-2/3 p-12 overflow-y-auto">
-                        <h2 className="text-2xl font-black text-white italic uppercase mb-8">Organization Parameters</h2>
-                        
-                        <form onSubmit={handleRegister} className="space-y-6 max-w-lg">
+                    {/* Right Panel - Form */}
+                    <div className="w-3/5 p-10 bg-slate-900/50">
+                        <div className="max-w-lg mx-auto">
+                            <div className="mb-8">
+                                <h2 className="text-2xl font-bold text-white mb-2">Initialize Organization</h2>
+                                <p className="text-slate-400 text-sm">Set up your OH&S Management System instance.</p>
+                            </div>
+
+                            {/* Progress Steps */}
+                            <div className="flex items-center gap-4 mb-8">
+                                <div className={`flex items-center gap-2 ${step >= 1 ? 'text-blue-400' : 'text-slate-500'}`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${step >= 1 ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400'}`}>1</div>
+                                    <span className="text-sm font-medium hidden sm:inline">Organization</span>
+                                </div>
+                                <div className={`flex-1 h-0.5 ${step >= 2 ? 'bg-blue-500' : 'bg-slate-700'}`}></div>
+                                <div className={`flex items-center gap-2 ${step >= 2 ? 'text-blue-400' : 'text-slate-500'}`}>
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${step >= 2 ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400'}`}>2</div>
+                                    <span className="text-sm font-medium hidden sm:inline">Owner Account</span>
+                                </div>
+                            </div>
                             
-                            {/* Organization Details */}
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-blue-400 uppercase tracking-widest ml-1">Enterprise Name</label>
-                                    <input required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-blue-500 outline-none transition" 
-                                        placeholder="e.g. Acme Corp" value={formData.orgName} onChange={handleNameChange} />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-blue-400 uppercase tracking-widest ml-1">System ID (Unique)</label>
-                                    <input required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm font-bold uppercase tracking-wider focus:border-blue-500 outline-none transition" 
-                                        placeholder="ORG-ID" value={formData.orgId} onChange={e => setFormData({...formData, orgId: e.target.value.toUpperCase()})} />
-                                </div>
-                            </div>
+                            <form onSubmit={handleRegister} className="space-y-6">
+                                {step === 1 && (
+                                    <div className="space-y-5 animate-fade-in">
+                                        <div>
+                                            <label className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 block">Enterprise Name</label>
+                                            <input 
+                                                required 
+                                                className="w-full bg-slate-800/50 border-2 border-slate-700 rounded-xl p-4 text-white focus:border-blue-500 outline-none transition-colors" 
+                                                placeholder="e.g. Acme Corporation"
+                                                value={formData.orgName} 
+                                                onChange={handleNameChange} 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 block">System ID (Unique)</label>
+                                            <input 
+                                                required 
+                                                className="w-full bg-slate-800/50 border-2 border-slate-700 rounded-xl p-4 text-white font-mono uppercase tracking-widest focus:border-blue-500 outline-none transition-colors" 
+                                                placeholder="ORG-001"
+                                                value={formData.orgId} 
+                                                onChange={e => setFormData({...formData, orgId: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '')})} 
+                                            />
+                                            <p className="text-[10px] text-slate-500 mt-2">This will be used for login and document references.</p>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => formData.orgName && formData.orgId ? setStep(2) : alert('Please fill all fields')}
+                                            className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold uppercase tracking-wider transition-colors"
+                                        >
+                                            Continue <i className="fas fa-arrow-right ml-2"></i>
+                                        </button>
+                                    </div>
+                                )}
 
-                            <hr className="border-slate-800" />
-
-                            {/* Owner Details */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest ml-1">Owner Full Name</label>
-                                <input required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-emerald-500 outline-none transition" 
-                                    placeholder="John Doe" value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest ml-1">Owner Email</label>
-                                <input type="email" required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-emerald-500 outline-none transition" 
-                                    placeholder="admin@enterprise.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest ml-1">Password</label>
-                                    <input type="password" required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-emerald-500 outline-none transition" 
-                                        placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest ml-1">Confirm Password</label>
-                                    <input type="password" required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-emerald-500 outline-none transition" 
-                                        placeholder="••••••••" value={formData.confirmPass} onChange={e => setFormData({...formData, confirmPass: e.target.value})} />
-                                </div>
-                            </div>
-
-                            <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black uppercase tracking-widest rounded-xl shadow-xl transition-all mt-4">
-                                {loading ? <i className="fas fa-spinner fa-spin"></i> : 'Deploy Organization'}
-                            </button>
-
-                        </form>
+                                {step === 2 && (
+                                    <div className="space-y-5 animate-fade-in">
+                                        <div>
+                                            <label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Owner Full Name</label>
+                                            <input 
+                                                required 
+                                                className="w-full bg-slate-800/50 border-2 border-slate-700 rounded-xl p-4 text-white focus:border-emerald-500 outline-none transition-colors" 
+                                                placeholder="John Doe"
+                                                value={formData.ownerName} 
+                                                onChange={e => setFormData({...formData, ownerName: e.target.value})} 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Owner Email</label>
+                                            <input 
+                                                type="email" 
+                                                required 
+                                                className="w-full bg-slate-800/50 border-2 border-slate-700 rounded-xl p-4 text-white focus:border-emerald-500 outline-none transition-colors" 
+                                                placeholder="admin@company.com"
+                                                value={formData.email} 
+                                                onChange={e => setFormData({...formData, email: e.target.value})} 
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Password</label>
+                                                <input 
+                                                    type="password" 
+                                                    required 
+                                                    className="w-full bg-slate-800/50 border-2 border-slate-700 rounded-xl p-4 text-white focus:border-emerald-500 outline-none transition-colors" 
+                                                    placeholder="••••••••"
+                                                    value={formData.password} 
+                                                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Confirm</label>
+                                                <input 
+                                                    type="password" 
+                                                    required 
+                                                    className="w-full bg-slate-800/50 border-2 border-slate-700 rounded-xl p-4 text-white focus:border-emerald-500 outline-none transition-colors" 
+                                                    placeholder="••••••••"
+                                                    value={formData.confirmPass} 
+                                                    onChange={e => setFormData({...formData, confirmPass: e.target.value})} 
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex gap-4 pt-2">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setStep(1)}
+                                                className="px-6 py-4 rounded-xl font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors"
+                                            >
+                                                <i className="fas fa-arrow-left mr-2"></i> Back
+                                            </button>
+                                            <button 
+                                                type="submit" 
+                                                disabled={loading}
+                                                className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white py-4 rounded-xl font-bold uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                {loading ? (
+                                                    <i className="fas fa-circle-notch fa-spin"></i>
+                                                ) : (
+                                                    <>
+                                                        <i className="fas fa-rocket"></i> Deploy Organization
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </form>
+                        </div>
                     </div>
                 </div>
             );

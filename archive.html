@@ -2,182 +2,266 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ISO Repository | Version Control & Delta</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISO 45001 | Document Repository</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Space Grotesk', sans-serif; }</style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="bg-slate-100 min-h-screen">
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        const generateFullPDF = (doc) => {
+        const generateDocPDF = (doc) => {
             const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('landscape');
+            const pdf = new jsPDF('portrait');
             const pW = pdf.internal.pageSize.getWidth();
-            const pH = pdf.internal.pageSize.getHeight();
-            const prefix = `${doc.orgCode || 'ORG'}-${doc.siteCode || 'SITE'}`.toUpperCase();
+            const prefix = `${doc.orgId || 'ORG'}-${doc.siteId || 'SITE'}`.toUpperCase();
 
-            const h = (title, id) => {
-                pdf.setFillColor(30, 41, 59); pdf.rect(0, 0, pW, 20, 'F');
-                pdf.setTextColor(255); pdf.setFontSize(10);
-                pdf.text(title, 14, 13);
-                pdf.text(`Doc ID: ${prefix}-${id} | Ver: ${doc.version}`, pW - 14, 13, { align: 'right' });
-                pdf.setTextColor(0);
-            };
+            // Header
+            pdf.setFillColor(30, 41, 59);
+            pdf.rect(0, 0, pW, 25, 'F');
+            pdf.setTextColor(255);
+            pdf.setFontSize(12);
+            pdf.text(doc.title || 'ISO Document', 14, 15);
+            pdf.setFontSize(9);
+            pdf.text(`Ref: ${doc.id} | Rev: ${doc.revision}`, pW - 14, 15, { align: 'right' });
 
-            h("DOCUMENT REVISION HISTORY (7.5)", "REV");
-            pdf.autoTable({ startY: 60, head: [['Ver', 'Date', 'Changes']], body: (doc.revisions || []).map(r => [r.ver, r.date, r.change]), theme: 'grid' });
-            
-            pdf.addPage(); h("SCOPE & BOUNDARIES (4.3)", "SCP");
-            pdf.autoTable({ startY: 30, head: [['Category', 'Description']], body: [['Physical', doc.boundaries.physical],['Operational', doc.boundaries.operational],['Organizational', doc.boundaries.organizational]], theme: 'striped' });
+            // Meta info
+            pdf.setTextColor(0);
+            pdf.setFontSize(10);
+            let y = 35;
+            pdf.text(`Document Type: ${doc.type}`, 14, y);
+            pdf.text(`Clause: ${doc.clause}`, 14, y + 6);
+            pdf.text(`Status: ${doc.status}`, 14, y + 12);
+            pdf.text(`Prepared By: ${doc.preparedBy}`, 14, y + 18);
+            pdf.text(`Approved By: ${doc.approvedBy || 'Pending'}`, 14, y + 24);
+            pdf.text(`Issue Date: ${doc.date}`, 14, y + 30);
 
-            pdf.addPage(); h("INTERESTED PARTIES (4.2)", "IPR");
-            pdf.autoTable({ startY: 30, head: [['ID', 'Name', 'Expectation']], body: (doc.interestedParties || []).map(p => [p.id, p.name, p.expectation]), theme: 'grid' });
+            // Content
+            pdf.setFontSize(11);
+            y = 80;
+            const lines = pdf.splitTextToSize(doc.content || 'No content.', pW - 28);
+            pdf.text(lines, 14, y);
 
-            pdf.addPage(); h("ISSUES REGISTER (4.1)", "IRR");
-            const iss = [...(doc.externalIssues || []).map(i => [i.id, 'EXT', i.text, i.priority]), ...(doc.internalIssues || []).map(i => [i.id, 'INT', i.text, i.priority])];
-            pdf.autoTable({ startY: 30, head: [['ID', 'Src', 'Issue Description', 'Risk']], body: iss, theme: 'grid' });
-
-            pdf.addPage(); h("PICTOGRAPHIC PROCESS MAP (4.4)", "MAP");
-            let y = 40;
-            (doc.processes || []).forEach((p, idx) => {
-                pdf.setFillColor(241, 245, 249); pdf.roundedRect(15, y, 65, 20, 3, 3, 'F');
-                pdf.setFillColor(37, 99, 235); pdf.roundedRect(95, y, 90, 20, 3, 3, 'F');
-                pdf.setFillColor(241, 245, 249); pdf.roundedRect(200, y, 65, 20, 3, 3, 'F');
-                
-                pdf.setFontSize(8); pdf.setTextColor(0);
-                pdf.text(p.inputs || "N/A", 17, y + 12, {maxWidth: 60});
-                pdf.setTextColor(255); pdf.setFont("helvetica", "bold");
-                pdf.text(p.name || "N/A", 100, y + 12, {maxWidth: 80});
-                pdf.setTextColor(0); pdf.setFont("helvetica", "normal");
-                pdf.text(p.outputs || "N/A", 202, y + 12, {maxWidth: 60});
-                y += 30;
-                if (y > pH - 30) { pdf.addPage(); h("PROCESS INTERACTION MAP (CONT.)", "MAP"); y = 30; }
-            });
-
-            pdf.save(`${prefix}-V${doc.version}.pdf`);
+            pdf.save(`${doc.id}.pdf`);
         };
 
         const App = () => {
-            const [view, setView] = useState('drafts');
-            const [search, setSearch] = useState('');
-            const [archive, setArchive] = useState({ drafts: [], approved: [] });
-            const [compare, setCompare] = useState({ open: false, draft: null, last: null, delta: '', idx: null });
             const [session, setSession] = useState(null);
+            const [view, setView] = useState('all');
+            const [search, setSearch] = useState('');
+            const [documents, setDocuments] = useState([]);
+            const [archive, setArchive] = useState({ drafts: [], approved: [] });
 
             useEffect(() => {
-                // Load Session
-                const sess = JSON.parse(sessionStorage.getItem('isoSession'));
-                if(sess) setSession(sess);
+                const s = sessionStorage.getItem('isoSession');
+                if (!s) { window.location.href = "index.html"; return; }
+                setSession(JSON.parse(s));
 
-                // Load Data
-                const data = JSON.parse(localStorage.getItem('isoArchive')) || { drafts: [], approved: [] };
-                setArchive(data);
+                // Load all document sources
+                const docs = JSON.parse(localStorage.getItem('isoDocuments')) || [];
+                const arc = JSON.parse(localStorage.getItem('isoArchive')) || { drafts: [], approved: [] };
+                setDocuments(docs);
+                setArchive(arc);
             }, []);
 
-            const updateStorage = (n) => { setArchive(n); localStorage.setItem('isoArchive', JSON.stringify(n)); };
-
-            const openCompare = (idx) => {
-                const draft = archive.drafts[idx];
-                const last = archive.approved.find(a => a.siteCode === draft.siteCode);
-                let changes = [];
-                if (!last) changes.push("Initial system release.");
-                else {
-                    if (draft.interestedParties.length !== last.interestedParties.length) changes.push("Stakeholder register updated");
-                    if (JSON.stringify(draft.boundaries) !== JSON.stringify(last.boundaries)) changes.push("Scope boundaries modified");
-                }
-                setCompare({ open: true, draft, last, delta: changes.join("; ") || "Review only.", idx });
+            const updateArchive = (n) => {
+                setArchive(n);
+                localStorage.setItem('isoArchive', JSON.stringify(n));
             };
 
-            const finalizeApproval = () => {
-                const draft = archive.drafts[compare.idx];
+            const deleteDoc = (type, idx) => {
+                if (!confirm("Delete this document?")) return;
+                if (type === 'doc') {
+                    const newDocs = documents.filter((_, i) => i !== idx);
+                    setDocuments(newDocs);
+                    localStorage.setItem('isoDocuments', JSON.stringify(newDocs));
+                } else {
+                    const n = { ...archive };
+                    n[type].splice(idx, 1);
+                    updateArchive(n);
+                }
+            };
+
+            const approveDoc = (idx) => {
+                const draft = archive.drafts[idx];
                 const siteHistory = archive.approved.filter(a => a.siteCode === draft.siteCode);
                 const nextVer = (siteHistory.length + 1).toFixed(1);
                 
-                // STAMPING THE APPROVER
-                const approvedDoc = { 
-                    ...draft, 
-                    version: nextVer, 
-                    // Capture Approver Name & Role from Session
-                    author: session ? session.user : 'Unknown',
-                    role: session ? session.role : 'System',
-                    revisions: [{ver: nextVer, date: new Date().toLocaleDateString(), change: compare.delta}, ...(draft.revisions || [])] 
+                const approvedDoc = {
+                    ...draft,
+                    version: nextVer,
+                    author: session?.user || 'Unknown',
+                    role: session?.role || 'System',
+                    revisions: [{ ver: nextVer, date: new Date().toLocaleDateString(), change: 'Approved' }, ...(draft.revisions || [])]
                 };
                 
-                const n = { drafts: archive.drafts.filter((_, i) => i !== compare.idx), approved: [approvedDoc, ...archive.approved] };
-                updateStorage(n);
-                setCompare({ open: false, draft: null, last: null, delta: '', idx: null });
+                const n = {
+                    drafts: archive.drafts.filter((_, i) => i !== idx),
+                    approved: [approvedDoc, ...archive.approved]
+                };
+                updateArchive(n);
+                alert("Document approved!");
             };
 
-            const filtered = archive[view].filter(d => d.siteCode?.toLowerCase().includes(search.toLowerCase()));
+            if (!session) return null;
+
+            // Combine all documents for display
+            const allDocs = [
+                ...documents.map((d, i) => ({ ...d, source: 'doc', sourceIdx: i })),
+                ...archive.drafts.map((d, i) => ({ ...d, source: 'drafts', sourceIdx: i, status: 'Draft' })),
+                ...archive.approved.map((d, i) => ({ ...d, source: 'approved', sourceIdx: i, status: 'Approved' }))
+            ];
+
+            const filteredDocs = allDocs.filter(d => {
+                const matchSearch = (d.title || d.companyName || '').toLowerCase().includes(search.toLowerCase()) ||
+                                   (d.id || d.siteCode || '').toLowerCase().includes(search.toLowerCase());
+                if (view === 'all') return matchSearch;
+                if (view === 'drafts') return matchSearch && (d.status === 'Draft' || d.source === 'drafts');
+                if (view === 'approved') return matchSearch && (d.status === 'Approved' || d.source === 'approved' || d.status === 'Released');
+                return matchSearch;
+            });
 
             return (
-                <div className="max-w-6xl mx-auto py-12 px-6">
-                    <nav className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl flex justify-between items-center mb-12 border-b-4 border-blue-600">
-                        <h1 className="text-2xl font-black italic uppercase tracking-tighter">OH&S Repository</h1>
-                        <a href="index4.html" className="bg-blue-600 text-white px-6 py-2 rounded-2xl text-xs font-black uppercase hover:bg-blue-500 transition shadow-lg"><i className="fas fa-edit mr-2"></i> Open Generator</a>
-                    </nav>
+                <div className="min-h-screen">
+                    {/* Header */}
+                    <header className="bg-slate-900 text-white">
+                        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <a href="home.html" className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+                                    <i className="fas fa-arrow-left"></i>
+                                </a>
+                                <div>
+                                    <h1 className="text-lg font-bold">Document Repository</h1>
+                                    <p className="text-xs text-slate-400 font-mono">Clause 7.5 - Documented Information</p>
+                                </div>
+                            </div>
+                            <a href="index4.html" className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20">
+                                <i className="fas fa-plus"></i> New Document
+                            </a>
+                        </div>
+                    </header>
 
-                    {compare.open && (
-                        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border-t-[12px] border-blue-600">
-                                <div className="p-8 border-b flex justify-between items-center"><h2 className="text-3xl font-black italic">Authorize Version</h2><button onClick={() => setCompare({...compare, open: false})} className="text-slate-300 hover:text-red-500 text-3xl"><i className="fas fa-times-circle"></i></button></div>
-                                <div className="p-8 bg-emerald-50 text-emerald-900 font-bold italic">Delta: "{compare.delta}"</div>
-                                <div className="p-8 flex gap-4"><button onClick={finalizeApproval} className="flex-1 bg-slate-900 text-white py-5 rounded-2xl font-black uppercase shadow-xl hover:bg-emerald-600 transition">Approve & Publish</button></div>
+                    {/* Main Content */}
+                    <main className="max-w-7xl mx-auto px-6 py-8">
+                        
+                        {/* Filters */}
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
+                            <div className="flex bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+                                {[['all', 'All Documents'], ['drafts', 'Drafts'], ['approved', 'Approved']].map(([id, label]) => (
+                                    <button
+                                        key={id}
+                                        onClick={() => setView(id)}
+                                        className={`px-6 py-3 rounded-lg text-xs font-bold uppercase transition-colors ${view === id ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="relative">
+                                <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input
+                                    className="pl-12 pr-6 py-3 border-2 border-slate-200 rounded-xl w-80 focus:border-blue-500 outline-none transition-colors"
+                                    placeholder="Search documents..."
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                />
                             </div>
                         </div>
-                    )}
 
-                    <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-8">
-                        <div className="flex bg-white p-2 rounded-3xl border shadow-xl w-fit">
-                            <button onClick={() => setView('drafts')} className={`px-12 py-4 rounded-2xl font-black text-xs transition-all ${view==='drafts'?'bg-orange-500 text-white shadow-xl':'text-slate-400'}`}>DRAFTS ({archive.drafts.length})</button>
-                            <button onClick={() => setView('approved')} className={`px-12 py-4 rounded-2xl font-black text-xs transition-all ${view==='approved'?'bg-emerald-600 text-white shadow-xl':'text-slate-400'}`}>APPROVED ({archive.approved.length})</button>
+                        {/* Stats */}
+                        <div className="grid grid-cols-3 gap-6 mb-8">
+                            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <p className="text-xs font-bold text-slate-400 uppercase">Total Documents</p>
+                                <p className="text-3xl font-bold text-slate-800 mt-1">{allDocs.length}</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl border-l-4 border-orange-500 shadow-sm">
+                                <p className="text-xs font-bold text-slate-400 uppercase">Pending Approval</p>
+                                <p className="text-3xl font-bold text-orange-500 mt-1">{archive.drafts.length}</p>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl border-l-4 border-emerald-500 shadow-sm">
+                                <p className="text-xs font-bold text-slate-400 uppercase">Approved</p>
+                                <p className="text-3xl font-bold text-emerald-500 mt-1">{archive.approved.length + documents.filter(d => d.status === 'Released').length}</p>
+                            </div>
                         </div>
-                        <input className="border-2 border-white p-5 rounded-3xl w-80 bg-white shadow-xl outline-none focus:border-blue-500 font-bold text-sm" placeholder="Site Search..." value={search} onChange={e => setSearch(e.target.value)} />
-                    </div>
 
-                    <div className="grid grid-cols-1 gap-4">
-                        {filtered.map((doc, i) => (
-                            <div key={i} className="bg-white p-8 rounded-[2.5rem] border flex justify-between items-center group transition hover:border-blue-400 shadow-lg relative overflow-hidden">
-                                {/* Decorator Line */}
-                                <div className={`absolute top-0 left-0 w-2 h-full ${view==='approved'?'bg-emerald-500':'bg-orange-500'}`}></div>
-                                
-                                <div className="flex-1 pl-4">
-                                    <h3 className="font-black text-2xl text-slate-800 tracking-tight italic uppercase">{doc.companyName}</h3>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{doc.siteCode} | {view==='approved' ? 'v'+doc.version : 'Pending'}</p>
+                        {/* Document List */}
+                        <div className="space-y-4">
+                            {filteredDocs.length === 0 && (
+                                <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center">
+                                    <i className="fas fa-folder-open text-4xl text-slate-300 mb-4"></i>
+                                    <p className="text-slate-500">No documents found.</p>
+                                </div>
+                            )}
+                            
+                            {filteredDocs.map((doc, i) => (
+                                <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-300 transition-colors group relative overflow-hidden">
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${doc.status === 'Approved' || doc.status === 'Released' ? 'bg-emerald-500' : 'bg-orange-500'}`}></div>
                                     
-                                    {/* --- USER & ROLE BADGE --- */}
-                                    <div className="flex items-center gap-3 mt-4">
-                                        <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                                            <i className="fas fa-user text-slate-400 text-xs"></i>
-                                            <span className="text-[10px] font-bold uppercase text-slate-600">{doc.author || 'System User'}</span>
+                                    <div className="flex justify-between items-center">
+                                        <div className="pl-4">
+                                            <h3 className="font-bold text-lg text-slate-800">{doc.title || doc.companyName || 'Untitled'}</h3>
+                                            <div className="flex items-center gap-4 mt-2">
+                                                <span className="text-xs font-mono text-slate-400">{doc.id || doc.siteCode}</span>
+                                                <span className={`text-xs font-bold px-2 py-1 rounded ${doc.status === 'Approved' || doc.status === 'Released' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                                                    {doc.version ? `v${doc.version}` : doc.status}
+                                                </span>
+                                                {doc.clause && <span className="text-xs text-slate-400">Clause {doc.clause}</span>}
+                                                {doc.type && <span className="text-xs text-slate-400">{doc.type}</span>}
+                                            </div>
+                                            {(doc.author || doc.preparedBy) && (
+                                                <div className="flex items-center gap-2 mt-3">
+                                                    <div className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center text-xs text-slate-500">
+                                                        <i className="fas fa-user"></i>
+                                                    </div>
+                                                    <span className="text-xs text-slate-500">{doc.author || doc.preparedBy}</span>
+                                                    {doc.role && <span className="text-xs text-blue-500 font-medium">({doc.role})</span>}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
-                                            <i className="fas fa-id-badge text-blue-400 text-xs"></i>
-                                            <span className="text-[10px] font-black uppercase text-blue-600">{doc.role || 'Contributor'}</span>
+                                        
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => generateDocPDF(doc)} 
+                                                className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
+                                                title="Download PDF"
+                                            >
+                                                <i className="fas fa-file-pdf"></i>
+                                            </button>
+                                            {doc.source === 'drafts' && (
+                                                <button 
+                                                    onClick={() => approveDoc(doc.sourceIdx)} 
+                                                    className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-colors"
+                                                    title="Approve"
+                                                >
+                                                    <i className="fas fa-check-circle"></i>
+                                                </button>
+                                            )}
+                                            <button 
+                                                onClick={() => deleteDoc(doc.source, doc.sourceIdx)} 
+                                                className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
+                                                title="Delete"
+                                            >
+                                                <i className="fas fa-trash-alt"></i>
+                                            </button>
                                         </div>
                                     </div>
-                                    {/* ------------------------- */}
                                 </div>
-
-                                <div className="flex gap-2">
-                                    <button onClick={() => generateFullPDF(doc)} className="p-4 bg-blue-50 text-blue-600 rounded-2xl shadow-md hover:scale-105 transition"><i className="fas fa-file-pdf"></i></button>
-                                    <button onClick={() => {localStorage.setItem('isoDataCurrent', JSON.stringify(doc)); window.location.href='index4.html';}} className="p-4 bg-slate-50 text-slate-500 rounded-2xl shadow-md hover:scale-105 transition"><i className="fas fa-edit"></i></button>
-                                    {view === 'drafts' && <button onClick={() => openCompare(i)} className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl shadow-md hover:scale-105 transition"><i className="fas fa-check-circle"></i></button>}
-                                    <button onClick={() => {if(confirm("Delete?")){const n={...archive}; n[view].splice(i,1); updateStorage(n);}}} className="p-4 bg-red-50 text-red-500 rounded-2xl shadow-md hover:scale-105 transition"><i className="fas fa-trash-alt"></i></button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    </main>
                 </div>
             );
         };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>

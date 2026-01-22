@@ -3,206 +3,334 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create ISO 45001 Document</title>
+    <title>ISO 45001 | Document Creator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'display': ['Space Grotesk', 'sans-serif'],
+                        'mono': ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; color: #333; }
-        
-        .section-title { font-size: 1.1em; font-weight: bold; margin-top: 20px; margin-bottom: 10px; color: #555; }
-        
-        .row { display: flex; gap: 20px; margin-bottom: 15px; }
-        .col { flex: 1; }
-        
-        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em; }
-        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        textarea { resize: vertical; }
-        
-        /* Read-only fields styling */
-        .auto-generated { background-color: #e9ecef; color: #495057; cursor: not-allowed; font-family: monospace; font-weight: bold; }
-
-        .btn-group { margin-top: 20px; text-align: right; }
-        button { padding: 10px 25px; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; }
-        .btn-save { background-color: #28a745; color: white; }
-        .btn-cancel { background-color: #6c757d; color: white; margin-right: 10px; }
-        
-        .context-banner { background: #e2e6ea; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 0.9em; color: #333; }
+        body { font-family: 'Space Grotesk', sans-serif; }
+        .input-focus:focus { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
     </style>
 </head>
-<body>
+<body class="bg-slate-100 min-h-screen">
+    <div id="root"></div>
 
-<div class="container">
-    <h2>New OH&S Document Control</h2>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
 
-    <div class="context-banner" id="contextBanner">
-        Loading Organization Context...
-    </div>
-
-    <form id="docForm">
-        <div class="section-title">1. Document Identification</div>
-        <div class="row">
-            <div class="col">
-                <label>ISO 45001 Clause (PDCA)</label>
-                <select id="isoClause" onchange="generateDocRef()">
-                    <option value="" disabled selected>Select Clause...</option>
-                    <optgroup label="PLAN">
-                        <option value="4.1">4.1 Context of the Organization</option>
-                        <option value="4.2">4.2 Needs of Workers</option>
-                        <option value="5.2">5.2 OH&S Policy</option>
-                        <option value="6.1">6.1 Actions to address risks</option>
-                    </optgroup>
-                    <optgroup label="DO">
-                        <option value="7.2">7.2 Competence</option>
-                        <option value="7.5">7.5 Documented Information</option>
-                        <option value="8.1">8.1 Operational Planning</option>
-                        <option value="8.2">8.2 Emergency Preparedness</option>
-                    </optgroup>
-                    <optgroup label="CHECK">
-                        <option value="9.1">9.1 Monitoring & Measurement</option>
-                        <option value="9.2">9.2 Internal Audit</option>
-                        <option value="9.3">9.3 Management Review</option>
-                    </optgroup>
-                    <optgroup label="ACT">
-                        <option value="10.2">10.2 Incident & Nonconformity</option>
-                        <option value="10.3">10.3 Continual Improvement</option>
-                    </optgroup>
-                </select>
-            </div>
-            <div class="col">
-                <label>Document Reference ID (Auto-Generated)</label>
-                <input type="text" id="docId" class="auto-generated" readonly>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col">
-                <label>Document Title</label>
-                <input type="text" id="docTitle" placeholder="e.g., Hazard Identification Procedure">
-            </div>
-            <div class="col">
-                <label>Document Type</label>
-                <select id="docType">
-                    <option value="Procedure">Procedure</option>
-                    <option value="Policy">Policy</option>
-                    <option value="Work Instruction">Work Instruction</option>
-                    <option value="Form/Checklist">Form / Checklist</option>
-                    <option value="Manual">Manual</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="section-title">2. Version & Control</div>
-        <div class="row">
-            <div class="col">
-                <label>Revision Number</label>
-                <input type="text" id="revNum" value="1.0">
-            </div>
-            <div class="col">
-                <label>Issue Date</label>
-                <input type="date" id="issueDate">
-            </div>
-            <div class="col">
-                <label>Status</label>
-                <select id="docStatus">
-                    <option value="Draft">Draft</option>
-                    <option value="Under Review">Under Review</option>
-                    <option value="Released">Released</option>
-                    <option value="Obsolete">Obsolete</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="section-title">3. Responsibility</div>
-        <div class="row">
-            <div class="col">
-                <label>Prepared By</label>
-                <input type="text" id="preparedBy" placeholder="Name/Role">
-            </div>
-            <div class="col">
-                <label>Approved By</label>
-                <input type="text" id="approvedBy" placeholder="Name/Role (e.g. Site Manager)">
-            </div>
-        </div>
-
-        <div class="section-title">4. Document Content</div>
-        <div class="row">
-            <div class="col">
-                <textarea id="docContent" rows="12" placeholder="Enter the procedure text, scope, definitions, and responsibilities here..."></textarea>
-            </div>
-        </div>
-
-        <div class="btn-group">
-            <button type="button" class="btn-cancel" onclick="window.history.back()">Cancel</button>
-            <button type="button" class="btn-save" onclick="saveDocument()">Save Document</button>
-        </div>
-    </form>
-</div>
-
-<script>
-    // 1. GLOBAL CONTEXT VARIABLES
-    let orgId = localStorage.getItem('orgId') || 'UNKNOWN_ORG';
-    let siteId = localStorage.getItem('siteId') || 'UNKNOWN_SITE';
-
-    // 2. INITIALIZATION
-    window.onload = function() {
-        // Display Context to user
-        document.getElementById('contextBanner').innerText = 
-            ` Creating Document for: Organization [${orgId}] - Site [${siteId}]`;
-        
-        // Set default date to today
-        document.getElementById('issueDate').valueAsDate = new Date();
-    };
-
-    // 3. AUTO-NAMING LOGIC
-    function generateDocRef() {
-        const clause = document.getElementById('isoClause').value.replace('.', '');
-        const typeShort = document.getElementById('docType').value.substring(0,3).toUpperCase();
-        
-        if(!clause) return;
-
-        // Generate a random 4 digit suffix for uniqueness (in a real app, you'd fetch the next sequence number)
-        const suffix = Math.floor(1000 + Math.random() * 9000);
-
-        // FORMAT: ORG-SITE-TYPE-CLAUSE-SUFFIX
-        // Example: GOOG-HYD4-PRO-ISO41-1023
-        const ref = `${orgId}-${siteId}-${typeShort}-ISO${clause}-${suffix}`;
-        
-        document.getElementById('docId').value = ref;
-    }
-
-    // Listener for Doc Type change to update ID as well
-    document.getElementById('docType').addEventListener('change', generateDocRef);
-
-    // 4. SAVE FUNCTION
-    function saveDocument() {
-        const docId = document.getElementById('docId').value;
-        if(!docId) { alert("Please select a clause to generate a Document ID."); return; }
-
-        const newDoc = {
-            id: docId,
-            orgId: orgId,        // HIDDEN SAVED DATA
-            siteId: siteId,      // HIDDEN SAVED DATA
-            clause: document.getElementById('isoClause').value,
-            title: document.getElementById('docTitle').value,
-            type: document.getElementById('docType').value,
-            revision: document.getElementById('revNum').value,
-            date: document.getElementById('issueDate').value,
-            status: document.getElementById('docStatus').value,
-            preparedBy: document.getElementById('preparedBy').value,
-            approvedBy: document.getElementById('approvedBy').value,
-            content: document.getElementById('docContent').value,
-            timestamp: new Date().toISOString()
+        const CLAUSE_OPTIONS = {
+            'PLAN': [
+                { value: '4.1', label: '4.1 Context of the Organization' },
+                { value: '4.2', label: '4.2 Needs of Workers & Interested Parties' },
+                { value: '4.3', label: '4.3 Scope of the OH&S System' },
+                { value: '5.2', label: '5.2 OH&S Policy' },
+                { value: '6.1', label: '6.1 Actions to Address Risks & Opportunities' },
+                { value: '6.2', label: '6.2 OH&S Objectives & Planning' },
+            ],
+            'DO': [
+                { value: '7.1', label: '7.1 Resources' },
+                { value: '7.2', label: '7.2 Competence' },
+                { value: '7.3', label: '7.3 Awareness' },
+                { value: '7.4', label: '7.4 Communication' },
+                { value: '7.5', label: '7.5 Documented Information' },
+                { value: '8.1', label: '8.1 Operational Planning & Control' },
+                { value: '8.2', label: '8.2 Emergency Preparedness & Response' },
+            ],
+            'CHECK': [
+                { value: '9.1', label: '9.1 Monitoring & Measurement' },
+                { value: '9.2', label: '9.2 Internal Audit' },
+                { value: '9.3', label: '9.3 Management Review' },
+            ],
+            'ACT': [
+                { value: '10.1', label: '10.1 General' },
+                { value: '10.2', label: '10.2 Incident, Nonconformity & Corrective Action' },
+                { value: '10.3', label: '10.3 Continual Improvement' },
+            ]
         };
 
-        // Get existing docs or init empty array
-        let docs = JSON.parse(localStorage.getItem('isoDocuments')) || [];
-        docs.push(newDoc);
-        localStorage.setItem('isoDocuments', JSON.stringify(docs));
+        const DOC_TYPES = ['Procedure', 'Policy', 'Work Instruction', 'Form/Checklist', 'Manual', 'Record', 'Register'];
 
-        alert('Document Saved Successfully!');
-        window.location.href = 'index5.html'; // Go to list view
-    }
-</script>
+        const App = () => {
+            const [session, setSession] = useState(null);
+            const [formData, setFormData] = useState({
+                clause: '',
+                docId: '',
+                title: '',
+                type: 'Procedure',
+                revision: '1.0',
+                date: new Date().toISOString().split('T')[0],
+                status: 'Draft',
+                preparedBy: '',
+                approvedBy: '',
+                content: ''
+            });
 
+            useEffect(() => {
+                const sessInfo = sessionStorage.getItem('isoSession');
+                if (!sessInfo) {
+                    window.location.href = "index.html";
+                    return;
+                }
+                const sess = JSON.parse(sessInfo);
+                setSession(sess);
+                setFormData(prev => ({
+                    ...prev,
+                    preparedBy: sess.user
+                }));
+            }, []);
+
+            const generateDocRef = (clause) => {
+                if (!clause || !session) return '';
+                const clauseClean = clause.replace('.', '');
+                const typeShort = formData.type.substring(0, 3).toUpperCase();
+                const suffix = Math.floor(1000 + Math.random() * 9000);
+                return `${session.orgId}-${typeShort}-ISO${clauseClean}-${suffix}`;
+            };
+
+            const handleClauseChange = (e) => {
+                const clause = e.target.value;
+                const docId = generateDocRef(clause);
+                setFormData({ ...formData, clause, docId });
+            };
+
+            const handleTypeChange = (e) => {
+                const type = e.target.value;
+                const docId = formData.clause ? generateDocRef(formData.clause).replace(formData.type.substring(0, 3).toUpperCase(), type.substring(0, 3).toUpperCase()) : '';
+                setFormData({ ...formData, type, docId: formData.clause ? generateDocRef(formData.clause) : '' });
+            };
+
+            const handleSave = () => {
+                if (!formData.docId || !formData.title) {
+                    alert("Please select a clause and enter a document title.");
+                    return;
+                }
+
+                const newDoc = {
+                    ...formData,
+                    id: formData.docId,
+                    orgId: session.orgId,
+                    author: session.user,
+                    role: session.role,
+                    timestamp: new Date().toISOString()
+                };
+
+                let docs = JSON.parse(localStorage.getItem('isoDocuments')) || [];
+                docs.push(newDoc);
+                localStorage.setItem('isoDocuments', JSON.stringify(docs));
+
+                alert('Document Saved Successfully!');
+                window.location.href = 'archive.html';
+            };
+
+            if (!session) return null;
+
+            const InputField = ({ label, id, type = "text", value, onChange, placeholder, readonly = false, mono = false, children }) => (
+                <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label}</label>
+                    {children || (
+                        <input 
+                            type={type}
+                            className={`w-full border-2 border-slate-200 rounded-xl p-4 bg-white focus:border-blue-500 outline-none transition-colors input-focus ${readonly ? 'bg-slate-50 text-slate-600 cursor-not-allowed' : ''} ${mono ? 'font-mono' : ''}`}
+                            placeholder={placeholder}
+                            value={value}
+                            onChange={onChange}
+                            readOnly={readonly}
+                        />
+                    )}
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* Header */}
+                    <header className="bg-slate-900 text-white">
+                        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <a href="home.html" className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
+                                    <i className="fas fa-arrow-left"></i>
+                                </a>
+                                <div>
+                                    <h1 className="text-lg font-bold">Document Creator</h1>
+                                    <p className="text-xs text-slate-400 font-mono">Clause 7.5 - Documented Information</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="bg-slate-800 px-4 py-2 rounded-xl">
+                                    <span className="text-xs text-slate-400">Context:</span>
+                                    <span className="text-xs text-blue-400 font-mono ml-2">{session.orgId}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="flex-1 py-8">
+                        <div className="max-w-4xl mx-auto px-6">
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                
+                                {/* Form Header */}
+                                <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-8 py-6 text-white">
+                                    <h2 className="text-xl font-bold">New OH&S Document</h2>
+                                    <p className="text-blue-100 text-sm mt-1">Create controlled documentation for your management system.</p>
+                                </div>
+
+                                <div className="p-8 space-y-8">
+                                    
+                                    {/* Section 1: Document Identification */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                            <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-xs">1</span>
+                                            Document Identification
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <InputField label="ISO 45001 Clause (PDCA)">
+                                                <select 
+                                                    className="w-full border-2 border-slate-200 rounded-xl p-4 bg-white focus:border-blue-500 outline-none transition-colors"
+                                                    value={formData.clause}
+                                                    onChange={handleClauseChange}
+                                                >
+                                                    <option value="">Select Clause...</option>
+                                                    {Object.entries(CLAUSE_OPTIONS).map(([group, options]) => (
+                                                        <optgroup key={group} label={group}>
+                                                            {options.map(opt => (
+                                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                            ))}
+                                                        </optgroup>
+                                                    ))}
+                                                </select>
+                                            </InputField>
+                                            <InputField 
+                                                label="Document Reference ID"
+                                                value={formData.docId}
+                                                readonly={true}
+                                                mono={true}
+                                                placeholder="Auto-generated..."
+                                            />
+                                            <InputField 
+                                                label="Document Title"
+                                                value={formData.title}
+                                                onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                                placeholder="e.g., Hazard Identification Procedure"
+                                            />
+                                            <InputField label="Document Type">
+                                                <select 
+                                                    className="w-full border-2 border-slate-200 rounded-xl p-4 bg-white focus:border-blue-500 outline-none transition-colors"
+                                                    value={formData.type}
+                                                    onChange={(e) => setFormData({...formData, type: e.target.value})}
+                                                >
+                                                    {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                                </select>
+                                            </InputField>
+                                        </div>
+                                    </div>
+
+                                    {/* Section 2: Version Control */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                            <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-xs">2</span>
+                                            Version & Control
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <InputField 
+                                                label="Revision Number"
+                                                value={formData.revision}
+                                                onChange={(e) => setFormData({...formData, revision: e.target.value})}
+                                                mono={true}
+                                            />
+                                            <InputField 
+                                                label="Issue Date"
+                                                type="date"
+                                                value={formData.date}
+                                                onChange={(e) => setFormData({...formData, date: e.target.value})}
+                                            />
+                                            <InputField label="Status">
+                                                <select 
+                                                    className="w-full border-2 border-slate-200 rounded-xl p-4 bg-white focus:border-blue-500 outline-none transition-colors"
+                                                    value={formData.status}
+                                                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                                >
+                                                    <option>Draft</option>
+                                                    <option>Under Review</option>
+                                                    <option>Released</option>
+                                                    <option>Obsolete</option>
+                                                </select>
+                                            </InputField>
+                                        </div>
+                                    </div>
+
+                                    {/* Section 3: Responsibility */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                            <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-xs">3</span>
+                                            Responsibility
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <InputField 
+                                                label="Prepared By"
+                                                value={formData.preparedBy}
+                                                onChange={(e) => setFormData({...formData, preparedBy: e.target.value})}
+                                                placeholder="Name/Role"
+                                            />
+                                            <InputField 
+                                                label="Approved By"
+                                                value={formData.approvedBy}
+                                                onChange={(e) => setFormData({...formData, approvedBy: e.target.value})}
+                                                placeholder="Name/Role (e.g. Site Manager)"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Section 4: Content */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                            <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-xs">4</span>
+                                            Document Content
+                                        </h3>
+                                        <textarea 
+                                            className="w-full border-2 border-slate-200 rounded-xl p-4 bg-white focus:border-blue-500 outline-none transition-colors h-64 resize-none"
+                                            placeholder="Enter the procedure text, scope, definitions, responsibilities, and detailed steps here..."
+                                            value={formData.content}
+                                            onChange={(e) => setFormData({...formData, content: e.target.value})}
+                                        />
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex justify-end gap-4 pt-4 border-t border-slate-100">
+                                        <a href="home.html" className="px-8 py-4 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors">
+                                            Cancel
+                                        </a>
+                                        <button 
+                                            onClick={handleSave}
+                                            className="px-8 py-4 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                                        >
+                                            <i className="fas fa-save"></i> Save Document
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
