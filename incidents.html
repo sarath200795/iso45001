@@ -14,16 +14,27 @@
     <script>
         tailwind.config = {
             theme: {
-                extend: {
-                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
-                }
+                extend: { colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' } }
             }
         }
     </script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
         
-        /* DIAGRAM STYLES */
+        /* TREE DIAGRAM STYLES */
+        .tree ul { padding-top: 20px; position: relative; display: flex; justify-content: center; transition: all 0.5s; }
+        .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; transition: all 0.5s; }
+        .tree li::before, .tree li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #64748b; width: 50%; height: 20px; }
+        .tree li::after { right: auto; left: 50%; border-left: 2px solid #64748b; }
+        .tree li:only-child::after, .tree li:only-child::before { display: none; }
+        .tree li:only-child { padding-top: 0; }
+        .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
+        .tree li:last-child::before { border-right: 2px solid #64748b; border-radius: 0 5px 0 0; }
+        .tree li:first-child::after { border-radius: 5px 0 0 0; }
+        .tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #64748b; width: 0; height: 20px; }
+        .tree-node { display: inline-block; padding: 10px; border-radius: 8px; background: #1e293b; border: 1px solid #475569; min-width: 140px; position: relative; z-index: 10; }
+
+        /* FISHBONE STYLES */
         .fishbone-container { position: relative; padding: 20px 0; overflow-x: auto; }
         .spine { position: absolute; top: 50%; left: 0; right: 120px; height: 3px; background: #64748b; z-index: 0; }
         .spine::after { content: ''; position: absolute; right: -20px; top: -10px; border-left: 20px solid #64748b; border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
@@ -35,36 +46,20 @@
         .ribs-top .rib-box::after { content: ''; position: absolute; bottom: -40px; left: 50%; width: 2px; height: 40px; background: #64748b; transform: skewX(-20deg); transform-origin: top; }
         .ribs-bottom .rib-box::before { content: ''; position: absolute; top: -40px; left: 50%; width: 2px; height: 40px; background: #64748b; transform: skewX(20deg); transform-origin: bottom; }
 
-        .tree ul { padding-top: 20px; position: relative; display: flex; justify-content: center; }
-        .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; }
-        .tree li::before, .tree li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #64748b; width: 50%; height: 20px; }
-        .tree li::after { right: auto; left: 50%; border-left: 2px solid #64748b; }
-        .tree li:only-child::after, .tree li:only-child::before { display: none; }
-        .tree li:only-child { padding-top: 0; }
-        .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
-        .tree li:last-child::before { border-right: 2px solid #64748b; border-radius: 0 5px 0 0; }
-        .tree li:first-child::after { border-radius: 5px 0 0 0; }
-        .tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #64748b; width: 0; height: 20px; }
-        .tree-node { display: inline-block; padding: 8px 12px; border-radius: 6px; background: #1e293b; border: 1px solid #475569; color: white; min-width: 120px; z-index: 10; position: relative; }
-
         /* PRINT STYLES */
         @media print {
-            @page { size: A4; margin: 10mm; }
+            @page { size: A4 landscape; margin: 10mm; }
             body { background: white; color: black; -webkit-print-color-adjust: exact; }
             .no-print { display: none !important; }
             .section-card { border: 1px solid #000 !important; background: white !important; color: black !important; box-shadow: none !important; margin-bottom: 20px; page-break-inside: avoid; }
             input, textarea, select { background: transparent !important; border: 1px solid #ccc !important; color: black !important; }
             .bg-slate-900, .bg-slate-800 { background: white !important; color: black !important; border: 1px solid #ccc !important; }
-            
-            /* Diagram Print Fixes */
             .rib-box, .tree-node { background: white !important; border: 1px solid black !important; color: black !important; }
             .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-left-color: black !important; border-color: black !important; }
             .head { background: white !important; color: black !important; border-color: black !important; }
-            
             .tab-content { display: block !important; margin-bottom: 30px; }
             .tab-header { display: block !important; font-weight: bold; font-size: 1.2rem; margin-bottom: 10px; border-bottom: 2px solid black; }
         }
-        
         .tab-content { display: none; }
         .tab-content.active { display: block; }
     </style>
@@ -84,33 +79,121 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        const FaultTreeNode = ({ node, onUpdate }) => {
-            const addChild = () => onUpdate({ ...node, children: [...(node.children||[]), { id: Date.now(), label: 'Cause', type: 'AND', children: [] }] });
+        // --- FAULT TREE COMPONENT (With Parallel Sibling Support) ---
+        const FaultTreeNode = ({ node, onUpdate, onDelete, onAddSibling }) => {
+            
+            // Add Child (Downwards)
+            const handleAddChild = () => {
+                const newChild = { id: Date.now(), label: 'New Event', type: 'EVENT', children: [] };
+                onUpdate({ ...node, children: [...(node.children || []), newChild] });
+            };
+
+            // Toggle Logic Gate
+            const toggleType = () => {
+                const types = ['EVENT', 'AND', 'OR', 'ROOT'];
+                const next = types[(types.indexOf(node.type) + 1) % types.length];
+                onUpdate({ ...node, type: next });
+            };
+
+            // Recursive Update for Children
+            const updateChild = (idx, newData) => {
+                const kids = [...node.children];
+                kids[idx] = newData;
+                onUpdate({ ...node, children: kids });
+            };
+
+            // Delete Child
+            const deleteChild = (idx) => {
+                const kids = node.children.filter((_, i) => i !== idx);
+                onUpdate({ ...node, children: kids });
+            };
+
+            // Add Sibling to Child (Parallel Cause)
+            const addSiblingToChild = () => {
+                const newSibling = { id: Date.now(), label: 'Parallel Event', type: 'EVENT', children: [] };
+                onUpdate({ ...node, children: [...node.children, newSibling] });
+            };
+
             return (
                 <li>
                     <div className="tree-node group">
-                        <div className="flex justify-between items-center mb-1 no-print">
-                            <button onClick={addChild} className="text-[9px] bg-blue-600 px-1 rounded text-white">+</button>
-                            <span onClick={()=>onUpdate({...node, type: node.type==='AND'?'OR':'AND'})} className="text-[8px] cursor-pointer bg-slate-700 px-1 rounded border border-slate-600">{node.type}</span>
+                        {/* CONTROLS (Hidden on Print) */}
+                        <div className="absolute -top-3 right-0 opacity-0 group-hover:opacity-100 flex gap-1 no-print z-30 transition-opacity">
+                            {/* Add Child (Down) */}
+                            <button onClick={handleAddChild} className="bg-blue-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center shadow hover:scale-110 transition-transform" title="Add Child (Down)">↓</button>
+                            
+                            {/* Add Sibling (Right) - Only if parent provided handler */}
+                            {onAddSibling && (
+                                <button onClick={onAddSibling} className="bg-purple-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center shadow hover:scale-110 transition-transform" title="Add Parallel Cause (Right)">→</button>
+                            )}
+                            
+                            {/* Delete */}
+                            {onDelete && (
+                                <button onClick={onDelete} className="bg-red-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center shadow hover:scale-110 transition-transform" title="Delete Node">x</button>
+                            )}
                         </div>
-                        <input value={node.label} onChange={e=>onUpdate({...node, label:e.target.value})} className="bg-transparent text-center text-xs font-bold w-full outline-none" />
+
+                        {/* Node Content */}
+                        <input 
+                            value={node.label} 
+                            onChange={(e) => onUpdate({...node, label: e.target.value})} 
+                            className="bg-transparent text-center text-xs font-bold w-full outline-none border-b border-transparent focus:border-blue-500 pb-1"
+                            placeholder="Event Description"
+                        />
+                        
+                        {/* Logic Gate Switch */}
+                        <div onClick={toggleType} className="mt-1 cursor-pointer no-print select-none">
+                            <span className={`text-[9px] px-1.5 rounded font-mono border ${
+                                node.type === 'AND' ? 'border-purple-500 text-purple-400' : 
+                                node.type === 'OR' ? 'border-orange-500 text-orange-400' : 
+                                node.type === 'ROOT' ? 'border-emerald-500 text-emerald-400' : 
+                                'border-slate-600 text-slate-500'
+                            }`}>
+                                {node.type}
+                            </span>
+                        </div>
+                        
+                        {/* Gate Icon (Print View) */}
                         <div className="hidden print:block text-[8px] font-bold text-center mt-1">[{node.type}]</div>
                     </div>
-                    {node.children?.length > 0 && <ul>{node.children.map((child, i) => (<FaultTreeNode key={child.id} node={child} onUpdate={d=>{const k=[...node.children];k[i]=d;onUpdate({...node, children:k})}} />))}</ul>}
+
+                    {/* Children Renderer */}
+                    {node.children && node.children.length > 0 && (
+                        <ul>
+                            {node.children.map((child, i) => (
+                                <FaultTreeNode 
+                                    key={child.id} 
+                                    node={child} 
+                                    onUpdate={(updatedChild) => updateChild(i, updatedChild)} 
+                                    onDelete={() => deleteChild(i)}
+                                    // Pass handler to add sibling to THIS child list
+                                    onAddSibling={addSiblingToChild} 
+                                />
+                            ))}
+                        </ul>
+                    )}
                 </li>
             );
         };
 
+        // --- FISHBONE COMPONENT ---
         const Fishbone = ({ data, onChange }) => {
             const update = (cat, i, val) => { const arr=[...data[cat]]; arr[i]=val; onChange({...data, [cat]:arr}); };
             const add = (cat) => onChange({...data, [cat]: [...data[cat], '']});
+            const remove = (cat, i) => { const arr=[...data[cat]]; arr.splice(i,1); onChange({...data, [cat]:arr}); };
+            
             const RibBox = ({ title, cat }) => (
                 <div className="rib-box">
                     <div className="flex justify-between mb-1 border-b border-slate-600 pb-1">
                         <span className="text-[9px] font-bold uppercase text-slate-400">{title}</span>
-                        <button onClick={()=>add(cat)} className="text-[10px] text-green-400 no-print">+</button>
+                        <button onClick={()=>add(cat)} className="text-[10px] text-green-400 no-print hover:text-green-300">+</button>
                     </div>
-                    {data[cat].map((v, i) => <input key={i} value={v} onChange={e=>update(cat, i, e.target.value)} className="w-full bg-transparent text-[10px] border-b border-slate-700 mb-1 outline-none text-white print:text-black" />)}
+                    {data[cat].map((v, i) => (
+                        <div key={i} className="flex group">
+                            <input value={v} onChange={e=>update(cat, i, e.target.value)} className="w-full bg-transparent text-[10px] border-b border-slate-700 mb-1 outline-none text-white print:text-black" />
+                            <button onClick={()=>remove(cat, i)} className="text-red-500 text-[8px] opacity-0 group-hover:opacity-100 ml-1 no-print">x</button>
+                        </div>
+                    ))}
                 </div>
             );
             return (
@@ -122,6 +205,7 @@
             );
         };
 
+        // --- MAIN APP ---
         const App = () => {
             const [step, setStep] = useState(1);
             const [session, setSession] = useState(null);
@@ -129,7 +213,7 @@
             
             const [data, setData] = useState({
                 id: '', siteId: '', date: new Date().toISOString().split('T')[0], time: '', type: 'Near Miss', description: '',
-                investigation: { fiveWhys: ['','','','',''], fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, faultTree: { id:1, label:'Incident', type:'OR', children:[] }, rootCause: '' },
+                investigation: { fiveWhys: ['','','','',''], fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, faultTree: { id:1, label:'Top Event', type:'AND', children:[] }, rootCause: '' },
                 capa: [], riskUpdated: false
             });
 
@@ -139,116 +223,160 @@
                 const sess = JSON.parse(s);
                 setSession(sess);
 
-                // URL Params Logic
+                // --- URL PARAMS FIX ---
                 const params = new URLSearchParams(window.location.search);
                 let ctxSite = params.get('site');
                 
-                // Handling GLOBAL vs Specific
+                // If site is 'GLOBAL' or null, enable editing. Otherwise lock it.
                 if (!ctxSite || ctxSite === 'GLOBAL') {
-                    setIsGlobal(true); // Enable editing
-                    ctxSite = ''; // Empty so user can type
+                    setIsGlobal(true);
+                    ctxSite = ''; // Clear so user can type
                 } else {
-                    setIsGlobal(false); // Read-only
+                    setIsGlobal(false);
                 }
 
                 const seq = Math.floor(Math.random()*9999);
-                setData(prev => ({ ...prev, id: `${sess.orgId}-${ctxSite || 'GEN'}-${seq}`, siteId: ctxSite }));
+                // Don't overwrite siteId if user is typing, only on init
+                setData(prev => ({ 
+                    ...prev, 
+                    id: `${sess.orgId}-${ctxSite || 'GEN'}-${seq}`, 
+                    siteId: ctxSite 
+                }));
             }, []);
 
             const saveData = async () => {
                 if(!data.siteId) { alert("Please enter a Site ID"); return; }
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/incidents`), data);
-                alert("Saved!");
+                alert("Report Saved Successfully!");
                 window.location.href = 'home.html';
             };
 
             if(!session) return null;
 
             return (
-                <div className="max-w-5xl mx-auto p-6">
+                <div className="max-w-6xl mx-auto p-6">
                     
                     {/* Header */}
                     <div className="flex justify-between items-center mb-8 no-print">
                         <div className="flex items-center gap-4">
-                            <a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a>
+                            <a href="home.html" className="text-slate-400 hover:text-white transition-colors"><i className="fas fa-arrow-left"></i> Back</a>
                             <h1 className="text-xl font-bold text-white">Incident Report</h1>
                         </div>
                         <div className="flex gap-2">
-                            {[1,2,3,4].map(n => <button key={n} onClick={()=>setStep(n)} className={`w-8 h-8 rounded-full font-bold text-sm ${step===n ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>{n}</button>)}
+                            {[1,2,3,4].map(n => <button key={n} onClick={()=>setStep(n)} className={`w-8 h-8 rounded-full font-bold text-sm transition-colors ${step===n ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500 hover:text-white'}`}>{n}</button>)}
                         </div>
-                        <button onClick={()=>window.print()} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i className="fas fa-file-pdf"></i> PDF</button>
+                        <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors"><i className="fas fa-file-pdf"></i> PDF</button>
                     </div>
 
                     {/* Print Header */}
                     <div className="hidden print:block text-center border-b-2 border-black pb-4 mb-6">
                         <h1 className="text-2xl font-bold uppercase">Incident Investigation Report</h1>
-                        <p className="text-sm font-mono mt-1">ID: {data.id} | Org: {session.orgId}</p>
+                        <div className="flex justify-between mt-2 text-sm font-mono">
+                            <span>ID: {data.id}</span>
+                            <span>Org: {session.orgId}</span>
+                            <span>Date: {data.date}</span>
+                        </div>
                     </div>
 
-                    {/* Step 1 */}
+                    {/* STEP 1: INITIAL */}
                     <div className={`tab-content ${step===1?'active':''} section-card`}>
                         <div className="hidden print:block tab-header">1. Initial Information</div>
-                        <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
-                            <div className="grid grid-cols-2 gap-6 mb-4">
+                        <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700 shadow-xl">
+                            <div className="grid grid-cols-2 gap-6 mb-6">
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site Location ID</label>
-                                    {/* TOGGLE: Input if Global/Empty, Text if Fixed */}
                                     {isGlobal ? (
                                         <input 
-                                            className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" 
+                                            className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white focus:border-blue-500 outline-none transition-colors" 
                                             placeholder="Enter Site Code (e.g. BLR-01)"
                                             value={data.siteId} 
                                             onChange={e=>setData({...data, siteId:e.target.value})} 
                                         />
                                     ) : (
-                                        <div className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-emerald-400 font-mono font-bold">
-                                            {data.siteId}
+                                        <div className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-emerald-400 font-mono font-bold cursor-not-allowed">
+                                            {data.siteId} <span className="text-slate-500 text-xs ml-2">(Locked from Home)</span>
                                         </div>
                                     )}
                                 </div>
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Type</label>
-                                    <select className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" value={data.type} onChange={e=>setData({...data, type:e.target.value})}><option>Near Miss</option><option>Accident</option><option>Hazard</option></select>
+                                    <select className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white focus:border-blue-500 outline-none" value={data.type} onChange={e=>setData({...data, type:e.target.value})}><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select>
                                 </div>
                                 <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Date</label><input type="date" className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" value={data.date} onChange={e=>setData({...data, date:e.target.value})} /></div>
                                 <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Time</label><input type="time" className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" value={data.time} onChange={e=>setData({...data, time:e.target.value})} /></div>
                             </div>
                             <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Description</label>
-                            <textarea className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white h-32" value={data.description} onChange={e=>setData({...data, description:e.target.value})}></textarea>
+                            <textarea className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white h-32 focus:border-blue-500 outline-none" value={data.description} onChange={e=>setData({...data, description:e.target.value})} placeholder="Describe what happened..."></textarea>
                         </div>
                     </div>
 
-                    {/* Step 2 */}
+                    {/* STEP 2: INVESTIGATION */}
                     <div className={`tab-content ${step===2?'active':''} section-card`}>
                         <div className="hidden print:block tab-header">2. Investigation</div>
-                        <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700 space-y-8">
-                            <div><h3 className="font-bold text-blue-400 mb-2">Fishbone</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} /></div>
-                            <div><h3 className="font-bold text-orange-400 mb-2">Fault Tree</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} /></ul></div></div>
-                            <div><h3 className="font-bold text-purple-400 mb-2">5 Whys</h3>{data.investigation.fiveWhys.map((w,i) => (<div key={i} className="flex gap-2 mb-2"><span className="text-slate-500 font-mono text-sm w-16 pt-2">Why {i+1}?</span><input className="flex-1 bg-slate-900 border-b border-slate-700 p-2 text-sm text-white" value={w} onChange={e=>{const arr=[...data.investigation.fiveWhys]; arr[i]=e.target.value; setData({...data, investigation:{...data.investigation, fiveWhys:arr}})}} /></div>))}</div>
-                            <div><label className="text-xs font-bold text-emerald-400 uppercase">Root Cause</label><textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-3 rounded-lg text-white mt-1" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})}></textarea></div>
+                        <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700 space-y-8 shadow-xl">
+                            <div><h3 className="font-bold text-blue-400 mb-2">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} /></div>
+                            
+                            <div className="border-t border-slate-700 pt-6">
+                                <h3 className="font-bold text-orange-400 mb-4 flex items-center gap-2">
+                                    Fault Tree Analysis 
+                                    <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded no-print font-normal">Use arrows (↓/→) to build tree</span>
+                                </h3>
+                                <div className="tree overflow-x-auto pb-4">
+                                    <ul>
+                                        {/* Root Node has no siblings/delete, only children */}
+                                        <FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} />
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div className="border-t border-slate-700 pt-6">
+                                <h3 className="font-bold text-purple-400 mb-2">5 Whys</h3>
+                                {data.investigation.fiveWhys.map((w,i) => (<div key={i} className="flex gap-2 mb-2"><span className="text-slate-500 font-mono text-sm w-16 pt-2">Why {i+1}?</span><input className="flex-1 bg-slate-900 border-b border-slate-700 p-2 text-sm text-white focus:border-blue-500 outline-none" value={w} onChange={e=>{const arr=[...data.investigation.fiveWhys]; arr[i]=e.target.value; setData({...data, investigation:{...data.investigation, fiveWhys:arr}})}} /></div>))}
+                            </div>
+                            
+                            <div className="border-t border-slate-700 pt-6">
+                                <label className="text-xs font-bold text-emerald-400 uppercase">Root Cause Conclusion</label>
+                                <textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-3 rounded-lg text-white mt-1 h-20" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})}></textarea>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Step 3 */}
+                    {/* STEP 3: CAPA */}
                     <div className={`tab-content ${step===3?'active':''} section-card`}>
                         <div className="hidden print:block tab-header">3. CAPA</div>
-                        <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
-                            <div className="grid grid-cols-4 gap-2 mb-4 no-print"><input id="act" placeholder="Action" className="col-span-2 bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white"/><input id="own" placeholder="Owner" className="bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white"/><input id="due" type="date" className="bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white"/></div>
-                            <button onClick={()=>{const act=document.getElementById('act').value, own=document.getElementById('own').value, due=document.getElementById('due').value; if(act){ setData({...data, capa:[...data.capa, {act, own, due, status:'Open'}]}); document.getElementById('act').value=''; }}} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold w-full mb-6 no-print">+ Add Action</button>
-                            <table className="w-full text-left text-sm text-slate-300"><thead className="border-b border-slate-600 text-xs uppercase"><tr><th className="pb-2">Action</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody className="divide-y divide-slate-700">{data.capa.map((c,i)=>(<tr key={i}><td className="py-2">{c.act}</td><td>{c.own}</td><td>{c.due}</td><td>{c.status}</td></tr>))}</tbody></table>
+                        <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700 shadow-xl">
+                            <div className="grid grid-cols-4 gap-2 mb-4 no-print">
+                                <input id="act" placeholder="Action Required" className="col-span-2 bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white focus:border-blue-500 outline-none"/>
+                                <input id="own" placeholder="Owner" className="bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white focus:border-blue-500 outline-none"/>
+                                <input id="due" type="date" className="bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white focus:border-blue-500 outline-none"/>
+                            </div>
+                            <button onClick={()=>{const act=document.getElementById('act').value, own=document.getElementById('own').value, due=document.getElementById('due').value; if(act){ setData({...data, capa:[...data.capa, {act, own, due, status:'Open'}]}); document.getElementById('act').value=''; }}} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm font-bold w-full mb-6 no-print transition-colors">+ Add Corrective Action</button>
+                            
+                            <table className="w-full text-left text-sm text-slate-300">
+                                <thead className="border-b border-slate-600 text-xs uppercase text-slate-500"><tr><th className="pb-2">Action</th><th>Owner</th><th>Due Date</th><th>Status</th></tr></thead>
+                                <tbody className="divide-y divide-slate-700">
+                                    {data.capa.length === 0 && <tr><td colSpan="4" className="py-4 text-center text-slate-500 italic">No actions added yet.</td></tr>}
+                                    {data.capa.map((c,i)=>(<tr key={i}><td className="py-3">{c.act}</td><td>{c.own}</td><td className="font-mono text-xs">{c.due}</td><td><span className="bg-orange-500/20 text-orange-400 px-2 py-1 rounded text-[10px]">{c.status}</span></td></tr>))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
-                    {/* Step 4 */}
+                    {/* STEP 4: REVIEW */}
                     <div className={`tab-content ${step===4?'active':''} section-card`}>
                         <div className="hidden print:block tab-header">4. Review</div>
-                        <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
+                        <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700 shadow-xl">
                             <div className="flex justify-between items-center bg-slate-900 p-4 rounded-lg border border-slate-700 mb-6 no-print">
                                 <div><h4 className="font-bold text-white">Update Risk Assessment</h4><p className="text-xs text-slate-400">Update HIRA for {data.siteId || 'this site'}?</p></div>
-                                <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm">Open Risk Module</a>
+                                <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors">Open Risk Module</a>
                             </div>
-                            <div className="flex gap-3 items-center mb-8 p-4 border border-slate-700 rounded-lg"><input type="checkbox" className="w-5 h-5" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} /><label className="text-sm font-bold text-white">Confirmed Risk Update</label></div>
-                            <div className="flex justify-end no-print"><button onClick={saveData} className="bg-emerald-600 text-white font-bold px-8 py-3 rounded-xl">Submit</button></div>
+                            <div className="flex gap-3 items-center mb-8 p-4 border border-slate-700 rounded-lg bg-slate-900/50">
+                                <input type="checkbox" className="w-5 h-5 accent-emerald-500" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} />
+                                <label className="text-sm font-bold text-white">I confirm that the Risk Assessment has been reviewed and controls updated.</label>
+                            </div>
+                            <div className="flex justify-end no-print">
+                                <button onClick={saveData} className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold px-8 py-3 rounded-xl shadow-lg transition-all transform hover:scale-105">Submit Report</button>
+                            </div>
                         </div>
                     </div>
 
