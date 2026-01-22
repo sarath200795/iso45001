@@ -12,6 +12,7 @@
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
     <script>
         tailwind.config = { theme: { extend: { fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] }, colors: { 'glass': 'rgba(30, 41, 59, 0.7)' } } } }
     </script>
@@ -59,8 +60,16 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, set, update, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
-        const app = initializeApp(firebaseConfig); window.db = getDatabase(app); window.fb = { get, ref, set, update, push };
+        
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "SENDER_ID", appId: "APP_ID" };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        // Expose to window for React to use
+        window.fb = { get, ref, set, update, push };
+        window.db = db;
+        window.firebaseReady = true; // Flag to signal readiness
     </script>
 
     <script type="text/babel">
@@ -154,7 +163,7 @@
         };
 
         const App = () => {
-            // STATE: Read URL params strictly for initialization
+            const [isReady, setIsReady] = useState(false);
             const [view, setView] = useState(() => {
                 const params = new URLSearchParams(window.location.search);
                 const ctx = params.get('site');
@@ -170,7 +179,21 @@
             const [incidents, setIncidents] = useState([]);
             const [currentData, setCurrentData] = useState(null);
 
+            // 1. WAIT FOR FIREBASE TO LOAD BEFORE DOING ANYTHING
             useEffect(() => {
+                const checkFirebase = setInterval(() => {
+                    if (window.firebaseReady && window.fb) {
+                        setIsReady(true);
+                        clearInterval(checkFirebase);
+                    }
+                }, 100);
+                return () => clearInterval(checkFirebase);
+            }, []);
+
+            // 2. INITIALIZE APP ONCE FIREBASE IS READY
+            useEffect(() => {
+                if (!isReady) return;
+
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href = 'index.html'; return; }
                 const sess = JSON.parse(s);
@@ -187,7 +210,7 @@
                         setIncidents(all);
                     }
                 });
-            }, []);
+            }, [isReady]);
 
             const handleSave = async (data) => {
                 const dbPath = `organizations/${session.orgId}/incidents`;
@@ -196,6 +219,7 @@
                 window.location.reload();
             };
 
+            if (!isReady) return <div className="h-screen flex items-center justify-center text-blue-500 font-bold"><i className="fas fa-circle-notch fa-spin mr-2"></i> Loading System...</div>;
             if(!session) return null;
 
             const filteredIncidents = incidents.filter(i => {
@@ -239,7 +263,9 @@
                 </div>
             );
         };
-        const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
