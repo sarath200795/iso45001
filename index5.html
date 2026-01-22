@@ -3,296 +3,364 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISO 45001 | Clause 5 Leadership</title>
+    <title>ISO 45001 | Management Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>body { font-family: 'Space Grotesk', sans-serif; }</style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'display': ['Space Grotesk', 'sans-serif'],
+                        'mono': ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Space Grotesk', sans-serif; }
+        .card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.2); }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-up { animation: fadeUp 0.5s ease-out forwards; }
+        .animate-delay-1 { animation-delay: 0.1s; opacity: 0; }
+        .animate-delay-2 { animation-delay: 0.2s; opacity: 0; }
+        .animate-delay-3 { animation-delay: 0.3s; opacity: 0; }
+        .animate-delay-4 { animation-delay: 0.4s; opacity: 0; }
+        
+        /* Custom Select Styling */
+        select option { background-color: #0f172a; color: white; }
+    </style>
 </head>
 <body class="bg-slate-100 min-h-screen">
     <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
 
-        const generateManualPDF = (doc) => {
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('landscape');
-            const pW = pdf.internal.pageSize.getWidth();
-            const pH = pdf.internal.pageSize.getHeight();
-            const prefix = `${doc.orgCode}-${doc.siteCode}`.toUpperCase();
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const Dashboard = () => {
+            const [session, setSession] = useState(null);
             
-            const addHeader = (title, id) => {
-                pdf.setFillColor(30, 41, 59);
-                pdf.rect(0, 0, pW, 20, 'F');
-                pdf.setTextColor(255);
-                pdf.setFontSize(10);
-                pdf.text(title, 14, 13);
-                pdf.text(`Doc ID: ${prefix}-C5-${id} | Ver: ${doc.version || 'Draft'}`, pW - 14, 13, { align: 'right' });
-                pdf.setTextColor(0);
+            // Site Context State
+            // Defaults to localStorage value or 'HQ' if nothing is set
+            const [activeSite, setActiveSite] = useState(localStorage.getItem('siteId') || 'HQ');
+            const [availableSites, setAvailableSites] = useState(['HQ']);
+
+            const [stats, setStats] = useState({
+                totalDocs: 0,
+                draftDocs: 0,
+                openIncidents: 0,
+                auditsDue: 0,
+                improvements: 0,
+                totalUsers: 0,
+                totalSites: 0
+            });
+
+            // 1. Initialize Data
+            useEffect(() => {
+                // Auth Check
+                const sessInfo = sessionStorage.getItem('isoSession');
+                if (!sessInfo) {
+                    window.location.href = "index.html";
+                    return;
+                }
+                const sess = JSON.parse(sessInfo);
+                setSession(sess);
+
+                // Load Database to get Sites
+                const dbKey = `ISO_DB_${sess.orgId}`;
+                const db = JSON.parse(localStorage.getItem(dbKey) || '{}');
+                
+                // Populate Sites Dropdown
+                // If sites exist in DB, use them, otherwise keep default ['HQ']
+                if (db.sites && db.sites.length > 0) {
+                    const siteCodes = db.sites.map(s => s.code);
+                    // Ensure HQ is always an option or strictly use DB sites? 
+                    // Usually HQ is implicit, but let's append if not present or just use DB.
+                    // For safety, we'll merge 'HQ' if the list is empty, otherwise use list.
+                    setAvailableSites(['HQ', ...siteCodes.filter(s => s !== 'HQ')]);
+                }
+
+                // Load operational data
+                const docs = JSON.parse(localStorage.getItem('isoDocuments')) || [];
+                const incidents = JSON.parse(localStorage.getItem('isoIncidents')) || [];
+                const audits = JSON.parse(localStorage.getItem('isoAudits')) || [];
+                const improvs = JSON.parse(localStorage.getItem('isoImprovements')) || [];
+                const archive = JSON.parse(localStorage.getItem('isoArchive')) || { drafts: [], approved: [] };
+                const archive5 = JSON.parse(localStorage.getItem('isoArchive5')) || { drafts: [], approved: [] };
+
+                setStats({
+                    totalDocs: archive.approved.length + archive5.approved.length + docs.length,
+                    draftDocs: archive.drafts.length + archive5.drafts.length + docs.filter(d => d.status === 'Draft').length,
+                    openIncidents: incidents.filter(i => i.status === 'Open' || i.status === 'Investigating').length,
+                    auditsDue: audits.filter(a => a.status === 'Scheduled').length,
+                    improvements: improvs.filter(i => i.status === 'In Progress' || i.status === 'Proposed').length,
+                    totalUsers: (db.users || []).length,
+                    totalSites: (db.sites || []).length
+                });
+
+                // Ensure localStorage is synced immediately with the default/active site
+                localStorage.setItem('siteId', activeSite);
+
+            }, []);
+
+            // 2. Handle Site Switch
+            const handleSiteChange = (e) => {
+                const newSite = e.target.value;
+                setActiveSite(newSite);
+                // CRITICAL: Save to localStorage so other pages (index4/5) read this value
+                localStorage.setItem('siteId', newSite);
+                // Optional: Reload logic here if stats depend on site specific data
             };
 
-            // PAGE 1: REVISION HISTORY
-            addHeader("LEADERSHIP MANUAL - REVISION HISTORY", "REV");
-            pdf.setFontSize(18);
-            pdf.text(doc.companyName || "LEADERSHIP MANUAL", pW/2, 40, {align:'center'});
-            pdf.autoTable({ startY: 55, head: [['Version', 'Date', 'Changes']], body: (doc.revisions || []).map(r => [r.ver, r.date, r.change]), theme: 'grid' });
+            const handleLogout = () => {
+                sessionStorage.removeItem('isoSession');
+                window.location.href = "index.html";
+            };
 
-            // PAGE 2: OH&S POLICY
-            pdf.addPage();
-            addHeader("OH&S POLICY (5.2)", "POL");
-            let y = 35;
-            const labels = { a: "Safe & Healthy Conditions:", b: "Objectives Framework:", c: "Legal Requirements:", d: "Hazard Elimination:", e: "Continual Improvement:", f: "Consultation & Participation:" };
-            
-            // Render Clauses
-            Object.keys(labels).forEach(k => {
-                // Check if we need a new page before printing clause
-                if(y > pH - 40) { 
-                    pdf.addPage(); 
-                    addHeader("OH&S POLICY (CONT.)", "POL"); 
-                    y = 30; 
-                }
-                
-                pdf.setFontSize(10); pdf.setFont("helvetica", "bold");
-                pdf.text(`5.2(${k}) ${labels[k]}`, 14, y); 
-                y += 6;
-                
-                pdf.setFont("helvetica", "normal");
-                const text = doc.policySpecifics?.[k] || "Not specified.";
-                const splitText = pdf.splitTextToSize(text, pW - 28);
-                pdf.text(splitText, 14, y); 
-                y += (splitText.length * 5) + 10;
-            });
+            const NavCard = ({ title, icon, link, desc, color, badge }) => (
+                <a href={link} className="block bg-white p-6 rounded-2xl border border-slate-200 shadow-sm card-hover group relative overflow-hidden">
+                    <div className={`absolute top-0 right-0 w-32 h-32 ${color.replace('bg-', 'bg-').replace('600', '50')} rounded-full blur-3xl opacity-50 -mr-16 -mt-16 group-hover:opacity-80 transition-opacity`}></div>
+                    <div className="relative">
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${color} text-white text-xl shadow-lg group-hover:scale-110 transition-transform`}>
+                            <i className={`fas ${icon}`}></i>
+                        </div>
+                        {badge > 0 && (
+                            <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full">
+                                {badge}
+                            </span>
+                        )}
+                        <h3 className="text-lg font-bold text-slate-800 mb-1 group-hover:text-blue-600 transition-colors">{title}</h3>
+                        <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
+                    </div>
+                </a>
+            );
 
-            // --- SECTION: ADDITIONAL NOTES ---
-            if (doc.policyText && doc.policyText.trim() !== "") {
-                // Check if we need a new page for notes
-                if(y > pH - 50) { 
-                    pdf.addPage(); 
-                    addHeader("OH&S POLICY (NOTES)", "POL"); 
-                    y = 30; 
-                } else {
-                    // Add separator line if on same page
-                    y -= 5;
-                    pdf.setDrawColor(200);
-                    pdf.line(14, y, pW - 14, y);
-                    y += 10;
-                }
-
-                pdf.setFontSize(11); 
-                pdf.setFont("helvetica", "bold");
-                pdf.setTextColor(30, 41, 59);
-                pdf.text("Additional Policy Notes & Context:", 14, y); 
-                y += 7;
-                
-                pdf.setFontSize(10); 
-                pdf.setFont("helvetica", "normal");
-                pdf.setTextColor(0);
-                
-                // Print Note Text
-                const noteText = pdf.splitTextToSize(doc.policyText, pW - 28);
-                pdf.text(noteText, 14, y);
-            }
-
-            // PAGE 3: RASCI MATRIX
-            pdf.addPage();
-            addHeader("RASCI RESPONSIBILITY MATRIX (5.3)", "RASCI");
-            if (doc.definedRoles && doc.rasciProcesses) {
-                const roleCols = doc.definedRoles.map(r => r.title);
-                const headRow = [['Process / Activity', ...roleCols]];
-                const bodyRows = doc.rasciProcesses.map(proc => {
-                    const row = [proc.name];
-                    roleCols.forEach(roleTitle => {
-                        const a = proc.assignments.find(a => a.role === roleTitle);
-                        row.push(a ? a.code : '-');
-                    });
-                    return row;
-                });
-                pdf.autoTable({ 
-                    startY: 30, 
-                    head: headRow, 
-                    body: bodyRows, 
-                    theme: 'grid', 
-                    headStyles: { fillColor: [30, 41, 59], fontSize: 8 }, 
-                    styles: { fontSize: 8, cellPadding: 2, halign: 'center' }, 
-                    columnStyles: { 0: { halign: 'left', fontStyle: 'bold', cellWidth: 50 } } 
-                });
-            }
-            pdf.save(`${prefix}-Clause5-Manual.pdf`);
-        };
-
-        const CONSULT_OPTIONS = ["1. Needs of interested parties", "2. Establishing Policy", "3. Assigning Roles", "4. Legal Requirements", "5. Objectives", "6. Outsourcing", "7. Monitoring", "8. Audit", "9. Continual Improvement"];
-
-        const App = () => {
-            const [session, setSession] = useState(null);
-            const [activeTab, setActiveTab] = useState('dashboard');
-            const [newRoleName, setNewRoleName] = useState('');
-            const [newProcessName, setNewProcessName] = useState('');
-
-            const [formData, setFormData] = useState(() => {
-                const saved = localStorage.getItem('isoDataClause5');
-                const parsed = saved ? JSON.parse(saved) : {};
-                const sess = JSON.parse(sessionStorage.getItem('isoSession') || '{}');
-                return {
-                    orgCode: sess.orgId || 'ORG', siteCode: sess.assignedSite || 'SITE-HQ',
-                    companyName: sess.orgName || 'My Organization', version: parsed.version || 'DRAFT',
-                    policySpecifics: parsed.policySpecifics || { a: '', b: '', c: '', d: '', e: '', f: '' },
-                    policyText: parsed.policyText || '', // Ensure initialized
-                    definedRoles: parsed.definedRoles || [{ title: 'Top Management' }, { title: 'Safety Manager' }, { title: 'Worker Rep' }],
-                    rasciProcesses: parsed.rasciProcesses || [{ name: 'Policy Development', assignments: [] }, { name: 'Hazard Identification', assignments: [] }, { name: 'Risk Assessment', assignments: [] }, { name: 'Incident Investigation', assignments: [] }, { name: 'Internal Audit', assignments: [] }],
-                    consultationLog: parsed.consultationLog || [], revisions: parsed.revisions || []
-                };
-            });
-
-            const [newItem, setNewItem] = useState({ meeting: '', type: 'Consultation', option: '', actions: '', responsible: '', due: '', status: 'Open' });
-
-            useEffect(() => { const s = sessionStorage.getItem('isoSession'); if (!s) { window.location.href = "index.html"; return; } setSession(JSON.parse(s)); }, []);
-            useEffect(() => { localStorage.setItem('isoDataClause5', JSON.stringify(formData)); }, [formData]);
-
-            const addRole = () => { if (!newRoleName) return; setFormData(p => ({ ...p, definedRoles: [...p.definedRoles, { title: newRoleName }] })); setNewRoleName(''); };
-            const removeRole = (i) => { if (!confirm("Remove?")) return; const t = formData.definedRoles[i].title; setFormData(p => ({ ...p, definedRoles: p.definedRoles.filter((_, j) => j !== i), rasciProcesses: p.rasciProcesses.map(pr => ({ ...pr, assignments: pr.assignments.filter(a => a.role !== t) })) })); };
-            const addProcess = () => { if (!newProcessName) return; setFormData(p => ({ ...p, rasciProcesses: [...p.rasciProcesses, { name: newProcessName, assignments: [] }] })); setNewProcessName(''); };
-            const removeProcess = (i) => { if (!confirm("Delete?")) return; setFormData(p => ({ ...p, rasciProcesses: p.rasciProcesses.filter((_, j) => j !== i) })); };
-            const updateAssignment = (pi, rt, c) => { setFormData(p => { const np = [...p.rasciProcesses]; let na = np[pi].assignments.filter(a => a.role !== rt); if (c) na.push({ role: rt, code: c }); np[pi] = { ...np[pi], assignments: na }; return { ...p, rasciProcesses: np }; }); };
-            const getAssignment = (pi, rt) => { const f = formData.rasciProcesses[pi]?.assignments.find(a => a.role === rt); return f ? f.code : ''; };
-
-            const addLogItem = () => { if (!newItem.meeting || !newItem.actions) { alert("Fill Meeting & Actions"); return; } setFormData(p => ({ ...p, consultationLog: [...p.consultationLog, newItem] })); setNewItem({ meeting: '', type: 'Consultation', option: '', actions: '', responsible: '', due: '', status: 'Open' }); };
-            const deleteLogItem = (i) => { if (!confirm("Delete?")) return; setFormData(p => ({ ...p, consultationLog: p.consultationLog.filter((_, j) => j !== i) })); };
-            const handleStatusChange = (i, s) => { setFormData(p => { const l = [...p.consultationLog]; l[i].status = s; return { ...p, consultationLog: l }; }); };
-
-            const stats = useMemo(() => { const s = { open: 0, inProgress: 0, closed: 0 }; formData.consultationLog.forEach(r => { if (r.status === 'Open') s.open++; else if (r.status === 'In Progress') s.inProgress++; else s.closed++; }); return s; }, [formData.consultationLog]);
-
-            const saveToArchive = () => { const a = JSON.parse(localStorage.getItem('isoArchive5')) || { drafts: [], approved: [] }; a.drafts.unshift({ ...formData, version: 'DRAFT', author: session?.user || 'Unknown', role: session?.role || 'System', timestamp: new Date().toLocaleString() }); localStorage.setItem('isoArchive5', JSON.stringify(a)); alert("Saved to Repository!"); };
+            const StatCard = ({ label, value, icon, color, sub }) => (
+                <div className={`bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden`}>
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${color}`}></div>
+                    <div className="pl-2">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                        <h4 className="text-3xl font-bold text-slate-800 mt-1">{value}</h4>
+                        {sub && <p className="text-[10px] text-slate-400 mt-1">{sub}</p>}
+                    </div>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl ${color.replace('bg-', 'bg-').replace('-500', '-50').replace('-600', '-50')} ${color.replace('bg-', 'text-')}`}>
+                        <i className={`fas ${icon}`}></i>
+                    </div>
+                </div>
+            );
 
             if (!session) return null;
 
             return (
-                <div className="flex h-screen overflow-hidden">
-                    <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl">
-                        <div className="p-6 border-b border-slate-700/50">
-                            <div className="flex items-center gap-3">
-                                <a href="home.html" className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors"><i className="fas fa-home text-sm"></i></a>
-                                <div><h1 className="text-lg font-bold">Leadership</h1><p className="text-[10px] text-blue-400 font-mono uppercase">Clause 5</p></div>
+                <div className="flex flex-col min-h-screen">
+                    
+                    {/* Header */}
+                    <header className="bg-slate-900 text-white">
+                        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                            
+                            {/* Logo & Org */}
+                            <div className="flex items-center gap-4 w-full md:w-auto">
+                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center font-bold text-sm shadow-lg shadow-blue-500/20">ISO</div>
+                                <div>
+                                    <h1 className="text-lg font-bold tracking-tight">{session.orgName || 'OH&S Management'}</h1>
+                                    <p className="text-xs text-slate-400 font-mono">{session.orgId}</p>
+                                </div>
                             </div>
-                            <div className="mt-4 text-[10px] bg-slate-800/50 p-3 rounded-xl text-center font-mono text-slate-400">{formData.orgCode} / {formData.siteCode}</div>
+
+                            {/* Site Selector & User Profile */}
+                            <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+                                
+                                {/* SITE SELECTOR */}
+                                <div className="flex items-center gap-2 bg-slate-800/80 rounded-lg p-1 border border-slate-700">
+                                    <div className="px-3 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                        <i className="fas fa-location-dot mr-1"></i> Site:
+                                    </div>
+                                    <select 
+                                        value={activeSite} 
+                                        onChange={handleSiteChange}
+                                        className="bg-transparent text-white text-sm font-bold focus:outline-none cursor-pointer py-1 pr-2"
+                                    >
+                                        {availableSites.map(site => (
+                                            <option key={site} value={site}>{site}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                    <div className="text-right hidden md:block">
+                                        <div className="text-sm font-medium text-slate-200">{session.user}</div>
+                                        <div className="text-xs text-blue-400 font-mono">{session.role}</div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={handleLogout} className="w-9 h-9 bg-slate-800 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors border border-slate-700">
+                                            <i className="fas fa-right-from-bracket text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <nav className="flex-1 p-4 space-y-2">
-                            {[['dashboard', 'fa-chart-pie', 'Dashboard'], ['consultation', 'fa-comments', 'Consultation'], ['policy', 'fa-file-shield', 'OH&S Policy'], ['rasci', 'fa-users-rectangle', 'RASCI Matrix']].map(([id, icon, label]) => (
-                                <button key={id} onClick={() => setActiveTab(id)} className={`w-full text-left p-4 rounded-xl font-medium flex items-center gap-3 transition-all ${activeTab === id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-700/50'}`}><i className={`fas ${icon} w-5`}></i>{label}</button>
-                            ))}
-                        </nav>
-                        <div className="p-4 border-t border-slate-700/50 space-y-3">
-                            <button onClick={() => generateManualPDF(formData)} className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2"><i className="fas fa-file-pdf"></i> Export PDF</button>
-                            <button onClick={saveToArchive} className="w-full bg-orange-600 hover:bg-orange-500 py-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2"><i className="fas fa-save"></i> Save to Archive</button>
-                            <a href="archive5.html" className="block text-center py-2 text-[10px] text-slate-500 hover:text-white">View Repository →</a>
+                        
+                        {/* Sub-nav */}
+                        <div className="bg-slate-800/50 border-t border-slate-700/50">
+                            <div className="max-w-7xl mx-auto px-6 py-3 flex gap-8 overflow-x-auto">
+                                <a href="home.html" className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
+                                    <i className="fas fa-home"></i> Dashboard
+                                </a>
+                                <a href="index5.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
+                                    <i className="fas fa-users-cog"></i> Leadership
+                                </a>
+                                <a href="archive.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
+                                    <i className="fas fa-folder-open"></i> Documents
+                                </a>
+                                <a href="index6.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
+                                    <i className="fas fa-chart-line"></i> Performance
+                                </a>
+                                {session.role === 'Owner' && (
+                                    <>
+                                        <a href="users.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
+                                            <i className="fas fa-users"></i> Users
+                                        </a>
+                                        <a href="sites.html" className="text-xs font-medium text-slate-400 hover:text-white uppercase tracking-wider flex items-center gap-2 transition-colors whitespace-nowrap">
+                                            <i className="fas fa-building"></i> Sites
+                                        </a>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                    </aside>
+                    </header>
 
-                    <main className="flex-1 overflow-y-auto bg-slate-50 p-8">
-                        {activeTab === 'dashboard' && (
-                            <div className="max-w-6xl mx-auto space-y-8">
-                                <div><h2 className="text-2xl font-bold text-slate-800">Consultation Dashboard</h2><p className="text-slate-500 text-sm">Track consultation and participation activities.</p></div>
-                                <div className="grid grid-cols-3 gap-6">
-                                    {[['Open', stats.open, 'fa-folder-open', 'orange'], ['In Progress', stats.inProgress, 'fa-spinner', 'blue'], ['Closed', stats.closed, 'fa-check-circle', 'emerald']].map(([l, v, i, c]) => (
-                                        <div key={l} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                                            <div className="flex justify-between items-start"><div><p className="text-xs font-bold text-slate-400 uppercase">{l}</p><p className={`text-4xl font-bold text-${c}-500 mt-2`}>{v}</p></div><div className={`w-12 h-12 bg-${c}-50 rounded-xl flex items-center justify-center text-${c}-500`}><i className={`fas ${i} text-xl`}></i></div></div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                                    <div className="p-6 border-b border-slate-100"><h3 className="font-bold text-slate-700">Action Item Tracker</h3></div>
-                                    <table className="w-full text-left text-sm">
-                                        <thead className="bg-slate-50"><tr><th className="p-4 font-bold text-slate-500 text-xs uppercase">Meeting</th><th className="p-4 font-bold text-slate-500 text-xs uppercase">Action</th><th className="p-4 font-bold text-slate-500 text-xs uppercase">Responsible</th><th className="p-4 font-bold text-slate-500 text-xs uppercase">Due</th><th className="p-4 font-bold text-slate-500 text-xs uppercase">Status</th><th className="p-4"></th></tr></thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {formData.consultationLog.map((r, i) => (
-                                                <tr key={i} className="hover:bg-slate-50">
-                                                    <td className="p-4 font-medium text-slate-700">{r.meeting}</td>
-                                                    <td className="p-4 text-slate-600 text-xs">{r.actions}</td>
-                                                    <td className="p-4 text-blue-600 font-medium text-xs">{r.responsible}</td>
-                                                    <td className="p-4 text-slate-500 font-mono text-xs">{r.due}</td>
-                                                    <td className="p-4"><select className={`text-xs font-bold uppercase bg-transparent outline-none ${r.status === 'Closed' ? 'text-emerald-600' : r.status === 'In Progress' ? 'text-blue-500' : 'text-orange-500'}`} value={r.status} onChange={e => handleStatusChange(i, e.target.value)}><option>Open</option><option>In Progress</option><option>Closed</option></select></td>
-                                                    <td className="p-4"><button onClick={() => deleteLogItem(i)} className="text-slate-300 hover:text-red-500"><i className="fas fa-trash"></i></button></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                    {/* Main Content */}
+                    <main className="flex-1 max-w-7xl mx-auto px-6 py-8 w-full">
+                        
+                        {/* Welcome Banner */}
+                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 mb-8 text-white relative overflow-hidden animate-fade-up">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                            <div className="relative z-10">
+                                <p className="text-blue-400 text-sm font-medium mb-1">Welcome back,</p>
+                                <h2 className="text-2xl font-bold mb-2">{session.user}</h2>
+                                <p className="text-slate-400 text-sm max-w-lg mb-4">Manage your organization's occupational health and safety system.</p>
+                                
+                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full border border-white/10 text-xs font-mono">
+                                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                                    Active Context: <span className="text-white font-bold">{session.orgId} - {activeSite}</span>
                                 </div>
                             </div>
-                        )}
+                        </div>
 
-                        {activeTab === 'consultation' && (
-                            <div className="max-w-4xl mx-auto space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-800">Log Consultation Activity</h2>
-                                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input className="border-2 border-slate-200 p-4 rounded-xl focus:border-blue-500 outline-none" placeholder="Meeting Type (e.g., Safety Committee)" value={newItem.meeting} onChange={e => setNewItem({ ...newItem, meeting: e.target.value })} />
-                                        <select className="border-2 border-slate-200 p-4 rounded-xl focus:border-blue-500 outline-none bg-white" value={newItem.option} onChange={e => setNewItem({ ...newItem, option: e.target.value })}><option value="">Select Requirement...</option>{CONSULT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select>
-                                    </div>
-                                    <textarea className="w-full border-2 border-slate-200 p-4 rounded-xl focus:border-blue-500 outline-none h-24" placeholder="Discussion Details / Actions..." value={newItem.actions} onChange={e => setNewItem({ ...newItem, actions: e.target.value })}></textarea>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input className="border-2 border-slate-200 p-4 rounded-xl focus:border-blue-500 outline-none" placeholder="Responsible Person" value={newItem.responsible} onChange={e => setNewItem({ ...newItem, responsible: e.target.value })} />
-                                        <input type="date" className="border-2 border-slate-200 p-4 rounded-xl focus:border-blue-500 outline-none" value={newItem.due} onChange={e => setNewItem({ ...newItem, due: e.target.value })} />
-                                    </div>
-                                    <button onClick={addLogItem} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-bold uppercase tracking-wider transition-colors">Add to Log</button>
-                                </div>
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                            <div className="animate-fade-up animate-delay-1">
+                                <StatCard label="Total Documents" value={stats.totalDocs} sub={`${stats.draftDocs} pending approval`} icon="fa-file-alt" color="bg-blue-500" />
                             </div>
-                        )}
-
-                        {activeTab === 'policy' && (
-                            <div className="max-w-4xl mx-auto space-y-6">
-                                <div><h2 className="text-2xl font-bold text-slate-800">OH&S Policy (5.2)</h2><p className="text-slate-500 text-sm">Define your organization's safety commitments.</p></div>
-                                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-                                    {[['a', 'Safe & Healthy Working Conditions', 'Commitment to prevent injury/ill health appropriate to size and context...'], ['b', 'Objectives Framework', 'How the policy supports the setting of safety objectives...'], ['c', 'Legal Requirements', 'Commitment to fulfill legal and other requirements...'], ['d', 'Hazard Elimination & Risk Reduction', 'Commitment to eliminate hazards and reduce OH&S risks (Ref 8.1.2)...'], ['e', 'Continual Improvement', 'Commitment to enhance OH&S management system performance...'], ['f', 'Consultation & Participation', 'Commitment to involve workers and their representatives...']].map(([k, l, p]) => (
-                                        <div key={k}>
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2 mb-2"><span className="w-6 h-6 bg-blue-100 text-blue-600 rounded flex items-center justify-center text-xs font-bold">5.2({k})</span>{l}</label>
-                                            <textarea className="w-full border-2 border-slate-200 p-4 rounded-xl focus:border-blue-500 outline-none h-24" placeholder={p} value={formData.policySpecifics?.[k] || ''} onChange={e => setFormData(p => ({ ...p, policySpecifics: { ...p.policySpecifics, [k]: e.target.value } }))} />
-                                        </div>
-                                    ))}
-
-                                    <div className="pt-6 border-t border-slate-100">
-                                        <label className="text-sm font-bold text-slate-800 uppercase tracking-wider block mb-2"><i className="fas fa-sticky-note mr-2 text-orange-500"></i>Additional Notes / Policy Context</label>
-                                        <textarea 
-                                            className="w-full border-2 border-slate-200 p-4 rounded-xl focus:border-blue-500 outline-none h-32 bg-slate-50" 
-                                            placeholder="Enter any additional details, scope information, or context relevant to the OH&S Policy..." 
-                                            value={formData.policyText} 
-                                            onChange={e => setFormData(p => ({ ...p, policyText: e.target.value }))} 
-                                        />
-                                    </div>
-                                </div>
+                            <div className="animate-fade-up animate-delay-2">
+                                <StatCard label="Open Incidents" value={stats.openIncidents} icon="fa-exclamation-triangle" color="bg-red-500" />
                             </div>
-                        )}
-
-                        {activeTab === 'rasci' && (
-                            <div className="max-w-6xl mx-auto space-y-6">
-                                <div className="flex justify-between items-end"><div><h2 className="text-2xl font-bold text-slate-800">RASCI Matrix (5.3)</h2><p className="text-slate-500 text-sm">Define responsibilities for key processes.</p></div><div className="text-xs text-slate-400 bg-white px-4 py-2 rounded-lg border">R=Responsible, A=Accountable, S=Support, C=Consulted, I=Informed</div></div>
-                                <div className="bg-white p-4 rounded-xl flex gap-3 items-center border border-slate-200"><span className="text-xs font-bold text-slate-500">Add Role:</span><input className="flex-1 border-2 border-slate-200 p-3 rounded-xl text-sm focus:border-blue-500 outline-none" placeholder="e.g. Fire Marshal" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} /><button onClick={addRole} className="bg-blue-600 text-white px-6 py-3 rounded-xl text-xs font-bold hover:bg-blue-500">+ Add Role</button></div>
-                                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-slate-800 text-white"><tr><th className="p-4 text-left min-w-[200px]">Process / Activity</th>{formData.definedRoles.map((r, i) => (<th key={i} className="p-4 text-center min-w-[100px]">{r.title}<button onClick={() => removeRole(i)} className="ml-2 text-slate-400 hover:text-red-400 text-xs"><i className="fas fa-times"></i></button></th>))}<th className="p-4 w-12"></th></tr></thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {formData.rasciProcesses.map((pr, pi) => (
-                                                <tr key={pi} className="hover:bg-slate-50">
-                                                    <td className="p-4 font-medium text-slate-700">{pr.name}</td>
-                                                    {formData.definedRoles.map((r, ri) => (<td key={ri} className="p-2 text-center border-l border-slate-100"><select className={`w-full text-center font-bold bg-transparent outline-none cursor-pointer ${getAssignment(pi, r.title) === 'R' ? 'text-red-600' : getAssignment(pi, r.title) === 'A' ? 'text-blue-600' : 'text-slate-400'}`} value={getAssignment(pi, r.title)} onChange={e => updateAssignment(pi, r.title, e.target.value)}><option value=""></option><option value="R">R</option><option value="A">A</option><option value="S">S</option><option value="C">C</option><option value="I">I</option></select></td>))}
-                                                    <td className="p-4 text-center"><button onClick={() => removeProcess(pi)} className="text-slate-300 hover:text-red-500"><i className="fas fa-trash"></i></button></td>
-                                                </tr>
-                                            ))}
-                                            <tr className="bg-slate-50"><td className="p-3"><input className="w-full p-3 border-2 border-slate-200 rounded-xl text-sm focus:border-blue-500 outline-none" placeholder="+ Add New Process" value={newProcessName} onChange={e => setNewProcessName(e.target.value)} /></td><td colSpan={formData.definedRoles.length + 1} className="p-3"><button onClick={addProcess} className="w-full bg-emerald-600 text-white py-3 rounded-xl text-xs font-bold hover:bg-emerald-500">Add Process Row</button></td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <div className="animate-fade-up animate-delay-3">
+                                <StatCard label="Audits Due" value={stats.auditsDue} icon="fa-clipboard-check" color="bg-orange-500" />
                             </div>
-                        )}
+                            <div className="animate-fade-up animate-delay-4">
+                                <StatCard label="Active Improvements" value={stats.improvements} icon="fa-chart-line" color="bg-emerald-500" />
+                            </div>
+                        </div>
+
+                        {/* Module Navigation */}
+                        <div className="mb-6 flex items-center justify-between">
+                            <h2 className="text-xl font-bold text-slate-800">System Modules</h2>
+                            <span className="text-[10px] bg-slate-200 px-3 py-1.5 rounded-full text-slate-600 font-bold uppercase tracking-wider">PDCA Cycle</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                            <NavCard 
+                                title="Context & Leadership" 
+                                desc="Clause 4 & 5: Organization Context, Policy, Roles (RASCI), and Worker Consultation."
+                                icon="fa-users-cog" 
+                                color="bg-indigo-600"
+                                link="index5.html"
+                                badge={0}
+                            />
+                            <NavCard 
+                                title="Document Control" 
+                                desc="Create, approve, and manage your ISO documentation repository."
+                                icon="fa-folder-open" 
+                                color="bg-blue-600"
+                                link="archive.html"
+                                badge={stats.draftDocs}
+                            />
+                            <NavCard 
+                                title="Create New Document" 
+                                desc="Document Authoring Wizard aligned with Clause 7.5 requirements."
+                                icon="fa-plus-circle" 
+                                color="bg-sky-500"
+                                link="index4.html"
+                                badge={0}
+                            />
+                            <NavCard 
+                                title="Performance & Audit" 
+                                desc="Clause 9: Internal Audits, Monitoring, and Compliance Checks."
+                                icon="fa-tasks" 
+                                color="bg-orange-500"
+                                link="index6.html"
+                                badge={stats.auditsDue}
+                            />
+                            <NavCard 
+                                title="Incidents & Improvement" 
+                                desc="Clause 10: Incident Logs, Non-conformities, and Corrective Actions."
+                                icon="fa-first-aid" 
+                                color="bg-red-600"
+                                link="index6.html"
+                                badge={stats.openIncidents}
+                            />
+                            <NavCard 
+                                title="Leadership Repository" 
+                                desc="OH&S Policy and Clause 5 documentation archive."
+                                icon="fa-crown" 
+                                color="bg-violet-600"
+                                link="archive5.html"
+                                badge={0}
+                            />
+                        </div>
+
+                        {/* Quick Actions */}
+                        <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
+                            <div className="mb-6 md:mb-0">
+                                <h3 className="text-xl font-bold mb-2">Quick Actions</h3>
+                                <p className="text-slate-400 text-sm max-w-md">Actions performed here will be tagged with: <strong>{activeSite}</strong></p>
+                            </div>
+                            <div className="flex gap-4">
+                                <a href="index6.html" className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-lg flex items-center gap-2">
+                                    <i className="fas fa-bullhorn"></i> Report Incident
+                                </a>
+                                <a href="index4.html" className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center gap-2 backdrop-blur-sm">
+                                    <i className="fas fa-file-medical"></i> New Procedure
+                                </a>
+                            </div>
+                        </div>
                     </main>
+
+                    {/* Footer */}
+                    <footer className="bg-white border-t border-slate-200 py-6 mt-auto">
+                        <div className="max-w-7xl mx-auto px-6 flex justify-between items-center text-xs text-slate-400">
+                            <p>&copy; 2024 ISO 45001 Management System</p>
+                            <p>
+                                <span className="inline-flex items-center gap-1">
+                                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                    System Online: {session.orgId} / {activeSite}
+                                </span>
+                            </p>
+                        </div>
+                    </footer>
                 </div>
             );
         };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        root.render(<Dashboard />);
     </script>
 </body>
 </html>
