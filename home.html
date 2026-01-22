@@ -4,12 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISO 45001 | Enterprise Hub</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -26,10 +33,10 @@
         .glass-panel:hover { border-color: rgba(59, 130, 246, 0.3); transform: translateY(-2px); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); }
         .card-glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.1), transparent 70%); opacity: 0; transition: opacity 0.3s; }
         .glass-panel:hover .card-glow { opacity: 1; }
-        /* Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        #map-container { height: 100%; width: 100%; z-index: 1; border-radius: 0.75rem; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col overflow-hidden">
@@ -39,14 +46,15 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, set, update, remove, child, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
+        // --- UPDATED CONFIGURATION ---
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY", // <--- REPLACE THIS
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
+            authDomain: "ohsms-fa534.firebaseapp.com",
             databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            projectId: "ohsms-fa534",
+            storageBucket: "ohsms-fa534.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID", // Optional for DB access
+            appId: "YOUR_APP_ID"             // Optional for DB access
         };
 
         const app = initializeApp(firebaseConfig);
@@ -55,7 +63,7 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
         const MODULES = [
             { id: 'dashboard', label: 'Dashboard', desc: 'KPIs & Stats', icon: 'fa-chart-pie', color: 'text-purple-400' },
@@ -70,15 +78,57 @@
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
         ];
 
-        // --- COMPONENTS ---
+        // --- MAP COMPONENT ---
+        const LocationPicker = ({ onConfirm, onClose }) => {
+            const mapRef = useRef(null);
+            const [coords, setCoords] = useState(null);
+
+            useEffect(() => {
+                if (!mapRef.current) {
+                    mapRef.current = L.map('map-container').setView([20.5937, 78.9629], 5);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(mapRef.current);
+
+                    let marker;
+                    mapRef.current.on('click', function(e) {
+                        const { lat, lng } = e.latlng;
+                        setCoords({ lat: lat.toFixed(6), lng: lng.toFixed(6) });
+                        if (marker) mapRef.current.removeLayer(marker);
+                        marker = L.marker([lat, lng]).addTo(mapRef.current);
+                    });
+                }
+                setTimeout(() => mapRef.current && mapRef.current.invalidateSize(), 100);
+                return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+            }, []);
+
+            return (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+                    <div className="bg-slate-900 w-full max-w-4xl h-[80vh] rounded-2xl flex flex-col overflow-hidden border border-slate-700">
+                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white flex items-center gap-2"><i className="fas fa-map-location-dot text-blue-500"></i> Select Location</h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white"><i className="fas fa-times"></i></button>
+                        </div>
+                        <div className="flex-1 relative bg-slate-800">
+                            <div id="map-container"></div>
+                            <div className="absolute bottom-6 left-6 right-6 z-[1000] flex justify-between items-end pointer-events-none">
+                                <div className="bg-slate-900/90 backdrop-blur p-4 rounded-xl border border-slate-700 shadow-xl pointer-events-auto">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Coordinates</p>
+                                    {coords ? <div className="font-mono text-emerald-400 font-bold">{coords.lat}, {coords.lng}</div> : <div className="text-slate-500 text-sm italic">Click map to pin</div>}
+                                </div>
+                                <button onClick={() => coords && onConfirm(coords)} disabled={!coords} className={`pointer-events-auto px-6 py-3 rounded-xl font-bold shadow-xl transition-all ${coords ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>Confirm Location</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
         const NavCard = ({ module, onClick }) => (
             <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group cursor-pointer flex flex-col h-40 justify-between">
                 <div className="card-glow"></div>
                 <div className="relative z-10 flex justify-between items-start">
-                    <div className={`w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-lg shadow-lg ${module.color}`}>
-                        <i className={`fas ${module.icon}`}></i>
-                    </div>
+                    <div className={`w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-lg shadow-lg ${module.color}`}><i className={`fas ${module.icon}`}></i></div>
                     {module.admin && <span className="text-[9px] font-bold uppercase bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Admin</span>}
                 </div>
                 <div className="relative z-10">
@@ -88,171 +138,70 @@
             </div>
         );
 
-        // --- MODULE: USER MANAGEMENT (With Approval Workflow) ---
-        const UserModule = ({ session, users, sites, requests, refresh }) => {
-            if(session.role !== 'Owner') return <div className="p-10 text-center text-red-400">Access Denied</div>;
-            
-            const [tab, setTab] = useState('active');
-            const [selected, setSelected] = useState(null);
+        const SiteModule = ({ session, sites, refresh }) => {
+            const [showMap, setShowMap] = useState(false);
+            const [formData, setFormData] = useState({ name: '', code: '', locationName: '', coords: null });
 
-            const handleApprove = async (reqId, reqData) => {
-                const updates = {};
-                // Update user role
-                updates[`organizations/${session.orgId}/users/${reqData.uid}/role`] = reqData.requestedRole;
-                updates[`organizations/${session.orgId}/users/${reqData.uid}/assignedSite`] = reqData.requestedSite;
-                updates[`organizations/${session.orgId}/users/${reqData.uid}/status`] = 'Active';
-                // Remove request
-                updates[`organizations/${session.orgId}/accessRequests/${reqId}`] = null;
-                
-                await window.fb.update(window.fb.ref(window.db), updates);
+            const handleDelete = async (siteCode) => {
+                if(!confirm(`Delete site ${siteCode}? This cannot be undone.`)) return;
+                await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/sites/${siteCode}`));
                 refresh();
             };
 
-            const updateUser = async (uid, role, site) => {
-                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/users/${uid}`), { role, assignedSite: site });
-                refresh(); setSelected(null);
+            const handleAddSite = async (e) => {
+                e.preventDefault();
+                if(!formData.coords) { alert("Please pick a location on the map."); return; }
+                const newSite = { name: formData.name, code: formData.code.toUpperCase(), locationName: formData.locationName, lat: formData.coords.lat, lng: formData.coords.lng, id: Date.now() };
+                await window.fb.set(window.fb.ref(window.db, `organizations/${session.orgId}/sites/${newSite.code}`), newSite);
+                setFormData({ name: '', code: '', locationName: '', coords: null });
+                refresh();
             };
 
             return (
-                <div className="animate-fade-in space-y-6">
-                    <div className="flex gap-4 border-b border-slate-700 pb-2">
-                        <button onClick={() => setTab('active')} className={`text-sm font-bold pb-2 ${tab === 'active' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400'}`}>Directory</button>
-                        <button onClick={() => setTab('requests')} className={`text-sm font-bold pb-2 flex items-center gap-2 ${tab === 'requests' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400'}`}>
-                            Requests {requests.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{requests.length}</span>}
-                        </button>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in relative">
+                    {showMap && <LocationPicker onClose={() => setShowMap(false)} onConfirm={(coords) => { setFormData({ ...formData, coords }); setShowMap(false); }} />}
+                    <div className="glass-panel p-6 rounded-2xl h-fit">
+                        <h3 className="font-bold mb-4 flex items-center gap-2"><i className="fas fa-plus-circle text-blue-400"></i> Add New Site</h3>
+                        <form onSubmit={handleAddSite} className="space-y-4">
+                            <div><label className="text-[10px] uppercase text-slate-500 font-bold">Name</label><input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white text-sm outline-none focus:border-blue-500" required /></div>
+                            <div><label className="text-[10px] uppercase text-slate-500 font-bold">Code</label><input value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white text-sm outline-none focus:border-blue-500 uppercase font-mono" required /></div>
+                            <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
+                                <label className="text-[10px] uppercase text-slate-500 font-bold block mb-2">Location</label>
+                                <input value={formData.locationName} onChange={e=>setFormData({...formData, locationName: e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-2 rounded-lg text-white text-xs outline-none mb-3" placeholder="City Name" required />
+                                <button type="button" onClick={() => setShowMap(true)} className={`w-full py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${formData.coords ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-slate-700 border-slate-600 hover:bg-slate-600'}`}>{formData.coords ? <><i className="fas fa-check"></i> Set</> : <><i className="fas fa-map-pin"></i> Pick on Map</>}</button>
+                            </div>
+                            <button className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold text-sm">Register Site</button>
+                        </form>
                     </div>
-
-                    {tab === 'requests' && (
-                        <div className="space-y-3">
-                            {requests.length === 0 && <p className="text-slate-500 text-sm">No pending requests.</p>}
-                            {requests.map(req => (
-                                <div key={req.id} className="glass-panel p-4 rounded-xl flex justify-between items-center border-l-4 border-orange-400">
-                                    <div>
-                                        <h4 className="font-bold text-sm">{req.userName}</h4>
-                                        <p className="text-xs text-slate-400">Wants: <span className="text-white">{req.requestedRole}</span> at <span className="text-white">{req.requestedSite || 'Global'}</span></p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => handleApprove(req.id, req)} className="px-3 py-1 bg-blue-600 rounded text-xs font-bold hover:bg-blue-500">Approve</button>
-                                    </div>
+                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
+                        {sites.length === 0 && <div className="col-span-2 text-center text-slate-500 py-10">No sites registered yet.</div>}
+                        {sites.map(s => (
+                            <div key={s.code} className="glass-panel p-5 rounded-2xl border-l-4 border-blue-500 flex justify-between items-start group">
+                                <div>
+                                    <h4 className="font-bold text-lg text-white">{s.name}</h4>
+                                    <div className="flex items-center gap-2 mt-1"><span className="bg-slate-800 text-slate-400 text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-700">{s.code}</span><span className="text-xs text-slate-400">{s.locationName}</span></div>
+                                    <div className="mt-3 flex items-center gap-2 text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded w-fit"><i className="fas fa-satellite-dish"></i> {s.lat}, {s.lng}</div>
                                 </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {tab === 'active' && (
-                        <div className="glass-panel p-6 rounded-2xl">
-                            <table className="w-full text-left text-sm">
-                                <thead className="text-xs uppercase text-slate-500 border-b border-slate-700"><tr><th className="pb-3">User</th><th className="pb-3">Role</th><th className="pb-3">Site</th><th className="pb-3 text-right">Edit</th></tr></thead>
-                                <tbody className="divide-y divide-slate-800">
-                                    {users.map(u => (
-                                        <tr key={u.id}>
-                                            <td className="py-3 font-bold">{u.name}<div className="text-[10px] text-slate-500 font-normal">{u.email}</div></td>
-                                            <td className="py-3"><span className="bg-slate-800 px-2 py-1 rounded text-xs">{u.role}</span></td>
-                                            <td className="py-3 text-slate-400">{u.assignedSite || 'Global'}</td>
-                                            <td className="py-3 text-right"><button onClick={()=>setSelected(u)} className="text-blue-400 hover:text-white"><i className="fas fa-pen"></i></button></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                    
-                    {selected && (
-                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-                            <div className="glass-panel bg-slate-900 p-6 rounded-2xl w-80">
-                                <h3 className="font-bold mb-4">Edit {selected.name}</h3>
-                                <select id="role" className="w-full bg-slate-800 mb-3 p-2 rounded text-white text-sm">{['Worker','Supervisor','Manager','Auditor'].map(r=><option key={r} value={r}>{r}</option>)}</select>
-                                <select id="site" className="w-full bg-slate-800 mb-4 p-2 rounded text-white text-sm"><option value="">Global</option>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select>
-                                <button onClick={() => updateUser(selected.id, document.getElementById('role').value, document.getElementById('site').value)} className="w-full bg-blue-600 py-2 rounded font-bold text-sm">Save</button>
-                                <button onClick={() => setSelected(null)} className="w-full mt-2 text-slate-400 text-xs">Cancel</button>
+                                <button onClick={() => handleDelete(s.code)} className="opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center"><i className="fas fa-trash"></i></button>
                             </div>
-                        </div>
-                    )}
-                </div>
-            );
-        };
-
-        // --- MODULE: PROFILE & REQUESTS ---
-        const ProfileModal = ({ session, sites, onClose }) => {
-            const [reqRole, setReqRole] = useState(session.role);
-            const [reqSite, setReqSite] = useState(session.assignedSite);
-            
-            const submitRequest = async () => {
-                const reqData = {
-                    uid: session.uid,
-                    userName: session.user,
-                    requestedRole: reqRole,
-                    requestedSite: reqSite,
-                    status: 'Pending',
-                    timestamp: Date.now()
-                };
-                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/accessRequests`), reqData);
-                alert("Request sent to Owner!");
-                onClose();
-            };
-
-            return (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-                    <div className="glass-panel bg-slate-900 p-8 rounded-2xl w-96 relative border border-slate-700">
-                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white"><i className="fas fa-times"></i></button>
-                        
-                        <div className="text-center mb-6">
-                            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-3">
-                                {session.user.charAt(0)}
-                            </div>
-                            <h2 className="text-xl font-bold">{session.user}</h2>
-                            <p className="text-xs text-slate-400">{session.email}</p>
-                        </div>
-
-                        <div className="bg-slate-800/50 p-4 rounded-xl mb-6">
-                            <p className="text-[10px] uppercase text-slate-500 font-bold mb-1">Current Access</p>
-                            <div className="flex justify-between text-sm">
-                                <span>{session.role}</span>
-                                <span className="text-blue-400">{session.assignedSite || 'Global'}</span>
-                            </div>
-                        </div>
-
-                        <h3 className="text-sm font-bold mb-3 text-slate-300">Request Access Change</h3>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="text-xs text-slate-500">Desired Role</label>
-                                <select value={reqRole} onChange={e=>setReqRole(e.target.value)} className="w-full bg-slate-800 p-2 rounded text-sm text-white outline-none border border-slate-700">
-                                    {['Worker','Supervisor','Site Manager','Safety Manager','Auditor'].map(r=><option key={r} value={r}>{r}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs text-slate-500">Desired Site</label>
-                                <select value={reqSite} onChange={e=>setReqSite(e.target.value)} className="w-full bg-slate-800 p-2 rounded text-sm text-white outline-none border border-slate-700">
-                                    <option value="">Global (Owner Only)</option>
-                                    {sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
-                                </select>
-                            </div>
-                            <button onClick={submitRequest} className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold text-sm transition-colors mt-2">
-                                Send Request
-                            </button>
-                        </div>
+                        ))}
                     </div>
                 </div>
             );
         };
 
-        // --- MAIN APP ---
         const App = () => {
             const [session, setSession] = useState(null);
             const [view, setView] = useState('hub');
             const [data, setData] = useState({ users: [], sites: [], requests: [] });
-            const [selectedSite, setSelectedSite] = useState('GLOBAL'); // GLOBAL or siteCode
-            const [showProfile, setShowProfile] = useState(false);
-
+            const [selectedSite, setSelectedSite] = useState('GLOBAL');
+            
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if (!s) { window.location.href = "index.html"; return; }
                 const sess = JSON.parse(s);
                 setSession(sess);
-                // If user is not owner, default their selection to their assigned site
-                if(sess.role !== 'Owner' && sess.assignedSite) {
-                    setSelectedSite(sess.assignedSite);
-                }
+                if(sess.role !== 'Owner' && sess.assignedSite) setSelectedSite(sess.assignedSite);
                 fetchData(sess.orgId);
             }, []);
 
@@ -261,147 +210,40 @@
                 const snapshot = await window.fb.get(window.fb.child(dbRef, `organizations/${orgId}`));
                 if (snapshot.exists()) {
                     const val = snapshot.val();
-                    const reqs = val.accessRequests ? Object.entries(val.accessRequests).map(([k,v]) => ({id:k, ...v})) : [];
                     setData({
                         users: val.users ? Object.values(val.users) : [],
                         sites: val.sites ? Object.values(val.sites) : [],
-                        requests: reqs
+                        requests: val.accessRequests ? Object.entries(val.accessRequests).map(([k,v]) => ({id:k, ...v})) : []
                     });
                 }
             };
 
             const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
-
             if (!session) return null;
-
-            // Logic for Navigation Dropdown
-            // Owner sees ALL sites. Standard user sees ONLY their assigned site (or Global if allowed).
-            const visibleSites = session.role === 'Owner' 
-                ? data.sites 
-                : data.sites.filter(s => s.code === session.assignedSite);
 
             return (
                 <div className="flex flex-col h-screen relative overflow-hidden bg-slate-950">
                     <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
-
-                    {/* HEADER */}
                     <header className="h-16 px-6 flex items-center justify-between z-20 backdrop-blur-sm bg-slate-900/50 border-b border-white/5">
                         <div className="flex items-center gap-4">
-                            {view !== 'hub' && (
-                                <button onClick={() => setView('hub')} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 hover:text-white transition-colors"><i className="fas fa-arrow-left"></i></button>
-                            )}
-                            <div>
-                                <h1 className="text-base font-bold text-white flex items-center gap-2">
-                                    <i className="fas fa-shield-halved text-blue-500"></i> ISO 45001 Hub
-                                </h1>
-                            </div>
-                            
-                            {/* SITE NAVIGATOR */}
+                            {view !== 'hub' && <button onClick={() => setView('hub')} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 hover:text-white transition-colors"><i className="fas fa-arrow-left"></i></button>}
+                            <div><h1 className="text-base font-bold text-white flex items-center gap-2"><i className="fas fa-shield-halved text-blue-500"></i> ISO 45001 Hub</h1></div>
                             <div className="h-6 w-[1px] bg-slate-700 mx-2"></div>
-                            <div className="relative group">
-                                <div className="flex items-center gap-2 text-xs font-bold bg-slate-800 px-3 py-1.5 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors border border-slate-700">
-                                    <i className="fas fa-location-dot text-emerald-400"></i>
-                                    {selectedSite === 'GLOBAL' ? 'Global View' : data.sites.find(s=>s.code===selectedSite)?.name || selectedSite}
-                                    <i className="fas fa-chevron-down ml-1 text-slate-500"></i>
-                                </div>
-                                {/* Dropdown */}
-                                <div className="absolute top-full left-0 mt-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden hidden group-hover:block z-50">
-                                    {session.role === 'Owner' && (
-                                        <button onClick={()=>setSelectedSite('GLOBAL')} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-800 text-slate-300 hover:text-white border-b border-slate-800">
-                                            Global (All Sites)
-                                        </button>
-                                    )}
-                                    {visibleSites.map(s => (
-                                        <button key={s.code} onClick={()=>setSelectedSite(s.code)} className="w-full text-left px-4 py-3 text-xs hover:bg-slate-800 text-slate-400 hover:text-white">
-                                            {s.name}
-                                        </button>
-                                    ))}
-                                    {visibleSites.length === 0 && session.role !== 'Owner' && (
-                                        <div className="px-4 py-3 text-xs text-slate-500 italic">No assigned sites</div>
-                                    )}
-                                </div>
-                            </div>
+                            <div className="flex items-center gap-2 text-xs font-bold bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300"><i className="fas fa-location-dot text-emerald-400"></i> {selectedSite === 'GLOBAL' ? 'Global View' : data.sites.find(s=>s.code===selectedSite)?.name || selectedSite}</div>
                         </div>
-
                         <div className="flex items-center gap-4">
-                            <button onClick={()=>setShowProfile(true)} className="flex items-center gap-3 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors">
-                                <div className="text-right hidden md:block">
-                                    <p className="text-xs font-bold text-white">{session.user}</p>
-                                    <p className="text-[10px] text-slate-400">{session.role}</p>
-                                </div>
+                            <button className="flex items-center gap-3 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors">
+                                <div className="text-right hidden md:block"><p className="text-xs font-bold text-white">{session.user}</p><p className="text-[10px] text-slate-400">{session.role}</p></div>
                                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center font-bold text-xs">{session.user.charAt(0)}</div>
                             </button>
                             <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors"><i className="fas fa-power-off"></i></button>
                         </div>
                     </header>
-
-                    {/* MAIN CONTENT */}
                     <main className="flex-1 overflow-y-auto p-6 z-10 relative">
-                        {view === 'hub' && (
-                            <div className="max-w-6xl mx-auto">
-                                <div className="flex justify-between items-end mb-6">
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-white">Modules</h2>
-                                        <p className="text-slate-400 text-xs">Viewing Data for: <span className="text-emerald-400 font-bold">{selectedSite === 'GLOBAL' ? 'All Sites' : selectedSite}</span></p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-fade-in">
-                                    {MODULES.map(module => (
-                                        <NavCard key={module.id} module={module} onClick={() => setView(module.id)} />
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {view === 'users' && <UserModule session={session} users={data.users} sites={data.sites} requests={data.requests} refresh={()=>fetchData(session.orgId)} />}
-                        
-                        {/* Site Mgmt: Pass refresh to update list after adding */}
-                        {view === 'sites' && (
-                            session.role === 'Owner' ? (
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-                                    <div className="glass-panel p-6 rounded-2xl h-fit">
-                                        <h3 className="font-bold mb-4">Add Site</h3>
-                                        <form onSubmit={async(e)=>{
-                                            e.preventDefault();
-                                            const fd = new FormData(e.target);
-                                            const code = fd.get('code').toUpperCase();
-                                            await window.fb.set(window.fb.ref(window.db, `organizations/${session.orgId}/sites/${code}`), { 
-                                                name: fd.get('name'), code, location: fd.get('loc'), id: Date.now() 
-                                            });
-                                            e.target.reset(); fetchData(session.orgId);
-                                        }} className="space-y-3">
-                                            <input name="name" className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white text-sm outline-none" placeholder="Site Name" required />
-                                            <input name="code" className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white text-sm outline-none uppercase" placeholder="Site Code" required />
-                                            <input name="loc" className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white text-sm outline-none" placeholder="Location" required />
-                                            <button className="w-full bg-blue-600 py-3 rounded-lg font-bold text-sm">Register</button>
-                                        </form>
-                                    </div>
-                                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {data.sites.map(s => (
-                                            <div key={s.code} className="glass-panel p-4 rounded-xl border-l-4 border-emerald-500">
-                                                <h4 className="font-bold">{s.name}</h4>
-                                                <p className="text-xs text-slate-400 font-mono">{s.code}</p>
-                                                <p className="text-xs mt-1 text-slate-300"><i className="fas fa-map-pin mr-1"></i>{s.location}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ) : <div className="text-center text-red-400 mt-10">Access Denied</div>
-                        )}
-
-                        {/* Generic Module View */}
-                        {['dashboard','incidents','audit','improvement','risk','consultation','doc_gen','doc_inv'].includes(view) && (
-                            <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
-                                <div className="w-20 h-20 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-6 text-3xl text-slate-600">
-                                    <i className={`fas ${MODULES.find(m=>m.id===view).icon}`}></i>
-                                </div>
-                                <h2 className="text-2xl font-bold text-white mb-2">{MODULES.find(m=>m.id===view).label}</h2>
-                                <p className="text-slate-400 max-w-md">Currently viewing context: <span className="text-emerald-400 font-bold">{selectedSite === 'GLOBAL' ? 'All Sites' : selectedSite}</span></p>
-                            </div>
-                        )}
+                        {view === 'hub' && <div className="max-w-6xl mx-auto"><h2 className="text-2xl font-bold text-white mb-6">Modules</h2><div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-fade-in">{MODULES.map(module => <NavCard key={module.id} module={module} onClick={() => setView(module.id)} />)}</div></div>}
+                        {view === 'sites' && <SiteModule session={session} sites={data.sites} refresh={() => fetchData(session.orgId)} />}
+                        {view !== 'hub' && view !== 'sites' && <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in"><div className="w-20 h-20 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-6 text-3xl text-slate-600"><i className={`fas ${MODULES.find(m=>m.id===view).icon}`}></i></div><h2 className="text-2xl font-bold text-white mb-2">{MODULES.find(m=>m.id===view).label}</h2><p className="text-slate-400">Context: <span className="text-emerald-400 font-bold">{selectedSite}</span></p></div>}
                     </main>
-
-                    {showProfile && <ProfileModal session={session} sites={data.sites} onClose={()=>setShowProfile(false)} />}
                 </div>
             );
         };
