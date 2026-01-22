@@ -61,7 +61,7 @@
 
         const MODULES = [
             { id: 'dashboard', label: 'Dashboard', desc: 'KPIs & Stats', icon: 'fa-chart-pie', color: 'text-purple-400', allowGlobal: true },
-            { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
+            { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' }, // Removed allowGlobal logic check in Nav
             { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
             { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' },
             { id: 'improvement', label: 'Improvement', desc: 'CAPA Tracking', icon: 'fa-chart-line', color: 'text-blue-400' },
@@ -114,43 +114,52 @@
 
             const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
 
-            // --- NAVIGATION LOGIC (FIXED) ---
+            // --- UPDATED NAVIGATION LOGIC ---
             const handleNav = (moduleId) => {
                 const module = MODULES.find(m => m.id === moduleId);
                 
-                // 1. Check if Owner needs to select a site
-                if (session.role === 'Owner' && selectedSite === 'GLOBAL' && !module.allowGlobal) {
-                    alert("Please select a specific Site from the dropdown above to enter this module.");
-                    return;
-                }
-
-                // 2. Check if user has permission
-                if (module.admin && session.role !== 'Owner') {
-                    alert("Access Denied: Owner permissions required.");
-                    return;
-                }
-
-                // 3. REDIRECTION LOGIC
+                // 1. DIRECT REDIRECTS (Prioritize these to bypass Global Check)
                 if (moduleId === 'incidents') {
-                    // Force browser to load the new file
+                    // Always allow redirection. Passing "GLOBAL" or a Site ID via URL.
                     window.location.href = `incidents.html?site=${selectedSite}`;
                     return;
                 }
+                
                 if (moduleId === 'sites') {
                     window.location.href = 'sites.html';
                     return;
                 }
+                
                 if (moduleId === 'users') {
                     window.location.href = 'users.html';
                     return;
                 }
+                
                 if (moduleId === 'risk') {
                     window.location.href = `risk.html?site=${selectedSite}`;
                     return;
                 }
 
-                // 4. Fallback for internal views
-                alert(`${module.label} module is currently under construction.`);
+                // 2. Permission Check for Admin Modules
+                if (module.admin && session.role !== 'Owner') {
+                    alert("Access Denied: Owner permissions required.");
+                    return;
+                }
+
+                // 3. Global Context Check (Only for internal operational modules like Audit/Inspection if added later)
+                if (session.role === 'Owner' && selectedSite === 'GLOBAL' && !module.allowGlobal) {
+                    alert("Please select a specific Site from the dropdown above to enter this module.");
+                    return;
+                }
+
+                // 4. Internal Dashboard Navigation
+                if (moduleId === 'dashboard') {
+                    alert("Dashboard view coming soon.");
+                    return;
+                }
+
+                // Fallback
+                alert(`Module ${module.label} is currently under construction.`);
             };
 
             if (!session) return null;
@@ -219,7 +228,7 @@
                         <div className="mb-8 animate-fade-in">
                             <h2 className="text-3xl font-bold text-white mb-2">Enterprise Modules</h2>
                             <p className="text-slate-400 text-sm">
-                                Currently viewing data for: <span className="text-emerald-400 font-bold px-2 py-0.5 bg-emerald-400/10 rounded border border-emerald-400/20">{selectedSite === 'GLOBAL' ? 'Global Organization' : selectedSite}</span>
+                                Context: <span className="text-emerald-400 font-bold px-2 py-0.5 bg-emerald-400/10 rounded border border-emerald-400/20">{selectedSite === 'GLOBAL' ? 'Global Organization' : selectedSite}</span>
                             </p>
                         </div>
 
