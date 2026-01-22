@@ -56,11 +56,10 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // --- FIREBASE CONFIGURATION ---
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY", // <--- PASTE YOUR API KEY HERE
+            apiKey: "YOUR_API_KEY", 
             authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", // Updated DB URL
+            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
             projectId: "YOUR_PROJECT_ID",
             storageBucket: "YOUR_PROJECT_ID.appspot.com",
             messagingSenderId: "YOUR_SENDER_ID",
@@ -69,11 +68,34 @@
 
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
+        
+        // Expose Firebase functions
+        window.firebase_get = get;
+        window.firebase_ref = ref;
+        window.firebase_child = child;
     </script>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
-        const { ref, get, child } = window.firebase ? window.firebase.database : { ref:()=>{}, get:()=>{}, child:()=>{} };
+
+        // FIXED: InputField is now defined OUTSIDE the Login component
+        const InputField = ({ type = "text", id, label, icon, placeholder, value, onChange, uppercase = false, onFocus, onBlur, focusedId }) => (
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 ml-1 flex items-center gap-2">
+                    <i className={`fas ${icon} text-blue-400`}></i> {label}
+                </label>
+                <input 
+                    type={type}
+                    required
+                    className={`input-field w-full bg-slate-900/50 border-2 ${focusedId === id ? 'border-blue-500' : 'border-slate-700/50'} rounded-xl py-4 px-5 outline-none text-white font-medium ${uppercase ? 'uppercase tracking-wider font-mono' : ''} placeholder:text-slate-500`}
+                    placeholder={placeholder}
+                    value={value}
+                    onChange={e => onChange(uppercase ? e.target.value.toUpperCase() : e.target.value)}
+                    onFocus={() => onFocus(id)}
+                    onBlur={() => onBlur(null)}
+                />
+            </div>
+        );
 
         const Login = () => {
             const [formData, setFormData] = useState({ orgId: '', email: '', password: '' });
@@ -95,8 +117,8 @@
                 const cleanOrgId = formData.orgId.toUpperCase().replace(/[^A-Z0-9-]/g, '');
                 
                 try {
-                    const dbRef = window.firebase ? window.firebase.database.ref(window.db) : null;
-                    const snapshot = await window.firebase_get(window.firebase_child(window.firebase_ref(window.db), `organizations/${cleanOrgId}`));
+                    const dbRef = window.firebase_ref(window.db);
+                    const snapshot = await window.firebase_get(window.firebase_child(dbRef, `organizations/${cleanOrgId}`));
 
                     if (!snapshot.exists()) {
                         setError("Organization ID not found.");
@@ -105,7 +127,7 @@
                     }
 
                     const orgData = snapshot.val();
-                    const users = orgData.users || [];
+                    const users = orgData.users || {};
                     const userList = Array.isArray(users) ? users : Object.values(users);
                     
                     const user = userList.find(u => 
@@ -140,24 +162,6 @@
                 }
             };
 
-            const InputField = ({ type = "text", id, label, icon, placeholder, value, onChange, uppercase = false }) => (
-                <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 ml-1 flex items-center gap-2">
-                        <i className={`fas ${icon} text-blue-400`}></i> {label}
-                    </label>
-                    <input 
-                        type={type}
-                        required
-                        className={`input-field w-full bg-slate-900/50 border-2 ${focusedField === id ? 'border-blue-500' : 'border-slate-700/50'} rounded-xl py-4 px-5 outline-none text-white font-medium ${uppercase ? 'uppercase tracking-wider font-mono' : ''} placeholder:text-slate-500`}
-                        placeholder={placeholder}
-                        value={value}
-                        onChange={e => onChange(uppercase ? e.target.value.toUpperCase() : e.target.value)}
-                        onFocus={() => setFocusedField(id)}
-                        onBlur={() => setFocusedField(null)}
-                    />
-                </div>
-            );
-
             return (
                 <div className="glass-panel rounded-3xl p-10 shadow-2xl glow-effect relative overflow-hidden">
                     <div className="text-center mb-10 relative">
@@ -177,11 +181,33 @@
                                 <i className="fas fa-exclamation-circle"></i> {error}
                             </div>
                         )}
-                        <InputField id="org" label="Organization ID" icon="fa-building" placeholder="ORG-001" value={formData.orgId} onChange={(v) => setFormData({...formData, orgId: v})} uppercase={true} />
-                        <InputField id="email" type="email" label="User Email" icon="fa-envelope" placeholder="admin@company.com" value={formData.email} onChange={(v) => setFormData({...formData, email: v})} />
-                        <InputField id="password" type="password" label="Password" icon="fa-lock" placeholder="••••••••" value={formData.password} onChange={(v) => setFormData({...formData, password: v})} />
+                        
+                        <InputField 
+                            id="org" label="Organization ID" icon="fa-building" placeholder="ORG-001"
+                            value={formData.orgId} 
+                            onChange={(v) => setFormData(prev => ({...prev, orgId: v}))} 
+                            uppercase={true}
+                            onFocus={setFocusedField} onBlur={setFocusedField} focusedId={focusedField}
+                        />
 
-                        <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-blue-500/25 transition-all duration-300 mt-4 flex items-center justify-center gap-3">
+                        <InputField 
+                            id="email" type="email" label="User Email" icon="fa-envelope" placeholder="admin@company.com"
+                            value={formData.email} 
+                            onChange={(v) => setFormData(prev => ({...prev, email: v}))}
+                            onFocus={setFocusedField} onBlur={setFocusedField} focusedId={focusedField}
+                        />
+
+                        <InputField 
+                            id="password" type="password" label="Password" icon="fa-lock" placeholder="••••••••"
+                            value={formData.password} 
+                            onChange={(v) => setFormData(prev => ({...prev, password: v}))}
+                            onFocus={setFocusedField} onBlur={setFocusedField} focusedId={focusedField}
+                        />
+
+                        <button 
+                            type="submit" disabled={loading}
+                            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-blue-500/25 transition-all duration-300 mt-4 flex items-center justify-center gap-3"
+                        >
                             {loading ? <i className="fas fa-circle-notch fa-spin text-lg"></i> : <span>Secure Login</span>}
                         </button>
                     </form>
@@ -198,13 +224,6 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<Login />);
-    </script>
-    
-    <script type="module">
-        import { getDatabase, ref, child, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        window.firebase_get = get;
-        window.firebase_ref = ref;
-        window.firebase_child = child;
     </script>
 </body>
 </html>
