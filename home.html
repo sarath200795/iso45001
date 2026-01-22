@@ -33,10 +33,14 @@
         .glass-panel:hover { border-color: rgba(59, 130, 246, 0.3); transform: translateY(-2px); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); }
         .card-glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.1), transparent 70%); opacity: 0; transition: opacity 0.3s; }
         .glass-panel:hover .card-glow { opacity: 1; }
+        /* Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        
+        /* Map Styles */
         #map-container { height: 100%; width: 100%; z-index: 1; border-radius: 0.75rem; }
+        .leaflet-container { font-family: sans-serif; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col overflow-hidden">
@@ -46,15 +50,14 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, set, update, remove, child, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // --- UPDATED CONFIGURATION ---
         const firebaseConfig = {
-            apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
-            authDomain: "ohsms-fa534.firebaseapp.com",
+            apiKey: "YOUR_API_KEY", // <--- REPLACE THIS
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
             databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
-            projectId: "ohsms-fa534",
-            storageBucket: "ohsms-fa534.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID", // Optional for DB access
-            appId: "YOUR_APP_ID"             // Optional for DB access
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -84,21 +87,28 @@
             const [coords, setCoords] = useState(null);
 
             useEffect(() => {
+                // Initialize Leaflet Map
                 if (!mapRef.current) {
-                    mapRef.current = L.map('map-container').setView([20.5937, 78.9629], 5);
+                    mapRef.current = L.map('map-container').setView([20.5937, 78.9629], 5); // Default: India View
+
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                         attribution: '&copy; OpenStreetMap contributors'
                     }).addTo(mapRef.current);
 
                     let marker;
+
                     mapRef.current.on('click', function(e) {
                         const { lat, lng } = e.latlng;
                         setCoords({ lat: lat.toFixed(6), lng: lng.toFixed(6) });
+                        
                         if (marker) mapRef.current.removeLayer(marker);
                         marker = L.marker([lat, lng]).addTo(mapRef.current);
                     });
                 }
-                setTimeout(() => mapRef.current && mapRef.current.invalidateSize(), 100);
+                
+                // Fix map render issues in modal
+                setTimeout(() => mapRef.current.invalidateSize(), 100);
+
                 return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
             }, []);
 
@@ -106,17 +116,35 @@
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
                     <div className="bg-slate-900 w-full max-w-4xl h-[80vh] rounded-2xl flex flex-col overflow-hidden border border-slate-700">
                         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
-                            <h3 className="font-bold text-white flex items-center gap-2"><i className="fas fa-map-location-dot text-blue-500"></i> Select Location</h3>
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                <i className="fas fa-map-location-dot text-blue-500"></i> Select Site Location
+                            </h3>
                             <button onClick={onClose} className="text-slate-400 hover:text-white"><i className="fas fa-times"></i></button>
                         </div>
+                        
                         <div className="flex-1 relative bg-slate-800">
                             <div id="map-container"></div>
+                            
+                            {/* Overlay Controls */}
                             <div className="absolute bottom-6 left-6 right-6 z-[1000] flex justify-between items-end pointer-events-none">
                                 <div className="bg-slate-900/90 backdrop-blur p-4 rounded-xl border border-slate-700 shadow-xl pointer-events-auto">
-                                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Coordinates</p>
-                                    {coords ? <div className="font-mono text-emerald-400 font-bold">{coords.lat}, {coords.lng}</div> : <div className="text-slate-500 text-sm italic">Click map to pin</div>}
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Selected Coordinates</p>
+                                    {coords ? (
+                                        <div className="font-mono text-emerald-400 font-bold">
+                                            {coords.lat}, {coords.lng}
+                                        </div>
+                                    ) : (
+                                        <div className="text-slate-500 text-sm italic">Click on the map to pin location</div>
+                                    )}
                                 </div>
-                                <button onClick={() => coords && onConfirm(coords)} disabled={!coords} className={`pointer-events-auto px-6 py-3 rounded-xl font-bold shadow-xl transition-all ${coords ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>Confirm Location</button>
+                                
+                                <button 
+                                    onClick={() => coords && onConfirm(coords)} 
+                                    disabled={!coords}
+                                    className={`pointer-events-auto px-6 py-3 rounded-xl font-bold shadow-xl transition-all ${coords ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+                                >
+                                    Confirm Location
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -124,11 +152,15 @@
             );
         };
 
+        // --- SUB COMPONENTS ---
+
         const NavCard = ({ module, onClick }) => (
             <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group cursor-pointer flex flex-col h-40 justify-between">
                 <div className="card-glow"></div>
                 <div className="relative z-10 flex justify-between items-start">
-                    <div className={`w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-lg shadow-lg ${module.color}`}><i className={`fas ${module.icon}`}></i></div>
+                    <div className={`w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-lg shadow-lg ${module.color}`}>
+                        <i className={`fas ${module.icon}`}></i>
+                    </div>
                     {module.admin && <span className="text-[9px] font-bold uppercase bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Admin</span>}
                 </div>
                 <div className="relative z-10">
@@ -138,20 +170,32 @@
             </div>
         );
 
+        // --- SITE MANAGEMENT MODULE (With Delete & Map) ---
         const SiteModule = ({ session, sites, refresh }) => {
             const [showMap, setShowMap] = useState(false);
             const [formData, setFormData] = useState({ name: '', code: '', locationName: '', coords: null });
 
             const handleDelete = async (siteCode) => {
-                if(!confirm(`Delete site ${siteCode}? This cannot be undone.`)) return;
-                await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/sites/${siteCode}`));
-                refresh();
+                if(!confirm(`Are you sure you want to delete site ${siteCode}? This cannot be undone.`)) return;
+                try {
+                    await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/sites/${siteCode}`));
+                    refresh();
+                } catch(e) { alert(e.message); }
             };
 
             const handleAddSite = async (e) => {
                 e.preventDefault();
                 if(!formData.coords) { alert("Please pick a location on the map."); return; }
-                const newSite = { name: formData.name, code: formData.code.toUpperCase(), locationName: formData.locationName, lat: formData.coords.lat, lng: formData.coords.lng, id: Date.now() };
+                
+                const newSite = {
+                    name: formData.name,
+                    code: formData.code.toUpperCase(),
+                    locationName: formData.locationName,
+                    lat: formData.coords.lat,
+                    lng: formData.coords.lng,
+                    id: Date.now()
+                };
+
                 await window.fb.set(window.fb.ref(window.db, `organizations/${session.orgId}/sites/${newSite.code}`), newSite);
                 setFormData({ name: '', code: '', locationName: '', coords: null });
                 refresh();
@@ -159,30 +203,60 @@
 
             return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in relative">
-                    {showMap && <LocationPicker onClose={() => setShowMap(false)} onConfirm={(coords) => { setFormData({ ...formData, coords }); setShowMap(false); }} />}
+                    {showMap && (
+                        <LocationPicker 
+                            onClose={() => setShowMap(false)}
+                            onConfirm={(coords) => {
+                                setFormData({ ...formData, coords });
+                                setShowMap(false);
+                            }} 
+                        />
+                    )}
+
+                    {/* Add Site Form */}
                     <div className="glass-panel p-6 rounded-2xl h-fit">
                         <h3 className="font-bold mb-4 flex items-center gap-2"><i className="fas fa-plus-circle text-blue-400"></i> Add New Site</h3>
                         <form onSubmit={handleAddSite} className="space-y-4">
-                            <div><label className="text-[10px] uppercase text-slate-500 font-bold">Name</label><input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white text-sm outline-none focus:border-blue-500" required /></div>
-                            <div><label className="text-[10px] uppercase text-slate-500 font-bold">Code</label><input value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white text-sm outline-none focus:border-blue-500 uppercase font-mono" required /></div>
-                            <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
-                                <label className="text-[10px] uppercase text-slate-500 font-bold block mb-2">Location</label>
-                                <input value={formData.locationName} onChange={e=>setFormData({...formData, locationName: e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-2 rounded-lg text-white text-xs outline-none mb-3" placeholder="City Name" required />
-                                <button type="button" onClick={() => setShowMap(true)} className={`w-full py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${formData.coords ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-slate-700 border-slate-600 hover:bg-slate-600'}`}>{formData.coords ? <><i className="fas fa-check"></i> Set</> : <><i className="fas fa-map-pin"></i> Pick on Map</>}</button>
+                            <div>
+                                <label className="text-[10px] uppercase text-slate-500 font-bold">Site Name</label>
+                                <input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white text-sm outline-none focus:border-blue-500" placeholder="e.g. Hyderabad Plant" required />
                             </div>
-                            <button className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold text-sm">Register Site</button>
+                            <div>
+                                <label className="text-[10px] uppercase text-slate-500 font-bold">Site Code (ID)</label>
+                                <input value={formData.code} onChange={e=>setFormData({...formData, code: e.target.value})} className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white text-sm outline-none focus:border-blue-500 uppercase font-mono" placeholder="HYD-01" required />
+                            </div>
+                            
+                            <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
+                                <label className="text-[10px] uppercase text-slate-500 font-bold block mb-2">Location Data</label>
+                                <input value={formData.locationName} onChange={e=>setFormData({...formData, locationName: e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-2 rounded-lg text-white text-xs outline-none mb-3" placeholder="Friendly Name (e.g. City)" required />
+                                
+                                <button type="button" onClick={() => setShowMap(true)} className={`w-full py-2 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${formData.coords ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-slate-700 border-slate-600 hover:bg-slate-600'}`}>
+                                    {formData.coords ? <><i className="fas fa-check"></i> Location Set ({formData.coords.lat}, {formData.coords.lng})</> : <><i className="fas fa-map-pin"></i> Pick on Map</>}
+                                </button>
+                            </div>
+
+                            <button className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold text-sm shadow-lg shadow-blue-500/20 transition-all">Register Site</button>
                         </form>
                     </div>
+
+                    {/* Site List */}
                     <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
                         {sites.length === 0 && <div className="col-span-2 text-center text-slate-500 py-10">No sites registered yet.</div>}
                         {sites.map(s => (
                             <div key={s.code} className="glass-panel p-5 rounded-2xl border-l-4 border-blue-500 flex justify-between items-start group">
                                 <div>
                                     <h4 className="font-bold text-lg text-white">{s.name}</h4>
-                                    <div className="flex items-center gap-2 mt-1"><span className="bg-slate-800 text-slate-400 text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-700">{s.code}</span><span className="text-xs text-slate-400">{s.locationName}</span></div>
-                                    <div className="mt-3 flex items-center gap-2 text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded w-fit"><i className="fas fa-satellite-dish"></i> {s.lat}, {s.lng}</div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className="bg-slate-800 text-slate-400 text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-700">{s.code}</span>
+                                        <span className="text-xs text-slate-400">{s.locationName}</span>
+                                    </div>
+                                    <div className="mt-3 flex items-center gap-2 text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded w-fit">
+                                        <i className="fas fa-satellite-dish"></i> {s.lat}, {s.lng}
+                                    </div>
                                 </div>
-                                <button onClick={() => handleDelete(s.code)} className="opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center"><i className="fas fa-trash"></i></button>
+                                <button onClick={() => handleDelete(s.code)} className="opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center">
+                                    <i className="fas fa-trash"></i>
+                                </button>
                             </div>
                         ))}
                     </div>
@@ -190,12 +264,14 @@
             );
         };
 
+        // --- MAIN APP (Container) ---
         const App = () => {
             const [session, setSession] = useState(null);
             const [view, setView] = useState('hub');
             const [data, setData] = useState({ users: [], sites: [], requests: [] });
             const [selectedSite, setSelectedSite] = useState('GLOBAL');
-            
+            const [showProfile, setShowProfile] = useState(false);
+
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if (!s) { window.location.href = "index.html"; return; }
@@ -224,13 +300,21 @@
             return (
                 <div className="flex flex-col h-screen relative overflow-hidden bg-slate-950">
                     <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+                    {/* HEADER */}
                     <header className="h-16 px-6 flex items-center justify-between z-20 backdrop-blur-sm bg-slate-900/50 border-b border-white/5">
                         <div className="flex items-center gap-4">
-                            {view !== 'hub' && <button onClick={() => setView('hub')} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 hover:text-white transition-colors"><i className="fas fa-arrow-left"></i></button>}
+                            {view !== 'hub' && (
+                                <button onClick={() => setView('hub')} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 hover:text-white transition-colors"><i className="fas fa-arrow-left"></i></button>
+                            )}
                             <div><h1 className="text-base font-bold text-white flex items-center gap-2"><i className="fas fa-shield-halved text-blue-500"></i> ISO 45001 Hub</h1></div>
                             <div className="h-6 w-[1px] bg-slate-700 mx-2"></div>
-                            <div className="flex items-center gap-2 text-xs font-bold bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300"><i className="fas fa-location-dot text-emerald-400"></i> {selectedSite === 'GLOBAL' ? 'Global View' : data.sites.find(s=>s.code===selectedSite)?.name || selectedSite}</div>
+                            <div className="flex items-center gap-2 text-xs font-bold bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300">
+                                <i className="fas fa-location-dot text-emerald-400"></i>
+                                {selectedSite === 'GLOBAL' ? 'Global View' : data.sites.find(s=>s.code===selectedSite)?.name || selectedSite}
+                            </div>
                         </div>
+
                         <div className="flex items-center gap-4">
                             <button className="flex items-center gap-3 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition-colors">
                                 <div className="text-right hidden md:block"><p className="text-xs font-bold text-white">{session.user}</p><p className="text-[10px] text-slate-400">{session.role}</p></div>
@@ -239,10 +323,28 @@
                             <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors"><i className="fas fa-power-off"></i></button>
                         </div>
                     </header>
+
+                    {/* MAIN CONTENT */}
                     <main className="flex-1 overflow-y-auto p-6 z-10 relative">
-                        {view === 'hub' && <div className="max-w-6xl mx-auto"><h2 className="text-2xl font-bold text-white mb-6">Modules</h2><div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-fade-in">{MODULES.map(module => <NavCard key={module.id} module={module} onClick={() => setView(module.id)} />)}</div></div>}
+                        {view === 'hub' && (
+                            <div className="max-w-6xl mx-auto">
+                                <h2 className="text-2xl font-bold text-white mb-6">Modules</h2>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-fade-in">
+                                    {MODULES.map(module => <NavCard key={module.id} module={module} onClick={() => setView(module.id)} />)}
+                                </div>
+                            </div>
+                        )}
+
                         {view === 'sites' && <SiteModule session={session} sites={data.sites} refresh={() => fetchData(session.orgId)} />}
-                        {view !== 'hub' && view !== 'sites' && <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in"><div className="w-20 h-20 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-6 text-3xl text-slate-600"><i className={`fas ${MODULES.find(m=>m.id===view).icon}`}></i></div><h2 className="text-2xl font-bold text-white mb-2">{MODULES.find(m=>m.id===view).label}</h2><p className="text-slate-400">Context: <span className="text-emerald-400 font-bold">{selectedSite}</span></p></div>}
+                        
+                        {/* Placeholder for other views */}
+                        {view !== 'hub' && view !== 'sites' && (
+                            <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
+                                <div className="w-20 h-20 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-6 text-3xl text-slate-600"><i className={`fas ${MODULES.find(m=>m.id===view).icon}`}></i></div>
+                                <h2 className="text-2xl font-bold text-white mb-2">{MODULES.find(m=>m.id===view).label}</h2>
+                                <p className="text-slate-400">Context: <span className="text-emerald-400 font-bold">{selectedSite}</span></p>
+                            </div>
+                        )}
                     </main>
                 </div>
             );
