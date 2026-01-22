@@ -231,6 +231,7 @@
         };
 
         const App = () => {
+            // STATE INITIALIZATION with URL Parameter Logic
             const [view, setView] = useState('list');
             const [session, setSession] = useState(null);
             const [sites, setSites] = useState([]);
@@ -244,17 +245,26 @@
                 const sess = JSON.parse(s);
                 setSession(sess);
                 
-                // Get URL Context just for initialization
+                // --- CRITICAL CHANGE START ---
+                // Get URL Context
                 const params = new URLSearchParams(window.location.search);
                 const ctx = params.get('site');
-                setSiteContext(ctx || 'GLOBAL'); // Default to Global if empty
+                
+                // If a specific site is in URL (and not Global), force view to 'form'
+                if (ctx && ctx !== 'GLOBAL') {
+                    setSiteContext(ctx);
+                    setView('form'); // <--- AUTO-NAVIGATE TO FORM
+                } else {
+                    setSiteContext(ctx || 'GLOBAL');
+                    setView('list'); // Default to List
+                }
+                // --- CRITICAL CHANGE END ---
 
                 const dbRef = window.fb.ref(window.db);
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}/sites`)).then(snap => {
                     if (snap.exists()) setSites(Object.values(snap.val()));
                 });
 
-                // Load ALL incidents initially, filtering happens in render/variable
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}/incidents`)).then(snap => {
                     if(snap.exists()) {
                         let all = Object.entries(snap.val()).map(([k,v]) => ({firebaseKey:k, ...v}));
@@ -272,7 +282,6 @@
 
             if(!session) return null;
 
-            // DYNAMIC FILTERING based on the Dropdown selection
             const filteredIncidents = incidents.filter(i => {
                 if (!siteContext || siteContext === 'GLOBAL') return true;
                 return i.siteId === siteContext;
@@ -282,21 +291,23 @@
                 <div className="flex flex-col h-full bg-slate-950 text-white min-h-screen">
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
                         <div className="flex items-center gap-4">
-                            {/* UPDATED BACK LINK: Points to incidents.html (Refresh/Reset) instead of Home */}
                             <a href="incidents.html" className="text-slate-400 hover:text-white flex items-center gap-2">
                                 <i className="fas fa-rotate-right"></i> Reset View
                             </a>
                             <h1 className="font-bold text-lg hidden md:block">Incidents</h1>
                         </div>
                         
-                        {/* NEW: SITE SELECTOR DROPDOWN IN HEADER */}
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-bold text-slate-500 uppercase mr-2 hidden sm:block">Context:</label>
                             <div className="relative">
                                 <i className="fas fa-filter absolute left-3 top-2.5 text-blue-400 text-xs"></i>
                                 <select 
                                     value={siteContext || 'GLOBAL'} 
-                                    onChange={(e) => setSiteContext(e.target.value)}
+                                    onChange={(e) => {
+                                        setSiteContext(e.target.value);
+                                        // Optional: If user changes context in dropdown while in form, maybe reset to list?
+                                        // For now, we keep them in whatever view they are in.
+                                    }}
                                     className="bg-slate-800 border border-slate-700 text-white text-xs rounded-lg py-2 pl-8 pr-4 outline-none focus:border-blue-500 appearance-none font-bold"
                                 >
                                     <option value="GLOBAL">Global (All Sites)</option>
