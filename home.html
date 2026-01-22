@@ -4,12 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISO 45001 | Enterprise Hub</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
     <script>
         tailwind.config = {
             theme: {
@@ -22,22 +26,31 @@
     </script>
     <style>
         body { font-family: 'Space Grotesk', sans-serif; background-color: #0f172a; color: white; }
-        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s; }
-        .glass-panel:hover { border-color: rgba(59, 130, 246, 0.3); transform: translateY(-2px); }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .glass-panel:hover { border-color: rgba(59, 130, 246, 0.3); transform: translateY(-2px); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); }
         .card-glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.1), transparent 70%); opacity: 0; transition: opacity 0.3s; }
         .glass-panel:hover .card-glow { opacity: 1; }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        #google-map { width: 100%; height: 100%; border-radius: 0.75rem; }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; } 
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="min-h-screen flex flex-col overflow-hidden">
     <div id="root" class="h-full flex flex-col"></div>
 
+    <script>
+        window.initMapCallback = function() { window.isGoogleMapsLoaded = true; };
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k&callback=initMapCallback&libraries=places" async defer></script>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, get, set, update, remove, child, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
+        // --- CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
             authDomain: "ohsms-fa534.firebaseapp.com",
@@ -50,7 +63,7 @@
 
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
-        window.fb = { get, ref, child };
+        window.fb = { get, ref, set, update, remove, child, push };
     </script>
 
     <script type="text/babel">
@@ -65,6 +78,240 @@
             { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true, allowGlobal: true },
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true, allowGlobal: true },
         ];
+
+        // --- COMPONENT: GOOGLE MAP PICKER ---
+        const GoogleMapPicker = ({ onConfirm, onClose }) => {
+            const mapContainerRef = useRef(null);
+            const [selectedLocation, setSelectedLocation] = useState(null);
+            const [mapInstance, setMapInstance] = useState(null);
+            const [loadingLoc, setLoadingLoc] = useState(false);
+
+            useEffect(() => {
+                if (!window.isGoogleMapsLoaded) {
+                    alert("Maps API loading... please wait a moment.");
+                    return;
+                }
+
+                const defaultLoc = { lat: 20.5937, lng: 78.9629 }; 
+                const map = new google.maps.Map(mapContainerRef.current, {
+                    zoom: 5,
+                    center: defaultLoc,
+                    mapTypeControl: false,
+                    streetViewControl: false,
+                    styles: [
+                        { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+                        { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+                        { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+                        { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+                    ]
+                });
+                setMapInstance(map);
+
+                // Click to Pin
+                map.addListener("click", (e) => {
+                    handleLocationSelect(e.latLng, map);
+                });
+            }, []);
+
+            const handleLocationSelect = (latLng, map) => {
+                const lat = latLng.lat();
+                const lng = latLng.lng();
+                
+                // Clear previous markers
+                if (window.currentMarker) window.currentMarker.setMap(null);
+                
+                const newMarker = new google.maps.Marker({
+                    position: { lat, lng },
+                    map: map,
+                    animation: google.maps.Animation.DROP
+                });
+                window.currentMarker = newMarker;
+
+                // Geocode to get City
+                const geocoder = new google.maps.Geocoder();
+                geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                    let city = "Unknown Location";
+                    if (status === "OK" && results[0]) {
+                        // Try to find the city/locality component
+                        const addressComponents = results[0].address_components;
+                        const locality = addressComponents.find(c => c.types.includes("locality"));
+                        const adminArea = addressComponents.find(c => c.types.includes("administrative_area_level_1"));
+                        
+                        if(locality) city = locality.long_name;
+                        else if(adminArea) city = adminArea.long_name;
+                        else city = results[0].formatted_address.split(',')[0];
+                    }
+                    setSelectedLocation({ lat, lng, city });
+                });
+                
+                map.panTo(latLng);
+            };
+
+            const handleCurrentLocation = () => {
+                if (navigator.geolocation && mapInstance) {
+                    setLoadingLoc(true);
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const latLng = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+                            handleLocationSelect(latLng, mapInstance);
+                            mapInstance.setZoom(15);
+                            setLoadingLoc(false);
+                        },
+                        () => { alert("Geolocation failed."); setLoadingLoc(false); }
+                    );
+                } else { alert("Browser doesn't support geolocation."); }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="bg-slate-900 w-full max-w-4xl h-[80vh] rounded-2xl flex flex-col overflow-hidden border border-slate-700 shadow-2xl relative">
+                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white flex items-center gap-2"><i className="fab fa-google text-blue-500"></i> Pin Site Location</h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white"><i className="fas fa-times"></i></button>
+                        </div>
+                        <div className="flex-1 relative bg-slate-800">
+                            <div ref={mapContainerRef} id="google-map"></div>
+                            
+                            <div className="absolute bottom-6 left-6 right-6 z-[100] flex justify-between items-end pointer-events-none">
+                                <div className="flex gap-4 items-end w-full">
+                                    <div className="bg-slate-900/90 backdrop-blur p-4 rounded-xl border border-slate-700 shadow-xl pointer-events-auto flex-1 max-w-md">
+                                        <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Selected Location</p>
+                                        {selectedLocation ? (
+                                            <div>
+                                                <div className="text-white text-lg font-bold truncate">{selectedLocation.city}</div>
+                                                <div className="font-mono text-emerald-400 text-xs mt-1">
+                                                    <i className="fas fa-satellite-dish mr-1"></i>
+                                                    {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-slate-500 text-sm italic">Click map or use 'My Location' button</div>
+                                        )}
+                                    </div>
+                                    <div className="flex gap-2 pointer-events-auto">
+                                        <button onClick={handleCurrentLocation} className="h-14 w-14 rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-xl flex items-center justify-center border border-slate-600" title="Use GPS">
+                                            {loadingLoc ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-crosshairs text-xl"></i>}
+                                        </button>
+                                        <button onClick={() => selectedLocation && onConfirm(selectedLocation)} disabled={!selectedLocation} className={`px-8 h-14 rounded-xl font-bold shadow-xl transition-all flex items-center ${selectedLocation ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
+                                            Confirm Site <i className="fas fa-check ml-2"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MODULE: SITE MANAGEMENT ---
+        const SiteModule = ({ session, sites, refresh }) => {
+            const [showMap, setShowMap] = useState(false);
+            const [formData, setFormData] = useState({ name: '', code: '', locationName: '', lat: null, lng: null });
+
+            const handleDelete = async (siteCode) => {
+                if(!confirm(`Delete site ${siteCode}? This is permanent.`)) return;
+                await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/sites/${siteCode}`));
+                refresh();
+            };
+
+            const handleMapConfirm = (loc) => {
+                setFormData({ ...formData, locationName: loc.city, lat: loc.lat, lng: loc.lng });
+                setShowMap(false);
+            };
+
+            const addSite = async (e) => {
+                e.preventDefault();
+                if (!formData.lat || !formData.lng) {
+                    alert("Please pick a location on the map to ensure accurate tracking.");
+                    return;
+                }
+                const newSite = {
+                    name: formData.name,
+                    code: formData.code.toUpperCase(), // Site ID
+                    locationName: formData.locationName, // City Name
+                    lat: formData.lat,
+                    lng: formData.lng,
+                    id: Date.now()
+                };
+                await window.fb.set(window.fb.ref(window.db, `organizations/${session.orgId}/sites/${newSite.code}`), newSite);
+                setFormData({ name: '', code: '', locationName: '', lat: null, lng: null }); 
+                refresh();
+            };
+
+            return (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in relative">
+                    {showMap && <GoogleMapPicker onConfirm={handleMapConfirm} onClose={() => setShowMap(false)} />}
+                    
+                    {/* ADD SITE CARD */}
+                    <div className="glass-panel p-6 rounded-2xl h-fit border border-blue-500/30">
+                        <h3 className="font-bold mb-4 flex items-center gap-2 text-lg"><i className="fas fa-building text-blue-400"></i> Register New Site</h3>
+                        <form onSubmit={addSite} className="space-y-4">
+                            <div>
+                                <label className="text-[10px] uppercase text-slate-500 font-bold ml-1">Site Code (Unique ID)</label>
+                                <input value={formData.code} onChange={e=>setFormData({...formData, code:e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-white text-sm outline-none uppercase font-mono focus:border-blue-500 transition-colors" placeholder="e.g. BLR-HQ" required />
+                            </div>
+                            <div>
+                                <label className="text-[10px] uppercase text-slate-500 font-bold ml-1">Site Name</label>
+                                <input value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-white text-sm outline-none focus:border-blue-500 transition-colors" placeholder="e.g. Bangalore Campus" required />
+                            </div>
+                            
+                            <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
+                                <label className="text-[10px] uppercase text-slate-500 font-bold block mb-2">Geo-Location</label>
+                                <div className="flex gap-2 mb-3">
+                                    <div className="flex-1 bg-slate-900 border border-slate-700 p-2 rounded-lg text-white text-xs flex items-center gap-2">
+                                        <i className="fas fa-map-marker-alt text-red-400"></i>
+                                        {formData.locationName || "No city selected"}
+                                    </div>
+                                </div>
+                                <button type="button" onClick={() => setShowMap(true)} className={`w-full py-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${formData.lat ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-slate-700 border-slate-600 hover:bg-slate-600 hover:text-white text-slate-400'}`}>
+                                    {formData.lat ? <><i className="fas fa-check-circle"></i> Location Locked</> : <><i className="fas fa-map"></i> Open Map Picker</>}
+                                </button>
+                            </div>
+
+                            <button className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 py-3 rounded-xl font-bold text-sm shadow-lg shadow-blue-500/20 text-white">
+                                Add Site to Registry
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* SITES LIST CARDS */}
+                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
+                        {sites.length === 0 && (
+                            <div className="col-span-2 text-center py-20 border-2 border-dashed border-slate-800 rounded-2xl">
+                                <div className="text-4xl text-slate-700 mb-4"><i className="fas fa-globe-asia"></i></div>
+                                <p className="text-slate-500">No sites registered yet.</p>
+                            </div>
+                        )}
+                        {sites.map(s => (
+                            <div key={s.code} className="glass-panel p-5 rounded-2xl border-l-4 border-emerald-500 flex justify-between items-start group relative overflow-hidden">
+                                {/* Decor */}
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full pointer-events-none"></div>
+                                
+                                <div className="w-full relative z-10">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <span className="bg-slate-800 text-blue-300 text-[10px] font-mono px-2 py-1 rounded border border-slate-700">{s.code}</span>
+                                            <h4 className="font-bold text-white text-lg mt-2">{s.name}</h4>
+                                        </div>
+                                        <button onClick={() => handleDelete(s.code)} className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                                            <i className="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="mt-4 pt-4 border-t border-slate-700/50 flex items-center justify-between">
+                                        <p className="text-sm text-slate-300 font-bold"><i className="fas fa-city mr-2 text-purple-400"></i> {s.locationName}</p>
+                                        <div className="text-[10px] text-emerald-400 font-mono bg-emerald-900/20 px-2 py-1 rounded border border-emerald-500/20">
+                                            {s.lat.toFixed(4)}, {s.lng.toFixed(4)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
 
         const NavCard = ({ module, onClick }) => (
             <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group cursor-pointer flex flex-col h-40 justify-between">
@@ -82,6 +329,7 @@
 
         const App = () => {
             const [session, setSession] = useState(null);
+            const [view, setView] = useState('hub');
             const [data, setData] = useState({ sites: [] });
             const [selectedSite, setSelectedSite] = useState('GLOBAL');
             const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -104,43 +352,33 @@
                 });
             }, []);
 
+            const fetchData = async (orgId) => {
+                const dbRef = window.fb.ref(window.db);
+                const snapshot = await window.fb.get(window.fb.child(dbRef, `organizations/${orgId}`));
+                if (snapshot.exists()) {
+                    const val = snapshot.val();
+                    setData({ sites: val.sites ? Object.values(val.sites) : [] });
+                }
+            };
+
             const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
 
             const handleNav = (moduleId) => {
                 const module = MODULES.find(m => m.id === moduleId);
                 
-                // 1. Admin/Owner Check for Admin Modules
-                if (module.admin && session.role !== 'Owner') {
-                    alert("Access Denied: Owner permissions required.");
-                    return;
-                }
-
-                // 2. Global View Check (Owners must select a site for operational modules)
-                if (session.role === 'Owner' && selectedSite === 'GLOBAL' && !module.allowGlobal) {
-                    alert("Please select a specific Site from the dropdown above to enter this module.");
-                    return;
-                }
+                if (moduleId === 'dashboard') { setView(moduleId); return; }
                 
-                // --- CONNECTED MODULES ---
-                if (moduleId === 'users') {
-                    window.location.href = 'users.html';
-                    return;
-                }
-                if (moduleId === 'incidents') {
-                    window.location.href = `incidents.html?site=${selectedSite}`;
-                    return;
-                }
-                if (moduleId === 'risk') {
-                    window.location.href = `risk.html?site=${selectedSite}`;
-                    return;
-                }
-                if (moduleId === 'sites') {
-                    window.location.href = 'sites.html'; // Assuming you have this or will build it
-                    return;
-                }
+                // Permission Checks
+                if (module.admin && session.role !== 'Owner') { alert("Access Denied."); return; }
+                if (session.role === 'Owner' && selectedSite === 'GLOBAL' && !module.allowGlobal) { alert("Please select a specific Site."); return; }
+                if (session.role !== 'Owner' && !session.assignedSite) { alert("Access Denied."); return; }
 
-                // Fallback
-                alert(`Module ${module.label} is coming soon.`);
+                // Redirects
+                if (moduleId === 'incidents') { window.location.href = `incidents.html?site=${selectedSite}`; return; }
+                if (moduleId === 'users') { window.location.href = 'users.html'; return; }
+                if (moduleId === 'risk') { window.location.href = `risk.html?site=${selectedSite}`; return; }
+
+                setView(moduleId);
             };
 
             if (!session) return null;
@@ -153,6 +391,7 @@
                     {/* HEADER */}
                     <header className="h-16 px-6 flex items-center justify-between z-20 backdrop-blur-sm bg-slate-900/50 border-b border-white/5">
                         <div className="flex items-center gap-4">
+                            {view !== 'hub' && <button onClick={() => setView('hub')} className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300 hover:text-white transition-colors"><i className="fas fa-arrow-left"></i></button>}
                             <h1 className="text-base font-bold text-white flex items-center gap-2"><i className="fas fa-shield-halved text-blue-500"></i> ISO Hub</h1>
                             <div className="h-6 w-[1px] bg-slate-700 mx-2"></div>
                             
@@ -174,15 +413,28 @@
                         <button onClick={handleLogout} className="text-slate-500 hover:text-red-400"><i className="fas fa-power-off"></i></button>
                     </header>
 
-                    {/* DASHBOARD GRID */}
+                    {/* MAIN CONTENT */}
                     <main className="flex-1 overflow-y-auto p-8 z-10 max-w-6xl mx-auto w-full">
-                        <div className="mb-8">
-                            <h2 className="text-3xl font-bold text-white mb-2">Welcome, {session.user.split(' ')[0]}</h2>
-                            <p className="text-slate-400 text-sm">Select a module to begin. Current Context: <span className="text-emerald-400 font-bold">{selectedSite}</span></p>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                            {MODULES.map(module => <NavCard key={module.id} module={module} onClick={() => handleNav(module.id)} />)}
-                        </div>
+                        {view === 'hub' && (
+                            <div className="animate-fade-in">
+                                <div className="mb-8">
+                                    <h2 className="text-3xl font-bold text-white mb-2">Welcome, {session.user.split(' ')[0]}</h2>
+                                    <p className="text-slate-400 text-sm">Select a module to begin. Context: <span className="text-emerald-400 font-bold">{selectedSite}</span></p>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                                    {MODULES.map(module => <NavCard key={module.id} module={module} onClick={() => handleNav(module.id)} />)}
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'sites' && <SiteModule session={session} sites={data.sites} refresh={() => fetchData(session.orgId)} />}
+                        
+                        {view !== 'hub' && view !== 'sites' && (
+                            <div className="flex flex-col items-center justify-center h-full text-center text-slate-500">
+                                <i className="fas fa-tools text-4xl mb-4"></i>
+                                <p>Module Under Construction</p>
+                            </div>
+                        )}
                     </main>
                 </div>
             );
