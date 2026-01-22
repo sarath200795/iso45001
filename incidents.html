@@ -12,22 +12,12 @@
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
     <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] },
-                    colors: { 'glass': 'rgba(30, 41, 59, 0.7)' }
-                }
-            }
-        }
+        tailwind.config = { theme: { extend: { fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] }, colors: { 'glass': 'rgba(30, 41, 59, 0.7)' } } } }
     </script>
     <style>
         body { font-family: 'Space Grotesk', sans-serif; background-color: #0f172a; color: white; }
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        
-        /* DIAGRAM STYLES */
         .fishbone-wrapper { position: relative; padding: 40px 20px; overflow-x: auto; min-width: 800px; background: rgba(15, 23, 42, 0.5); border-radius: 16px; border: 1px dashed #334155; }
         .spine-main { position: absolute; top: 50%; left: 20px; right: 140px; height: 4px; background: #94a3b8; transform: translateY(-50%); }
         .spine-main::after { content: ''; position: absolute; right: -20px; top: -8px; width: 0; height: 0; border-left: 20px solid #94a3b8; border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
@@ -37,8 +27,6 @@
         .rib-top, .rib-bottom { background: #1e293b; border: 1px solid #475569; padding: 10px; border-radius: 8px; min-height: 80px; position: relative; margin: 20px 0; }
         .rib-top::after { content: ''; position: absolute; bottom: -20px; left: 50%; width: 2px; height: 20px; background: #64748b; transform: skewX(-20deg); transform-origin: top; }
         .rib-bottom::before { content: ''; position: absolute; top: -20px; left: 50%; width: 2px; height: 20px; background: #64748b; transform: skewX(20deg); transform-origin: bottom; }
-
-        /* TREE STYLES */
         .tree ul { padding-top: 20px; position: relative; display: flex; justify-content: center; }
         .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; }
         .tree li::before, .tree li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #475569; width: 50%; height: 20px; }
@@ -50,7 +38,6 @@
         .tree li:first-child::after { border-radius: 5px 0 0 0; }
         .tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #475569; width: 0; height: 20px; }
         .tree-node { display: inline-block; padding: 10px; border-radius: 8px; background: #1e293b; border: 1px solid #334155; min-width: 140px; position: relative; z-index: 10; }
-
         @media print {
             body { background: white; color: black; -webkit-print-color-adjust: exact; }
             .no-print { display: none !important; }
@@ -72,76 +59,39 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, set, update, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-        // REPLACE WITH YOUR FIREBASE CONFIG
-        const firebaseConfig = {
-            apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
-            authDomain: "ohsms-fa534.firebaseapp.com",
-            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
-            projectId: "ohsms-fa534",
-            storageBucket: "ohsms-fa534.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        window.db = getDatabase(app);
-        window.fb = { get, ref, set, update, push };
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+        const app = initializeApp(firebaseConfig); window.db = getDatabase(app); window.fb = { get, ref, set, update, push };
     </script>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- TREE NODE COMPONENT (Fault Tree) ---
         const FaultTreeNode = ({ node, onUpdate, onDelete, onAddSibling }) => {
             const handleAddChild = () => onUpdate({ ...node, children: [...(node.children||[]), { id: Date.now(), label: 'Event', type: 'EVENT', children: [] }] });
             const toggleType = () => onUpdate({ ...node, type: ['EVENT', 'AND', 'OR', 'ROOT'][(['EVENT', 'AND', 'OR', 'ROOT'].indexOf(node.type) + 1) % 4] });
             return (
                 <li>
                     <div className="tree-node group">
-                        <div className="absolute -top-3 right-0 opacity-0 group-hover:opacity-100 flex gap-1 no-print z-30">
-                            <button onClick={handleAddChild} className="bg-blue-600 text-white w-5 h-5 rounded-full text-[10px] shadow">↓</button>
-                            {onAddSibling && <button onClick={onAddSibling} className="bg-purple-600 text-white w-5 h-5 rounded-full text-[10px] shadow">→</button>}
-                            {onDelete && <button onClick={onDelete} className="bg-red-600 text-white w-5 h-5 rounded-full text-[10px] shadow">x</button>}
-                        </div>
-                        <input value={node.label} onChange={e=>onUpdate({...node, label:e.target.value})} className="bg-transparent text-center w-full text-xs font-bold outline-none border-b border-transparent focus:border-blue-500 pb-1" />
-                        <div onClick={toggleType} className="mt-1 cursor-pointer no-print"><span className="text-[9px] px-1.5 rounded font-mono border border-slate-600 text-slate-500">{node.type}</span></div>
+                        <div className="absolute -top-3 right-0 opacity-0 group-hover:opacity-100 flex gap-1 no-print z-30"><button onClick={handleAddChild} className="bg-blue-600 text-white w-5 h-5 rounded-full text-[10px] shadow">↓</button>{onAddSibling && <button onClick={onAddSibling} className="bg-purple-600 text-white w-5 h-5 rounded-full text-[10px] shadow">→</button>}{onDelete && <button onClick={onDelete} className="bg-red-600 text-white w-5 h-5 rounded-full text-[10px] shadow">x</button>}</div>
+                        <input value={node.label} onChange={e=>onUpdate({...node, label:e.target.value})} className="bg-transparent text-center w-full text-xs font-bold outline-none border-b border-transparent focus:border-blue-500 pb-1" /><div onClick={toggleType} className="mt-1 cursor-pointer no-print"><span className="text-[9px] px-1.5 rounded font-mono border border-slate-600 text-slate-500">{node.type}</span></div>
                     </div>
                     {node.children?.length > 0 && <ul>{node.children.map((child, i) => (<FaultTreeNode key={child.id} node={child} onUpdate={d=>{const k=[...node.children];k[i]=d;onUpdate({...node, children:k})}} onDelete={()=>{const k=node.children.filter((_,x)=>x!==i);onUpdate({...node, children:k})}} onAddSibling={()=>{onUpdate({...node, children:[...node.children, {id:Date.now(), label:'Parallel', type:'EVENT', children:[]}]})}} />))}</ul>}
                 </li>
             );
         };
 
-        // --- FISHBONE COMPONENT ---
         const FishboneDiagram = ({ data, onChange }) => {
             const Rib = ({ title, cat, pos }) => (
-                <div className={pos==='top'?'rib-top':'rib-bottom'}>
-                    <h4 className="text-[10px] font-bold uppercase text-blue-400 mb-2 flex justify-between border-b border-slate-700 pb-1">{title} <button onClick={()=>onChange({...data, [cat]: [...(data[cat]||[]), '']})} className="text-green-400 no-print">+</button></h4>
-                    <div className="space-y-1">{(data[cat]||[]).map((val, i)=>(<div key={i} className="flex gap-1 items-center group"><span className="text-slate-500">•</span><input className="bg-transparent border-b border-slate-700 w-full text-[10px] text-white outline-none" value={val} onChange={e=>{const arr=[...data[cat]];arr[i]=e.target.value;onChange({...data, [cat]:arr})}} /><button onClick={()=>{const arr=[...data[cat]];arr.splice(i,1);onChange({...data, [cat]:arr})}} className="text-red-500 opacity-0 group-hover:opacity-100 text-[8px] no-print">x</button></div>))}</div>
-                </div>
+                <div className={pos==='top'?'rib-top':'rib-bottom'}><h4 className="text-[10px] font-bold uppercase text-blue-400 mb-2 flex justify-between border-b border-slate-700 pb-1">{title} <button onClick={()=>onChange({...data, [cat]: [...(data[cat]||[]), '']})} className="text-green-400 no-print">+</button></h4><div className="space-y-1">{(data[cat]||[]).map((val, i)=>(<div key={i} className="flex gap-1 items-center group"><span className="text-slate-500">•</span><input className="bg-transparent border-b border-slate-700 w-full text-[10px] text-white outline-none" value={val} onChange={e=>{const arr=[...data[cat]];arr[i]=e.target.value;onChange({...data, [cat]:arr})}} /><button onClick={()=>{const arr=[...data[cat]];arr.splice(i,1);onChange({...data, [cat]:arr})}} className="text-red-500 opacity-0 group-hover:opacity-100 text-[8px] no-print">x</button></div>))}</div></div>
             );
             return (
-                <div className="fishbone-wrapper mt-6">
-                    <div className="spine-main"></div><div className="fish-head"><div><div className="text-[8px] uppercase tracking-widest text-slate-400">Effect</div><div className="leading-tight text-sm">INCIDENT</div></div></div>
-                    <div className="ribs-container">
-                        <div className="rib-column"><Rib title="Man" cat="man" pos="top" /></div><div className="rib-column"><Rib title="Machine" cat="machine" pos="top" /></div><div className="rib-column"><Rib title="Material" cat="material" pos="top" /></div>
-                        <div className="rib-column"><Rib title="Method" cat="method" pos="bottom" /></div><div className="rib-column"><Rib title="Environment" cat="environment" pos="bottom" /></div>
-                    </div>
-                </div>
+                <div className="fishbone-wrapper mt-6"><div className="spine-main"></div><div className="fish-head"><div><div className="text-[8px] uppercase tracking-widest text-slate-400">Effect</div><div className="leading-tight text-sm">INCIDENT</div></div></div><div className="ribs-container"><div className="rib-column"><Rib title="Man" cat="man" pos="top" /></div><div className="rib-column"><Rib title="Machine" cat="machine" pos="top" /></div><div className="rib-column"><Rib title="Material" cat="material" pos="top" /></div><div className="rib-column"><Rib title="Method" cat="method" pos="bottom" /></div><div className="rib-column"><Rib title="Environment" cat="environment" pos="bottom" /></div></div></div>
             );
         };
 
-        // --- MAIN INCIDENT FORM ---
         const IncidentForm = ({ session, sites, initialData, selectedSiteContext, onBack, onSave }) => {
             const [step, setStep] = useState(1);
-            
-            // Initialize data with Site Context passed from Dashboard
-            const [data, setData] = useState(initialData || {
-                siteId: (selectedSiteContext && selectedSiteContext !== 'GLOBAL') ? selectedSiteContext : '', 
-                date: '', time: '', type: 'Near Miss', description: '',
-                investigation: { fiveWhys: ['','','','',''], fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, faultTreeRoot: { id: 1, label: 'Top Event', type: 'AND', children: [] }, rootCause: '' },
-                capa: [], riskUpdated: false
-            });
+            const [data, setData] = useState(initialData || { siteId: (selectedSiteContext && selectedSiteContext !== 'GLOBAL') ? selectedSiteContext : '', date: '', time: '', type: 'Near Miss', description: '', investigation: { fiveWhys: ['','','','',''], fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, faultTreeRoot: { id: 1, label: 'Top Event', type: 'AND', children: [] }, rootCause: '' }, capa: [], riskUpdated: false });
 
             useEffect(() => {
                 if(!initialData && data.siteId && data.type && !data.id) {
@@ -155,39 +105,24 @@
                 <div className="max-w-7xl mx-auto w-full pb-20 animate-fade-in">
                     <div className="flex items-center justify-between mb-6 no-print">
                         <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back to List</button>
-                        <div className="flex gap-2 bg-slate-900 p-1 rounded-full border border-slate-700">
-                            {['Initial', 'Investigate', 'CAPA', 'Review'].map((label, i) => (<button key={i} onClick={() => setStep(i+1)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${step === i+1 ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{label}</button>))}
-                        </div>
+                        <div className="flex gap-2 bg-slate-900 p-1 rounded-full border border-slate-700">{['Initial', 'Investigate', 'CAPA', 'Review'].map((label, i) => (<button key={i} onClick={() => setStep(i+1)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${step === i+1 ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{label}</button>))}</div>
                         <button onClick={() => window.print()} className="bg-emerald-900/20 px-4 py-2 rounded-lg border border-emerald-500/50 text-emerald-400 font-bold text-sm"><i className="fas fa-file-pdf"></i> Generate Full Report</button>
                     </div>
-
-                    <div className="hidden print:block text-center border-b-2 border-black pb-4 mb-6">
-                        <h1 className="text-2xl font-bold uppercase">Incident Investigation Report</h1>
-                        <p className="text-sm mt-1">ID: {data.id} | Site: {data.siteId}</p>
-                    </div>
-
-                    {/* 1. INITIAL */}
+                    <div className="hidden print:block text-center border-b-2 border-black pb-4 mb-6"><h1 className="text-2xl font-bold uppercase">Incident Investigation Report</h1><p className="text-sm mt-1">ID: {data.id} | Site: {data.siteId}</p></div>
+                    
                     <div className={`print-section ${step === 1 ? 'block' : 'hidden'}`}>
                         <div className="glass-panel p-8 rounded-2xl mb-6">
                             <h2 className="text-lg font-bold mb-4 text-blue-400 border-b border-white/10 pb-2">1. Incident Overview</h2>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                <div>
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Site Location</label>
-                                    <select className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.siteId} onChange={e=>setData({...data, siteId:e.target.value})}>
-                                        <option value="">Select Site...</option>
-                                        {sites.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
-                                    </select>
-                                </div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Site Location</label><select className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.siteId} onChange={e=>setData({...data, siteId:e.target.value})}><option value="">Select Site...</option>{sites.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}</select></div>
                                 <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.type} onChange={e=>setData({...data, type:e.target.value})}><option>Near Miss</option><option>Accident</option></select></div>
                                 <div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.date} onChange={e=>setData({...data, date:e.target.value})} /></div>
                                 <div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.time} onChange={e=>setData({...data, time:e.target.value})} /></div>
                             </div>
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Description</label>
-                            <textarea rows="3" className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.description} onChange={e=>setData({...data, description:e.target.value})}></textarea>
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="3" className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.description} onChange={e=>setData({...data, description:e.target.value})}></textarea>
                         </div>
                     </div>
 
-                    {/* 2. INVESTIGATION */}
                     <div className={`print-section ${step === 2 ? 'block' : 'hidden'}`}>
                         <div className="glass-panel p-8 rounded-2xl mb-6">
                             <h2 className="text-lg font-bold mb-6 text-purple-400 border-b border-white/10 pb-2">2. Investigation</h2>
@@ -198,30 +133,18 @@
                         </div>
                     </div>
 
-                    {/* 3. CAPA */}
                     <div className={`print-section ${step === 3 ? 'block' : 'hidden'}`}>
                         <div className="glass-panel p-8 rounded-2xl mb-6">
                             <h2 className="text-lg font-bold mb-4 text-orange-400 border-b border-white/10 pb-2">3. Corrective Actions</h2>
-                            <div className="bg-slate-900/50 p-4 rounded mb-4 no-print">
-                                <div className="grid grid-cols-4 gap-2 mb-2">
-                                    <input id="cDesc" placeholder="Action" className="col-span-2 bg-slate-800 border border-slate-700 rounded p-2 text-white text-xs"/>
-                                    <input id="cOwn" placeholder="Owner" className="bg-slate-800 border border-slate-700 rounded p-2 text-white text-xs"/>
-                                    <input id="cDate" type="date" className="bg-slate-800 border border-slate-700 rounded p-2 text-white text-xs"/>
-                                </div>
-                                <button onClick={()=>{const d=document.getElementById('cDesc').value, o=document.getElementById('cOwn').value, t=document.getElementById('cDate').value; if(d){ setData({...data, capa: [...data.capa, {desc:d, owner:o, dueDate:t, status:'Open'}]}); document.getElementById('cDesc').value=''; }}} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded">Add Action</button>
-                            </div>
+                            <div className="bg-slate-900/50 p-4 rounded mb-4 no-print"><div className="grid grid-cols-4 gap-2 mb-2"><input id="cDesc" placeholder="Action" className="col-span-2 bg-slate-800 border border-slate-700 rounded p-2 text-white text-xs"/><input id="cOwn" placeholder="Owner" className="bg-slate-800 border border-slate-700 rounded p-2 text-white text-xs"/><input id="cDate" type="date" className="bg-slate-800 border border-slate-700 rounded p-2 text-white text-xs"/></div><button onClick={()=>{const d=document.getElementById('cDesc').value, o=document.getElementById('cOwn').value, t=document.getElementById('cDate').value; if(d){ setData({...data, capa: [...data.capa, {desc:d, owner:o, dueDate:t, status:'Open'}]}); document.getElementById('cDesc').value=''; }}} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded">Add Action</button></div>
                             <table className="w-full text-left text-sm"><thead className="border-b border-slate-700 text-xs uppercase text-slate-500"><tr><th>Action</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody className="divide-y divide-slate-800">{data.capa.map((c,i)=>(<tr key={i}><td className="py-2">{c.desc}</td><td>{c.owner}</td><td>{c.dueDate}</td><td>{c.status}</td></tr>))}</tbody></table>
                         </div>
                     </div>
 
-                    {/* 4. REVIEW */}
                     <div className={`print-section ${step === 4 ? 'block' : 'hidden'}`}>
                         <div className="glass-panel p-8 rounded-2xl mb-6">
                             <h2 className="text-lg font-bold mb-4 text-emerald-400 border-b border-white/10 pb-2">4. Review & Sign-off</h2>
-                            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex justify-between items-center mb-6 no-print">
-                                <div><h3 className="font-bold text-white">Risk Assessment Check</h3><p className="text-sm text-slate-400">Update HIRA for Site: <span className="text-emerald-400">{data.siteId || 'Global'}</span>?</p></div>
-                                <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold text-sm">Open Risk Module</a>
-                            </div>
+                            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex justify-between items-center mb-6 no-print"><div><h3 className="font-bold text-white">Risk Assessment Check</h3><p className="text-sm text-slate-400">Update HIRA for Site: <span className="text-emerald-400">{data.siteId || 'Global'}</span>?</p></div><a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold text-sm">Open Risk Module</a></div>
                             <div className="flex gap-2 items-center mb-6"><input type="checkbox" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} className="w-4 h-4"/><label className="text-sm text-white">Risk Assessment Reviewed</label></div>
                             <div className="flex justify-end no-print"><button onClick={()=>onSave(data)} className="bg-emerald-600 text-white font-bold px-8 py-3 rounded-xl shadow-lg">Save & Close</button></div>
                         </div>
@@ -231,19 +154,16 @@
         };
 
         const App = () => {
-            // --- FIX START: Initialize State Synchronously from URL ---
+            // STATE: Read URL params strictly for initialization
             const [view, setView] = useState(() => {
                 const params = new URLSearchParams(window.location.search);
                 const ctx = params.get('site');
-                // If a site is present and not 'GLOBAL', default to FORM view
                 return (ctx && ctx !== 'GLOBAL') ? 'form' : 'list';
             });
-
             const [siteContext, setSiteContext] = useState(() => {
                 const params = new URLSearchParams(window.location.search);
                 return params.get('site') || 'GLOBAL';
             });
-            // --- FIX END ---
 
             const [session, setSession] = useState(null);
             const [sites, setSites] = useState([]);
@@ -287,79 +207,39 @@
                 <div className="flex flex-col h-full bg-slate-950 text-white min-h-screen">
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
                         <div className="flex items-center gap-4">
-                            <a href="incidents.html" className="text-slate-400 hover:text-white flex items-center gap-2">
-                                <i className="fas fa-rotate-right"></i> Reset View
-                            </a>
+                            <a href="incidents.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-rotate-right"></i> Reset View</a>
                             <h1 className="font-bold text-lg hidden md:block">Incidents</h1>
                         </div>
-                        
                         <div className="flex items-center gap-2">
                             <label className="text-xs font-bold text-slate-500 uppercase mr-2 hidden sm:block">Context:</label>
                             <div className="relative">
                                 <i className="fas fa-filter absolute left-3 top-2.5 text-blue-400 text-xs"></i>
-                                <select 
-                                    value={siteContext} 
-                                    onChange={(e) => {
-                                        setSiteContext(e.target.value);
-                                        // Optional: Reset to list if context changes manually
-                                        if(view === 'form' && !currentData) setView('list');
-                                    }}
-                                    className="bg-slate-800 border border-slate-700 text-white text-xs rounded-lg py-2 pl-8 pr-4 outline-none focus:border-blue-500 appearance-none font-bold"
-                                >
+                                <select value={siteContext} onChange={(e) => { setSiteContext(e.target.value); if(view === 'form' && !currentData) setView('list'); }} className="bg-slate-800 border border-slate-700 text-white text-xs rounded-lg py-2 pl-8 pr-4 outline-none focus:border-blue-500 appearance-none font-bold">
                                     <option value="GLOBAL">Global (All Sites)</option>
                                     {sites.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
                                 </select>
                             </div>
                         </div>
                     </div>
-                    
                     <div className="p-6 flex-1 overflow-y-auto">
                         {view === 'list' && (
                             <div className="max-w-7xl mx-auto animate-fade-in">
                                 <div className="flex justify-between mb-8">
-                                    <div>
-                                        <h2 className="text-3xl font-bold">Incident Dashboard</h2>
-                                        <p className="text-slate-400 text-sm mt-1">Showing data for: <span className="text-emerald-400 font-bold">{siteContext}</span></p>
-                                    </div>
+                                    <div><h2 className="text-3xl font-bold">Incident Dashboard</h2><p className="text-slate-400 text-sm mt-1">Showing data for: <span className="text-emerald-400 font-bold">{siteContext}</span></p></div>
                                     <button onClick={()=>{setCurrentData(null); setView('form')}} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-500 transition-colors">+ Report New</button>
                                 </div>
-                                
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {filteredIncidents.length === 0 && (
-                                        <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-800 rounded-3xl">
-                                            <div className="text-4xl mb-4">📭</div>
-                                            <h3 className="text-xl font-bold text-slate-500">No Incidents Found</h3>
-                                            <p className="text-slate-600 text-sm">No records for {siteContext === 'GLOBAL' ? 'any site' : siteContext}.</p>
-                                        </div>
-                                    )}
-                                    {filteredIncidents.map(inc => (
-                                        <div key={inc.id} className="glass-panel p-5 rounded-2xl border-l-4 border-blue-500 relative group transition-all hover:-translate-y-1">
-                                            <div className="flex justify-between items-start mb-2"><div><span className="text-[10px] font-mono bg-slate-800 px-2 py-1 rounded text-blue-300">{inc.id}</span><h3 className="font-bold text-lg mt-2">{inc.type === 'Accident' ? '🚨 Accident' : '⚠️ ' + inc.type}</h3></div></div>
-                                            <p className="text-sm text-slate-400 line-clamp-2 mb-4 h-10">{inc.description}</p>
-                                            <div className="flex justify-between items-end"><span className="text-[10px] text-slate-400"><i className="fas fa-calendar mr-1"></i> {inc.date}</span><button onClick={()=>{setCurrentData(inc); setView('form')}} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-500">Manage</button></div>
-                                        </div>
-                                    ))}
+                                    {filteredIncidents.length === 0 && (<div className="col-span-full py-20 text-center border-2 border-dashed border-slate-800 rounded-3xl"><div className="text-4xl mb-4">📭</div><h3 className="text-xl font-bold text-slate-500">No Incidents Found</h3></div>)}
+                                    {filteredIncidents.map(inc => (<div key={inc.id} className="glass-panel p-5 rounded-2xl border-l-4 border-blue-500 relative group transition-all hover:-translate-y-1"><div className="flex justify-between items-start mb-2"><div><span className="text-[10px] font-mono bg-slate-800 px-2 py-1 rounded text-blue-300">{inc.id}</span><h3 className="font-bold text-lg mt-2">{inc.type === 'Accident' ? '🚨 Accident' : '⚠️ ' + inc.type}</h3></div></div><p className="text-sm text-slate-400 line-clamp-2 mb-4 h-10">{inc.description}</p><div className="flex justify-between items-end"><span className="text-[10px] text-slate-400"><i className="fas fa-calendar mr-1"></i> {inc.date}</span><button onClick={()=>{setCurrentData(inc); setView('form')}} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-500">Manage</button></div></div>))}
                                 </div>
                             </div>
                         )}
-                        {view === 'form' && (
-                            <IncidentForm 
-                                key={currentData ? currentData.id : siteContext} 
-                                session={session} 
-                                sites={sites} 
-                                selectedSiteContext={siteContext} 
-                                initialData={currentData} 
-                                onBack={()=>setView('list')} 
-                                onSave={handleSave} 
-                            />
-                        )}
+                        {view === 'form' && <IncidentForm key={currentData ? currentData.id : siteContext} session={session} sites={sites} selectedSiteContext={siteContext} initialData={currentData} onBack={()=>setView('list')} onSave={handleSave} />}
                     </div>
                 </div>
             );
         };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
     </script>
 </body>
 </html>
