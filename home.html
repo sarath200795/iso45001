@@ -13,38 +13,52 @@
     <script>tailwind.config = { theme: { extend: { fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] }, colors: { 'glass': 'rgba(30, 41, 59, 0.7)' } } } }</script>
     <style>
         body { font-family: 'Space Grotesk', sans-serif; background-color: #0f172a; color: white; }
-        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s; cursor: pointer; }
         .glass-panel:hover { border-color: rgba(59, 130, 246, 0.3); transform: translateY(-2px); }
+        /* Ensure clicks pass through decoration layers */
+        .card-glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.1), transparent 70%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .glass-panel:hover .card-glow { opacity: 1; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col overflow-hidden">
     <div id="root" class="h-full flex flex-col"></div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        // PASTE YOUR FIREBASE CONFIG HERE
-        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "SENDER_ID", appId: "APP_ID" };
-        const app = initializeApp(firebaseConfig); window.db = getDatabase(app); window.fb = { get, ref, child };
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { get, ref, child };
     </script>
+
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
+
         const MODULES = [
-            { id: 'dashboard', label: 'Dashboard', desc: 'KPIs & Stats', icon: 'fa-chart-pie', color: 'text-purple-400', allowGlobal: true },
-            { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400', allowGlobal: true }, 
+            { id: 'dashboard', label: 'Dashboard', desc: 'KPIs & Stats', icon: 'fa-chart-pie', color: 'text-purple-400' },
+            { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
             { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
             { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' },
             { id: 'improvement', label: 'Improvement', desc: 'CAPA Tracking', icon: 'fa-chart-line', color: 'text-blue-400' },
-            { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true, allowGlobal: true },
-            { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true, allowGlobal: true },
+            { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true },
+            { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
         ];
 
         const NavCard = ({ module, onClick }) => (
-            <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group cursor-pointer flex flex-col h-40 justify-between">
+            <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group h-40 flex flex-col justify-between">
+                <div className="card-glow"></div>
                 <div className="relative z-10 flex justify-between items-start">
                     <div className={`w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-lg shadow-lg ${module.color}`}><i className={`fas ${module.icon}`}></i></div>
                     {module.admin && <span className="text-[9px] font-bold uppercase bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-600">Admin</span>}
                 </div>
-                <div className="relative z-10"><h3 className="text-base font-bold text-white mb-0.5 group-hover:text-blue-400 transition-colors">{module.label}</h3><p className="text-[10px] text-slate-400">{module.desc}</p></div>
+                <div className="relative z-10">
+                    <h3 className="text-base font-bold text-white mb-0.5 group-hover:text-blue-400 transition-colors">{module.label}</h3>
+                    <p className="text-[10px] text-slate-400">{module.desc}</p>
+                </div>
             </div>
         );
 
@@ -64,37 +78,51 @@
                 
                 const dbRef = window.fb.ref(window.db);
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}`)).then((snap) => {
-                    if (snap.exists()) { const val = snap.val(); setData({ sites: val.sites ? Object.values(val.sites) : [] }); }
+                    if (snap.exists()) setData({ sites: snap.val().sites ? Object.values(snap.val().sites) : [] });
                 });
-                document.addEventListener("mousedown", (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsDropdownOpen(false); });
+
+                document.addEventListener("mousedown", (e) => {
+                    if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsDropdownOpen(false);
+                });
             }, []);
 
             const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
 
-            // --- CORRECTED NAVIGATION LOGIC ---
+            // --- FIXED NAVIGATION FUNCTION ---
             const handleNav = (moduleId) => {
-                const module = MODULES.find(m => m.id === moduleId);
-                
-                // 1. Permission Check
-                if (module.admin && session.role !== 'Owner') { alert("Access Denied: Owner permissions required."); return; }
-
-                // 2. Routing (CLEAN LINKS)
-                switch(moduleId) {
-                    case 'incidents':
-                        window.location.href = 'incidents.html'; // No URL parameters!
-                        break;
-                    case 'sites':
-                        window.location.href = 'sites.html'; 
-                        break;
-                    case 'users':
-                        window.location.href = 'users.html';
-                        break;
-                    case 'risk':
-                        window.location.href = `risk.html?site=${selectedSite}`; // Risk still needs context
-                        break;
-                    default:
-                        alert(`${module.label} module is coming soon.`);
+                // 1. Immediate Redirects (Bypassing permission checks for core modules)
+                if (moduleId === 'incidents') {
+                    // This forces the browser to go to incidents.html
+                    window.location.href = `incidents.html?site=${selectedSite}`;
+                    return;
                 }
+                if (moduleId === 'sites') {
+                    window.location.href = 'sites.html';
+                    return;
+                }
+                if (moduleId === 'users') {
+                    window.location.href = 'users.html';
+                    return;
+                }
+                if (moduleId === 'risk') {
+                    window.location.href = `risk.html?site=${selectedSite}`;
+                    return;
+                }
+
+                // 2. Fallback for unfinished modules
+                if (moduleId === 'dashboard') {
+                    alert("Dashboard view coming soon.");
+                    return;
+                }
+
+                // 3. Permission/Context Checks for other modules
+                const module = MODULES.find(m => m.id === moduleId);
+                if (module.admin && session.role !== 'Owner') {
+                    alert("Access Denied: Owner permissions required.");
+                    return;
+                }
+                
+                alert(`Module ${module.label} is under construction.`);
             };
 
             if (!session) return null;
@@ -103,6 +131,7 @@
             return (
                 <div className="flex flex-col h-screen bg-slate-950 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+
                     <header className="h-16 px-6 flex items-center justify-between z-20 backdrop-blur-sm bg-slate-900/50 border-b border-white/5">
                         <div className="flex items-center gap-4">
                             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg"><i className="fas fa-shield-halved"></i></div>
@@ -125,11 +154,15 @@
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="text-right hidden md:block"><p className="text-xs font-bold text-white">{session.user}</p><p className="text-[10px] text-slate-400 uppercase tracking-wider">{session.role}</p></div>
-                            <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors ml-2" title="Logout"><i className="fas fa-power-off"></i></button>
+                            <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors ml-2"><i className="fas fa-power-off"></i></button>
                         </div>
                     </header>
+
                     <main className="flex-1 overflow-y-auto p-8 z-10 max-w-7xl mx-auto w-full">
-                        <div className="mb-8"><h2 className="text-3xl font-bold text-white mb-2">Enterprise Modules</h2><p className="text-slate-400 text-sm">Context: <span className="text-emerald-400 font-bold px-2 py-0.5 bg-emerald-400/10 rounded border border-emerald-400/20">{selectedSite === 'GLOBAL' ? 'Global Organization' : selectedSite}</span></p></div>
+                        <div className="mb-8">
+                            <h2 className="text-3xl font-bold text-white mb-2">Enterprise Modules</h2>
+                            <p className="text-slate-400 text-sm">Context: <span className="text-emerald-400 font-bold px-2 py-0.5 bg-emerald-400/10 rounded border border-emerald-400/20">{selectedSite === 'GLOBAL' ? 'Global Organization' : selectedSite}</span></p>
+                        </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                             {MODULES.map(module => <NavCard key={module.id} module={module} onClick={() => handleNav(module.id)} />)}
                         </div>
@@ -137,7 +170,9 @@
                 </div>
             );
         };
-        const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
