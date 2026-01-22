@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISO 45001 | Permission Manager</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] },
+                    colors: { 'glass': 'rgba(30, 41, 59, 0.7)' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Space Grotesk', sans-serif; background-color: #0f172a; color: white; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .checkbox-wrapper input:checked + div { background-color: #2563eb; border-color: #2563eb; }
+        .checkbox-wrapper input:checked + div svg { display: block; }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, get, update, remove, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
+            authDomain: "ohsms-fa534.firebaseapp.com",
+            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
+            projectId: "ohsms-fa534",
+            storageBucket: "ohsms-fa534.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { get, ref, update, remove, child };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const ROLES = ['Owner', 'Safety Manager', 'Site Manager', 'Supervisor', 'Worker', 'Auditor'];
+
+        // --- COMPONENT: MULTI-SELECT DROPDOWN ---
+        const MultiSelect = ({ options, selected, onChange }) => {
+            const [isOpen, setIsOpen] = useState(false);
+
+            const toggleOption = (code) => {
+                if (selected.includes(code)) {
+                    onChange(selected.filter(s => s !== code));
+                } else {
+                    onChange([...selected, code]);
+                }
+            };
+
+            return (
+                <div className="relative">
+                    <button 
+                        onClick={() => setIsOpen(!isOpen)} 
+                        className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-left text-sm flex justify-between items-center hover:border-blue-500 transition-colors"
+                    >
+                        <span className={selected.length ? 'text-white' : 'text-slate-500'}>
+                            {selected.length === 0 ? 'Select Sites...' : `${selected.length} sites selected`}
+                        </span>
+                        <i className={`fas fa-chevron-down text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
+                    </button>
+
+                    {isOpen && (
+                        <div className="absolute top-full left-0 w-full mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto p-2">
+                            {options.map(opt => (
+                                <div 
+                                    key={opt.code} 
+                                    onClick={() => toggleOption(opt.code)}
+                                    className="flex items-center gap-3 p-2 hover:bg-slate-800 rounded-lg cursor-pointer transition-colors"
+                                >
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center ${selected.includes(opt.code) ? 'bg-blue-600 border-blue-600' : 'border-slate-600'}`}>
+                                        {selected.includes(opt.code) && <i className="fas fa-check text-[10px] text-white"></i>}
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-bold text-white">{opt.name}</div>
+                                        <div className="text-[10px] text-slate-500 font-mono">{opt.code}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- COMPONENT: PERMISSION MODAL ---
+        const PermissionModal = ({ user, sites, onClose, onSave }) => {
+            const [role, setRole] = useState(user.role || 'Worker');
+            // Support backward compatibility (string) or new (array)
+            const initialSites = Array.isArray(user.accessibleSites) 
+                ? user.accessibleSites 
+                : (user.assignedSite ? [user.assignedSite] : []);
+            
+            const [selectedSites, setSelectedSites] = useState(initialSites);
+
+            const handleSave = () => {
+                if (selectedSites.length === 0 && role !== 'Owner') {
+                    alert("Please assign at least one site.");
+                    return;
+                }
+                
+                // We save 'assignedSite' (singular) as the Primary/First one for older page compatibility
+                // We save 'accessibleSites' (array) for this new multi-site feature
+                const updates = {
+                    role: role,
+                    assignedSite: selectedSites.length > 0 ? selectedSites[0] : '', 
+                    accessibleSites: selectedSites,
+                    status: 'Active' // Approving the user
+                };
+                onSave(user.id, updates);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white"><i className="fas fa-times"></i></button>
+                        
+                        <div className="mb-6 text-center">
+                            <div className="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold">
+                                {user.name.charAt(0)}
+                            </div>
+                            <h2 className="text-xl font-bold text-white">{user.name}</h2>
+                            <p className="text-sm text-slate-400">{user.email}</p>
+                            {user.status === 'Pending' && <span className="bg-orange-500/20 text-orange-400 text-[10px] px-2 py-1 rounded mt-2 inline-block">Pending Approval</span>}
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Assign Role</label>
+                                <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-white outline-none focus:border-blue-500">
+                                    {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Assign Sites</label>
+                                <MultiSelect options={sites} selected={selectedSites} onChange={setSelectedSites} />
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {selectedSites.map(code => (
+                                        <span key={code} className="bg-slate-800 border border-slate-700 text-xs px-2 py-1 rounded text-slate-300">
+                                            {code}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button onClick={handleSave} className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold text-white shadow-lg shadow-blue-500/20 mt-4">
+                                {user.status === 'Pending' ? 'Approve & Grant Access' : 'Update Permissions'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [session, setSession] = useState(null);
+            const [users, setUsers] = useState([]);
+            const [sites, setSites] = useState([]);
+            const [requests, setRequests] = useState([]); // Pending requests from index.html flow
+            const [editUser, setEditUser] = useState(null);
+            const [view, setView] = useState('pending'); // 'pending' or 'active'
+
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if (!s) { window.location.href = "index.html"; return; }
+                const sess = JSON.parse(s);
+                if (sess.role !== 'Owner') { 
+                    alert("Access Denied. Owner permissions required."); 
+                    window.location.href = "home.html"; 
+                    return; 
+                }
+                setSession(sess);
+                fetchData(sess.orgId);
+            }, []);
+
+            const fetchData = async (orgId) => {
+                const dbRef = window.fb.ref(window.db);
+                const snapshot = await window.fb.get(window.fb.child(dbRef, `organizations/${orgId}`));
+                if (snapshot.exists()) {
+                    const val = snapshot.val();
+                    const allUsers = val.users ? Object.entries(val.users).map(([k,v]) => ({id:k, ...v})) : [];
+                    
+                    setUsers(allUsers.filter(u => u.status === 'Active'));
+                    setRequests(allUsers.filter(u => u.status === 'Pending'));
+                    
+                    // Also check for explicit accessRequests node (legacy support)
+                    if (val.accessRequests) {
+                        const legacyReqs = Object.entries(val.accessRequests).map(([k,v]) => ({
+                            id: v.uid, 
+                            name: v.userName, 
+                            email: 'Unknown', 
+                            status: 'Pending', 
+                            isLegacy: true,
+                            reqKey: k // to delete request
+                        }));
+                        // Merge logic would go here if needed, for now sticking to user node status
+                    }
+
+                    setSites(val.sites ? Object.values(val.sites) : []);
+                }
+            };
+
+            const updatePermissions = async (uid, updates) => {
+                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/users/${uid}`), updates);
+                setEditUser(null);
+                fetchData(session.orgId);
+            };
+
+            const deleteUser = async (uid) => {
+                if(!confirm("Are you sure you want to remove this user?")) return;
+                await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/users/${uid}`));
+                fetchData(session.orgId);
+            };
+
+            if (!session) return null;
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-white">
+                    {/* Header */}
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
+                        <div className="flex items-center gap-4">
+                            <a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a>
+                            <h1 className="font-bold text-lg">Permission Manager</h1>
+                        </div>
+                        <span className="text-xs bg-slate-800 px-3 py-1 rounded text-slate-400">{session.orgId}</span>
+                    </div>
+
+                    <div className="p-8 max-w-6xl mx-auto w-full flex-1 overflow-y-auto">
+                        
+                        {/* Tabs */}
+                        <div className="flex gap-6 border-b border-slate-800 mb-8">
+                            <button onClick={() => setView('pending')} className={`pb-3 text-sm font-bold flex items-center gap-2 ${view === 'pending' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-white'}`}>
+                                Pending Requests
+                                {requests.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{requests.length}</span>}
+                            </button>
+                            <button onClick={() => setView('active')} className={`pb-3 text-sm font-bold ${view === 'active' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-white'}`}>
+                                Active Users
+                            </button>
+                        </div>
+
+                        {/* PENDING VIEW */}
+                        {view === 'pending' && (
+                            <div className="space-y-4">
+                                {requests.length === 0 && (
+                                    <div className="text-center py-20 border-2 border-dashed border-slate-800 rounded-2xl text-slate-500">
+                                        <i className="fas fa-check-circle text-4xl mb-4 opacity-50"></i>
+                                        <p>No pending access requests.</p>
+                                    </div>
+                                )}
+                                {requests.map(req => (
+                                    <div key={req.id} className="glass-panel p-6 rounded-2xl flex items-center justify-between border-l-4 border-orange-500">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-orange-500/10 rounded-full flex items-center justify-center text-orange-500">
+                                                <i className="fas fa-user-clock"></i>
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-lg">{req.name}</h3>
+                                                <p className="text-sm text-slate-400">{req.email}</p>
+                                                <div className="text-[10px] text-orange-400 mt-1">Waiting for Role & Site Assignment</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <button onClick={() => deleteUser(req.id)} className="px-4 py-2 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">Reject</button>
+                                            <button onClick={() => setEditUser(req)} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">Grant Access</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* ACTIVE VIEW */}
+                        {view === 'active' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {users.map(u => (
+                                    <div key={u.id} className="glass-panel p-6 rounded-2xl relative group">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-slate-300 font-bold">
+                                                {u.name.charAt(0)}
+                                            </div>
+                                            {u.role !== 'Owner' && (
+                                                <button onClick={() => setEditUser(u)} className="text-blue-400 hover:text-white text-xs font-bold border border-blue-500/30 px-3 py-1 rounded-lg hover:bg-blue-600">
+                                                    Edit
+                                                </button>
+                                            )}
+                                        </div>
+                                        <h3 className="font-bold text-lg">{u.name}</h3>
+                                        <p className="text-xs text-slate-400 mb-3">{u.email}</p>
+                                        
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-sm border-b border-slate-800 pb-2">
+                                                <span className="text-slate-500">Role</span>
+                                                <span className="text-emerald-400 font-bold">{u.role}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-xs text-slate-500 block mb-1">Access</span>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {Array.isArray(u.accessibleSites) && u.accessibleSites.length > 0 
+                                                        ? u.accessibleSites.map(s => <span key={s} className="bg-slate-800 px-2 py-0.5 rounded text-[10px] text-slate-300">{s}</span>)
+                                                        : <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] text-slate-300">{u.assignedSite || 'None'}</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {u.role !== 'Owner' && (
+                                            <button onClick={() => deleteUser(u.id)} className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity">
+                                                <i className="fas fa-trash"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* MODAL */}
+                    {editUser && (
+                        <PermissionModal 
+                            user={editUser} 
+                            sites={sites} 
+                            onClose={() => setEditUser(null)} 
+                            onSave={updatePermissions} 
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
