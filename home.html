@@ -94,7 +94,6 @@
                 setSession(sess);
                 if(sess.role !== 'Owner' && sess.assignedSite) setSelectedSite(sess.assignedSite);
                 
-                // Fetch Sites
                 const dbRef = window.fb.ref(window.db);
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}`)).then((snap) => {
                     if (snap.exists()) setData({ sites: snap.val().sites ? Object.values(snap.val().sites) : [] });
@@ -110,13 +109,23 @@
             const handleNav = (moduleId) => {
                 const module = MODULES.find(m => m.id === moduleId);
                 
-                // 1. Owner Global Check
+                // 1. Admin/Owner Check for Admin Modules
+                if (module.admin && session.role !== 'Owner') {
+                    alert("Access Denied: Owner permissions required.");
+                    return;
+                }
+
+                // 2. Global View Check (Owners must select a site for operational modules)
                 if (session.role === 'Owner' && selectedSite === 'GLOBAL' && !module.allowGlobal) {
                     alert("Please select a specific Site from the dropdown above to enter this module.");
                     return;
                 }
                 
-                // 2. Redirects
+                // --- CONNECTED MODULES ---
+                if (moduleId === 'users') {
+                    window.location.href = 'users.html';
+                    return;
+                }
                 if (moduleId === 'incidents') {
                     window.location.href = `incidents.html?site=${selectedSite}`;
                     return;
@@ -125,9 +134,13 @@
                     window.location.href = `risk.html?site=${selectedSite}`;
                     return;
                 }
+                if (moduleId === 'sites') {
+                    window.location.href = 'sites.html'; // Assuming you have this or will build it
+                    return;
+                }
 
-                // 3. Fallback for others
-                alert(`Module ${module.label} is under construction.`);
+                // Fallback
+                alert(`Module ${module.label} is coming soon.`);
             };
 
             if (!session) return null;
