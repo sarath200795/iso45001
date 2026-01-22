@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ISO 45001 | Site Registry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            const [session, setSession] = useState(null);
+            const [sites, setSites] = useState([]);
+            const [users, setUsers] = useState([]); // Needed for dropdown
+            const [showModal, setShowModal] = useState(false);
+            
+            // New Site Form State
+            const [newSite, setNewSite] = useState({ 
+                name: '', 
+                code: '', 
+                location: '', 
+                ownerEmail: '' 
+            });
+
+            useEffect(() => {
+                // 1. Auth & Role Check
+                const sessInfo = sessionStorage.getItem('isoSession');
+                if (!sessInfo) { window.location.href = "index.html"; return; }
+                const parsed = JSON.parse(sessInfo);
+                
+                if (parsed.role !== 'Owner') {
+                    alert("Access Denied: Only Organization Owners can register sites.");
+                    window.location.href = "home.html";
+                    return;
+                }
+                setSession(parsed);
+
+                // 2. Load DB
+                const dbKey = `ISO_DB_${parsed.orgId}`;
+                const db = JSON.parse(localStorage.getItem(dbKey) || '{"sites":[], "users":[]}');
+                
+                // Initialize sites array if not exists
+                if(!db.sites) db.sites = [];
+                
+                setSites(db.sites);
+                setUsers(db.users);
+            }, []);
+
+            const handleAddSite = (e) => {
+                e.preventDefault();
+                const dbKey = `ISO_DB_${session.orgId}`;
+                const db = JSON.parse(localStorage.getItem(dbKey));
+
+                // Duplicate Check
+                if(db.sites.find(s => s.code === newSite.code)) {
+                    alert("Site Code must be unique.");
+                    return;
+                }
+
+                // Get Owner Name for UI display
+                const ownerUser = users.find(u => u.email === newSite.ownerEmail);
+                const ownerName = ownerUser ? ownerUser.name : 'Unassigned';
+
+                const siteObj = {
+                    ...newSite,
+                    ownerName: ownerName,
+                    id: `SITE-${Date.now().toString().substr(-6)}`,
+                    created: new Date().toLocaleDateString()
+                };
+
+                const updatedSites = [...(db.sites || []), siteObj];
+                db.sites = updatedSites;
+                
+                // Update LocalStorage
+                localStorage.setItem(dbKey, JSON.stringify(db));
+                setSites(updatedSites);
+                setShowModal(false);
+                setNewSite({ name: '', code: '', location: '', ownerEmail: '' });
+            };
+
+            const handleDelete = (code) => {
+                if(!confirm("Delete this site? This will not delete documents, but will remove the site structure.")) return;
+                const dbKey = `ISO_DB_${session.orgId}`;
+                const db = JSON.parse(localStorage.getItem(dbKey));
+                const updated = db.sites.filter(s => s.code !== code);
+                db.sites = updated;
+                localStorage.setItem(dbKey, JSON.stringify(db));
+                setSites(updated);
+            };
+
+            return (
+                <div className="min-h-screen flex bg-slate-50">
+                    <aside className="w-64 bg-slate-900 text-white p-6 flex flex-col">
+                        <div className="mb-8">
+                            <h1 className="font-black italic uppercase text-lg tracking-tighter">Site Registry</h1>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-widest">{session?.orgId}</p>
+                        </div>
+                        <a href="home.html" className="flex items-center gap-3 text-slate-400 hover:text-white mb-4 transition">
+                            <i className="fas fa-arrow-left"></i> <span className="text-xs font-bold uppercase">Back to Dashboard</span>
+                        </a>
+                    </aside>
+
+                    <main className="flex-1 p-10">
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <h2 className="text-3xl font-black text-slate-800 uppercase italic tracking-tighter">Site Management</h2>
+                                <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Create Sites & Assign Owners</p>
+                            </div>
+                            <button onClick={() => setShowModal(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-black uppercase text-xs shadow-lg transition">
+                                <i className="fas fa-building-circle-check mr-2"></i> Register New Site
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {sites.map((site, i) => (
+                                <div key={i} className="bg-white p-6 rounded-[2rem] shadow-lg border border-slate-100 relative group hover:border-indigo-400 transition">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 text-xl"><i className="fas fa-industry"></i></div>
+                                        <button onClick={() => handleDelete(site.code)} className="text-slate-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
+                                    </div>
+                                    <h3 className="text-xl font-black text-slate-800 uppercase italic">{site.name}</h3>
+                                    <div className="flex items-center gap-2 mt-1 mb-4">
+                                        <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">{site.code}</span>
+                                        <span className="text-slate-400 text-xs"><i className="fas fa-map-marker-alt mr-1"></i>{site.location}</span>
+                                    </div>
+                                    <div className="border-t pt-4">
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase">Assigned Site Owner</p>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px]"><i className="fas fa-user"></i></div>
+                                            <span className="text-sm font-bold text-indigo-600">{site.ownerName || 'Unassigned'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {sites.length === 0 && (
+                                <div className="col-span-3 text-center py-20 text-slate-400">
+                                    <i className="fas fa-map-location-dot text-4xl mb-4 opacity-30"></i>
+                                    <p>No Sites Registered.</p>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    {/* MODAL */}
+                    {showModal && (
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl">
+                                <h3 className="text-xl font-black italic uppercase mb-6">Register Site</h3>
+                                <form onSubmit={handleAddSite} className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Site Name</label>
+                                            <input required className="w-full border p-3 rounded-xl text-sm font-bold" placeholder="e.g. Texas Plant" value={newSite.name} onChange={e => setNewSite({...newSite, name: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Site Code</label>
+                                            <input required className="w-full border p-3 rounded-xl text-sm font-bold uppercase" placeholder="e.g. TX-01" value={newSite.code} onChange={e => setNewSite({...newSite, code: e.target.value.toUpperCase()})} />
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Location / Address</label>
+                                        <input required className="w-full border p-3 rounded-xl text-sm" placeholder="City, Country" value={newSite.location} onChange={e => setNewSite({...newSite, location: e.target.value})} />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Assign Site Owner</label>
+                                        <select required className="w-full border p-3 rounded-xl text-sm font-bold bg-white" value={newSite.ownerEmail} onChange={e => setNewSite({...newSite, ownerEmail: e.target.value})}>
+                                            <option value="">Select a User...</option>
+                                            {users.map(u => (
+                                                <option key={u.email} value={u.email}>{u.name} ({u.role})</option>
+                                            ))}
+                                        </select>
+                                        <p className="text-[9px] text-slate-400 mt-1 italic">* Only users registered in the system appear here.</p>
+                                    </div>
+
+                                    <div className="flex gap-4 pt-4">
+                                        <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-xl font-bold uppercase text-xs bg-slate-100 text-slate-500 hover:bg-slate-200">Cancel</button>
+                                        <button type="submit" className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg">Create Site</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

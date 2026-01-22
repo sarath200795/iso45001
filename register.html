@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISO 45001 | System Initialization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-panel { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    </style>
+</head>
+<body class="bg-slate-900 h-screen flex items-center justify-center overflow-hidden relative">
+
+    <div class="absolute inset-0 z-0">
+        <div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px]"></div>
+        <div class="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-[120px]"></div>
+    </div>
+
+    <div id="root" class="z-10 w-full max-w-6xl p-6"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        const Register = () => {
+            const [formData, setFormData] = useState({
+                orgName: '',
+                orgId: '',
+                ownerName: '',
+                email: '',
+                password: '',
+                confirmPass: ''
+            });
+            const [loading, setLoading] = useState(false);
+
+            // Auto-generate Org ID
+            const handleNameChange = (e) => {
+                const name = e.target.value;
+                // Generate simple ID: First 3 chars + random number
+                const idSuggestion = name.length > 2 
+                    ? (name.substring(0, 3).toUpperCase() + Math.floor(100 + Math.random() * 900)) 
+                    : '';
+                setFormData({ ...formData, orgName: name, orgId: formData.orgId || idSuggestion });
+            };
+
+            const handleRegister = (e) => {
+                e.preventDefault();
+                setLoading(true);
+
+                setTimeout(() => {
+                    // 1. Validation
+                    if (formData.password !== formData.confirmPass) {
+                        alert("Passwords do not match."); setLoading(false); return;
+                    }
+                    
+                    const cleanId = formData.orgId.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                    const dbKey = `ISO_DB_${cleanId}`;
+
+                    // 2. Check if Org already exists
+                    if (localStorage.getItem(dbKey)) {
+                        alert("Organization ID already exists! Please choose a unique ID.");
+                        setLoading(false);
+                        return;
+                    }
+
+                    // 3. Construct Initial Database Structure
+                    const newOrgDB = {
+                        meta: {
+                            name: formData.orgName,
+                            created: new Date().toISOString(),
+                            plan: 'Enterprise'
+                        },
+                        users: [
+                            {
+                                id: 'USR-001',
+                                name: formData.ownerName,
+                                email: formData.email,
+                                password: formData.password, // In production, hash this!
+                                role: 'Owner', // ROLE SET AS OWNER
+                                status: 'Active'
+                            }
+                        ],
+                        approvedDocs: [],
+                        drafts: []
+                    };
+
+                    // 4. Save to Local Storage
+                    localStorage.setItem(dbKey, JSON.stringify(newOrgDB));
+
+                    alert(`System Initialized!\nOrganization ID: ${cleanId}\nOwner: ${formData.ownerName}`);
+                    window.location.href = "index.html";
+                    
+                }, 1500);
+            };
+
+            return (
+                <div className="flex w-full h-[700px] glass-panel rounded-[3rem] shadow-2xl overflow-hidden">
+                    
+                    {/* Left: Info */}
+                    <div className="w-1/3 bg-slate-950/50 p-12 flex flex-col justify-between border-r border-white/5">
+                        <div>
+                            <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-blue-500/20">
+                                <i className="fas fa-server text-2xl text-white"></i>
+                            </div>
+                            <h1 className="text-3xl font-black italic uppercase text-white tracking-tighter mb-2">System Init</h1>
+                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest leading-relaxed">
+                                Deploy a new ISO 45001 Management Instance.
+                            </p>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="p-4 rounded-xl bg-blue-900/20 border border-blue-500/30">
+                                <h3 className="text-blue-400 font-bold uppercase text-[10px] tracking-widest mb-1">Owner Role</h3>
+                                <p className="text-slate-300 text-xs">You will be assigned full administrative control over this workspace.</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
+                                <h3 className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mb-1">Data Isolation</h3>
+                                <p className="text-slate-500 text-xs">Your data is keyed securely to your Organization ID.</p>
+                            </div>
+                        </div>
+                        <a href="index.html" className="text-slate-500 hover:text-white text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition">
+                            <i className="fas fa-arrow-left"></i> Return to Login
+                        </a>
+                    </div>
+
+                    {/* Right: Form */}
+                    <div className="w-2/3 p-12 overflow-y-auto">
+                        <h2 className="text-2xl font-black text-white italic uppercase mb-8">Organization Parameters</h2>
+                        
+                        <form onSubmit={handleRegister} className="space-y-6 max-w-lg">
+                            
+                            {/* Organization Details */}
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-blue-400 uppercase tracking-widest ml-1">Enterprise Name</label>
+                                    <input required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-blue-500 outline-none transition" 
+                                        placeholder="e.g. Acme Corp" value={formData.orgName} onChange={handleNameChange} />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-blue-400 uppercase tracking-widest ml-1">System ID (Unique)</label>
+                                    <input required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm font-bold uppercase tracking-wider focus:border-blue-500 outline-none transition" 
+                                        placeholder="ORG-ID" value={formData.orgId} onChange={e => setFormData({...formData, orgId: e.target.value.toUpperCase()})} />
+                                </div>
+                            </div>
+
+                            <hr className="border-slate-800" />
+
+                            {/* Owner Details */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest ml-1">Owner Full Name</label>
+                                <input required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-emerald-500 outline-none transition" 
+                                    placeholder="John Doe" value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest ml-1">Owner Email</label>
+                                <input type="email" required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-emerald-500 outline-none transition" 
+                                    placeholder="admin@enterprise.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest ml-1">Password</label>
+                                    <input type="password" required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-emerald-500 outline-none transition" 
+                                        placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest ml-1">Confirm Password</label>
+                                    <input type="password" required className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:border-emerald-500 outline-none transition" 
+                                        placeholder="••••••••" value={formData.confirmPass} onChange={e => setFormData({...formData, confirmPass: e.target.value})} />
+                                </div>
+                            </div>
+
+                            <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black uppercase tracking-widest rounded-xl shadow-xl transition-all mt-4">
+                                {loading ? <i className="fas fa-spinner fa-spin"></i> : 'Deploy Organization'}
+                            </button>
+
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Register />);
+    </script>
+</body>
+</html>

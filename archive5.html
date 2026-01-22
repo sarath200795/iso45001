@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ISO Repository | Clause 5 Archive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 min-h-screen">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const generatePDF = (doc) => {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('landscape');
+            const pW = pdf.internal.pageSize.getWidth();
+            const prefix = `${doc.orgCode || 'ORG'}-${doc.siteCode || 'SITE'}`.toUpperCase();
+            
+            const h = (title, id) => {
+                pdf.setFillColor(30, 41, 59); pdf.rect(0, 0, pW, 20, 'F');
+                pdf.setTextColor(255); pdf.setFontSize(10);
+                pdf.text(title, 14, 13);
+                pdf.text(`Doc ID: ${prefix}-C5-${id} | Ver: ${doc.version}`, pW - 14, 13, { align: 'right' });
+                pdf.setTextColor(0);
+            };
+
+            h("REVISION HISTORY", "REV");
+            pdf.autoTable({ startY: 60, head: [['Ver', 'Date', 'Changes']], body: (doc.revisions || []).map(r => [r.ver, r.date, r.change]), theme: 'grid' });
+
+            pdf.addPage(); h("OH&S POLICY (5.2)", "POL");
+            pdf.setFontSize(10); 
+            let y = 35;
+            ['a','b','c','d','e','f'].forEach(k => {
+                const checked = doc.policyChecklist?.[k] ? '[X]' : '[ ]';
+                pdf.text(`${checked} 5.2(${k}) Compliant`, 14, y);
+                y += 6;
+            });
+            pdf.text(doc.policyText || "No policy drafted.", 14, y + 10, { maxWidth: pW - 28 });
+
+            pdf.addPage(); h("RASCI MATRIX (5.3)", "RASCI");
+            if(doc.roles) {
+                 pdf.autoTable({ startY: 30, head: [['Process', 'Role', 'RASCI', 'Authority']], body: doc.roles.map(r => [r.process, r.role, r.rasci, r.authority]), theme: 'grid' });
+            }
+
+            pdf.addPage(); h("CONSULTATION (5.4)", "CON");
+            if(doc.consultation) {
+                pdf.autoTable({
+                    startY: 30,
+                    head: [['Area', 'Details']],
+                    body: [
+                        ['Mechanisms (5.4a)', doc.consultation.mechanisms],
+                        ['Info Access (5.4b)', doc.consultation.infoAccess],
+                        ['Barriers (5.4c)', doc.consultation.barriers]
+                    ],
+                    theme: 'striped'
+                });
+            }
+            
+            pdf.save(`${prefix}-Clause5-Approved.pdf`);
+        };
+
+        const App = () => {
+            const [view, setView] = useState('drafts');
+            const [archive, setArchive] = useState({ drafts: [], approved: [] });
+            const [modal, setModal] = useState({ open: false, delta: '', idx: null });
+            const [session, setSession] = useState(null);
+
+            useEffect(() => { 
+                const sess = JSON.parse(sessionStorage.getItem('isoSession'));
+                if(sess) setSession(sess);
+
+                const data = JSON.parse(localStorage.getItem('isoArchive5')) || { drafts: [], approved: [] }; 
+                setArchive(data); 
+            }, []);
+
+            const updateStorage = (n) => { setArchive(n); localStorage.setItem('isoArchive5', JSON.stringify(n)); };
+
+            const openCompare = (idx) => {
+                const draft = archive.drafts[idx];
+                const last = archive.approved.find(a => a.siteCode === draft.siteCode);
+                let changes = [];
+                if (!last) changes.push("Initial Clause 5 Setup.");
+                else {
+                    if (draft.policyText !== last.policyText) changes.push("Policy text updated");
+                }
+                setModal({ open: true, delta: changes.join("; ") || "Periodic Review.", idx });
+            };
+
+            const finalizeApproval = () => {
+                const draft = archive.drafts[modal.idx];
+                const siteHistory = archive.approved.filter(a => a.siteCode === draft.siteCode);
+                const nextVer = (siteHistory.length + 1).toFixed(1);
+                
+                // STAMPING AUTHOR & ROLE
+                const approvedDoc = { 
+                    ...draft, 
+                    version: nextVer, 
+                    author: session ? session.user : 'Unknown',
+                    role: session ? session.role : 'System',
+                    revisions: [{ver: nextVer, date: new Date().toLocaleDateString(), change: modal.delta}, ...(draft.revisions || [])] 
+                };
+
+                updateStorage({ drafts: archive.drafts.filter((_, i) => i !== modal.idx), approved: [approvedDoc, ...archive.approved] });
+                setModal({ open: false, delta: '', idx: null });
+            };
+
+            return (
+                <div className="max-w-6xl mx-auto py-12 px-6">
+                    <nav className="bg-slate-900 text-white p-6 rounded-3xl flex justify-between items-center mb-12 border-b-4 border-blue-600 shadow-xl">
+                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-house text-xl"></i></a><h1 className="text-2xl font-black italic uppercase">Leadership Repository</h1></div>
+                        <a href="index5.html" className="bg-blue-600 px-6 py-2 rounded-2xl font-black text-xs uppercase shadow-lg hover:bg-blue-500">New Draft</a>
+                    </nav>
+
+                    {modal.open && (
+                        <div className="fixed inset-0 bg-slate-900/70 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-xl flex flex-col border-t-[12px] border-blue-600">
+                                <div className="p-8 border-b flex justify-between items-center"><h2 className="text-3xl font-black italic">Authorize Version</h2></div>
+                                <div className="p-8 bg-emerald-50 text-emerald-900 font-bold italic leading-relaxed">"{modal.delta}"</div>
+                                <div className="p-8 flex gap-4"><button onClick={finalizeApproval} className="flex-1 bg-slate-900 text-white py-5 rounded-2xl font-black tracking-widest hover:bg-emerald-600 transition uppercase shadow-xl">Approve</button></div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex bg-white p-2 rounded-3xl border shadow-xl mb-12 w-fit">
+                        <button onClick={() => setView('drafts')} className={`px-12 py-4 rounded-2xl font-black text-xs transition-all ${view==='drafts'?'bg-orange-500 text-white shadow-xl':'text-slate-400'}`}>DRAFTS ({archive.drafts.length})</button>
+                        <button onClick={() => setView('approved')} className={`px-12 py-4 rounded-2xl font-black text-xs transition-all ${view==='approved'?'bg-emerald-600 text-white shadow-xl':'text-slate-400'}`}>APPROVED ({archive.approved.length})</button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                        {archive[view].map((doc, i) => (
+                            <div key={i} className="bg-white p-8 rounded-[2.5rem] border shadow-lg flex justify-between items-center group transition hover:border-blue-400 relative overflow-hidden">
+                                {/* Decorator Line */}
+                                <div className={`absolute top-0 left-0 w-2 h-full ${view==='approved'?'bg-emerald-500':'bg-orange-500'}`}></div>
+                                
+                                <div className="flex-1 pl-4">
+                                    <h3 className="font-black text-2xl text-slate-800 italic uppercase">{doc.companyName}</h3>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{doc.siteCode} | {view==='approved' ? 'v'+doc.version : 'Pending'}</p>
+                                    
+                                    {/* --- USER & ROLE BADGE --- */}
+                                    <div className="flex items-center gap-3 mt-4">
+                                        <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                                            <i className="fas fa-user text-slate-400 text-xs"></i>
+                                            <span className="text-[10px] font-bold uppercase text-slate-600">{doc.author || 'System User'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                                            <i className="fas fa-id-badge text-blue-400 text-xs"></i>
+                                            <span className="text-[10px] font-black uppercase text-blue-600">{doc.role || 'Contributor'}</span>
+                                        </div>
+                                    </div>
+                                    {/* ------------------------- */}
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button onClick={() => generatePDF(doc)} className="p-4 bg-blue-50 text-blue-600 rounded-2xl shadow-md hover:scale-105 transition"><i className="fas fa-file-pdf"></i></button>
+                                    <button onClick={() => {localStorage.setItem('isoDataClause5', JSON.stringify(doc)); window.location.href='index5.html';}} className="p-4 bg-slate-50 text-slate-500 rounded-2xl shadow-md hover:scale-105 transition"><i className="fas fa-edit"></i></button>
+                                    {view === 'drafts' && <button onClick={() => openCompare(i)} className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl shadow-md hover:scale-105 transition"><i className="fas fa-check-circle"></i></button>}
+                                    <button onClick={() => {if(confirm("Delete?")){const n={...archive}; n[view].splice(i,1); updateStorage(n);}}} className="p-4 bg-red-50 text-red-500 rounded-2xl shadow-md hover:scale-105 transition"><i className="fas fa-trash-alt"></i></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

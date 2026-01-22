@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ISO 45001 | Organization Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 text-slate-900 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const App = () => {
+            const [session, setSession] = useState(null);
+            const [dbData, setDbData] = useState({ approvedDocs: [], drafts: [], sites: [], accessRequests: [] });
+            
+            // CONTEXT STATE
+            const [activeSite, setActiveSite] = useState('GLOBAL');
+            const [availableSites, setAvailableSites] = useState([]);
+            
+            // NOTIFICATIONS STATE
+            const [showNotif, setShowNotif] = useState(false);
+            const [myRequests, setMyRequests] = useState([]);
+
+            useEffect(() => {
+                const sessInfo = sessionStorage.getItem('isoSession');
+                if (!sessInfo) { window.location.href = "index.html"; return; }
+                const parsedSession = JSON.parse(sessInfo);
+                setSession(parsedSession);
+
+                // Load Data
+                const dbKey = `ISO_DB_${parsedSession.orgId}`;
+                const raw = localStorage.getItem(dbKey);
+                const db = raw ? JSON.parse(raw) : { approvedDocs: [], drafts: [], sites: [], users: [], accessRequests: [] };
+                
+                // Ensure array exists
+                if(!db.accessRequests) db.accessRequests = [];
+                setDbData(db);
+
+                // DETERMINE AVAILABLE SITES
+                if (parsedSession.role === 'Owner') {
+                    setAvailableSites(db.sites || []);
+                } else {
+                    const mySites = (db.sites || []).filter(s => s.ownerEmail === parsedSession.email);
+                    setAvailableSites(mySites);
+                    if(mySites.length > 0) setActiveSite(mySites[0].code);
+                }
+
+                // FILTER REQUESTS FOR THIS USER (For Notifications)
+                // 1. Org Owner sees ALL requests.
+                // 2. Site Owner sees requests where requestedSite matches their site(s).
+                // 3. Pending Only.
+                let relevantRequests = [];
+                
+                if (parsedSession.role === 'Owner') {
+                    relevantRequests = db.accessRequests.filter(r => r.status === 'Pending');
+                } else {
+                    // Check if user owns any sites
+                    const ownedSiteCodes = (db.sites || []).filter(s => s.ownerEmail === parsedSession.email).map(s => s.code);
+                    if(ownedSiteCodes.length > 0) {
+                        relevantRequests = db.accessRequests.filter(r => 
+                            r.status === 'Pending' && ownedSiteCodes.includes(r.requestedSite)
+                        );
+                    }
+                }
+                setMyRequests(relevantRequests);
+
+            }, []);
+
+            // --- APPROVAL LOGIC ---
+            const handleApproval = (request, isApproved) => {
+                const dbKey = `ISO_DB_${session.orgId}`;
+                const db = JSON.parse(localStorage.getItem(dbKey));
+
+                // 1. Update Request Status
+                const reqIndex = db.accessRequests.findIndex(r => r.id === request.id);
+                if (reqIndex > -1) {
+                    db.accessRequests[reqIndex].status = isApproved ? 'Approved' : 'Rejected';
+                }
+
+                // 2. If Approved, Update User Profile
+                if (isApproved) {
+                    const userIndex = db.users.findIndex(u => u.email === request.requesterEmail);
+                    if (userIndex > -1) {
+                        db.users[userIndex].role = request.requestedRole;
+                        db.users[userIndex].assignedSite = request.requestedSite; // Update site access
+                    }
+                }
+
+                // 3. Save & Refresh
+                localStorage.setItem(dbKey, JSON.stringify(db));
+                setDbData(db);
+                setMyRequests(prev => prev.filter(r => r.id !== request.id)); // Remove from view
+                alert(isApproved ? "User permissions updated." : "Request rejected.");
+            };
+
+            const filteredDocs = useMemo(() => {
+                if (activeSite === 'GLOBAL') return dbData.approvedDocs;
+                return dbData.approvedDocs.filter(d => d.siteCode === activeSite);
+            }, [dbData.approvedDocs, activeSite]);
+
+            const stats = useMemo(() => {
+                const draftsCount = activeSite === 'GLOBAL' ? dbData.drafts.length : dbData.drafts.filter(d => d.siteCode === activeSite).length;
+                return { approved: filteredDocs.length, drafts: draftsCount };
+            }, [filteredDocs, dbData.drafts, activeSite]);
+
+            if (!session) return <div className="flex h-screen items-center justify-center bg-slate-900 text-white">Loading Secure Environment...</div>;
+
+            return (
+                <div className="flex h-screen overflow-hidden">
+                    <aside className="w-80 bg-slate-900 text-white flex flex-col shadow-2xl z-50">
+                        <div className="p-8 pb-4">
+                            <div className="mb-6">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center font-black text-lg shadow-lg shadow-blue-600/50">{session.orgId.substring(0, 2)}</div>
+                                    <div>
+                                        <h1 className="font-black italic text-lg uppercase tracking-tighter truncate w-40">{session.orgName}</h1>
+                                        <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-bold">Online</p>
+                                    </div>
+                                </div>
+                                <div className="relative">
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Active Site Context</label>
+                                    <div className="relative">
+                                        <i className="fas fa-location-dot absolute left-3 top-3 text-slate-400 text-xs"></i>
+                                        <select value={activeSite} onChange={(e) => setActiveSite(e.target.value)} disabled={availableSites.length === 0 && session.role !== 'Owner'} className="w-full bg-slate-800 border border-slate-700 text-white text-xs font-bold rounded-xl py-2 pl-8 pr-2 outline-none focus:border-blue-500 appearance-none uppercase">
+                                            {session.role === 'Owner' && <option value="GLOBAL">★ All Sites (Global)</option>}
+                                            {availableSites.map(s => (<option key={s.code} value={s.code}>{s.name} ({s.code})</option>))}
+                                            {availableSites.length === 0 && session.role !== 'Owner' && <option>No Site Assigned</option>}
+                                        </select>
+                                        <div className="absolute right-3 top-3 text-slate-500 text-xs pointer-events-none">▼</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center"><i className="fas fa-user text-xs"></i></div>
+                                    <div><div className="text-xs font-bold text-white">{session.user}</div><div className="text-[9px] font-black text-blue-400 uppercase tracking-wider border border-blue-900/50 bg-blue-900/20 px-2 py-0.5 rounded inline-block mt-1">{session.role}</div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <nav className="flex-1 overflow-y-auto px-4 space-y-2">
+                            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest ml-4 mb-2">Modules</p>
+                            <a href="#" className="flex items-center gap-4 p-4 rounded-2xl bg-blue-600 text-white shadow-lg"><i className="fas fa-chart-pie w-6 text-center"></i><span className="text-xs font-black uppercase tracking-widest">Dashboard</span></a>
+                            <a href="index4.html" className="flex items-center gap-4 p-4 rounded-2xl text-slate-400 hover:bg-slate-800 hover:text-white transition"><i className="fas fa-sitemap w-6 text-center"></i><span className="text-xs font-bold uppercase tracking-widest">Context (Cl. 4)</span></a>
+                            <a href="index5.html" className="flex items-center gap-4 p-4 rounded-2xl text-slate-400 hover:bg-slate-800 hover:text-white transition"><i className="fas fa-users-gear w-6 text-center"></i><span className="text-xs font-bold uppercase tracking-widest">Leadership (Cl. 5)</span></a>
+                        </nav>
+                        <div className="p-4 mt-auto"><button onClick={() => { sessionStorage.removeItem('isoSession'); window.location.href='index.html'; }} className="w-full py-4 bg-red-900/20 text-red-400 hover:bg-red-900/40 rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center justify-center gap-2"><i className="fas fa-power-off"></i> Logout</button></div>
+                    </aside>
+
+                    <main className="flex-1 overflow-y-auto bg-slate-100 p-10 relative">
+                        <header className="mb-10 flex justify-between items-end border-b border-slate-200 pb-8">
+                            <div>
+                                <h2 className="text-4xl font-black text-slate-800 uppercase italic tracking-tighter">Command Center</h2>
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">View: <span className="text-blue-600">{activeSite === 'GLOBAL' ? 'Organization Wide' : activeSite}</span></p>
+                            </div>
+                            
+                            {/* NOTIFICATION BELL */}
+                            {(session.role === 'Owner' || availableSites.length > 0) && (
+                                <div className="relative">
+                                    <button onClick={() => setShowNotif(!showNotif)} className="w-12 h-12 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:text-blue-600 transition relative">
+                                        <i className="fas fa-bell"></i>
+                                        {myRequests.length > 0 && (
+                                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full animate-pulse">{myRequests.length}</span>
+                                        )}
+                                    </button>
+                                    
+                                    {/* DROPDOWN NOTIFICATIONS */}
+                                    {showNotif && (
+                                        <div className="absolute right-0 mt-4 w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 p-4">
+                                            <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-sm uppercase">Pending Requests</h3><button onClick={() => setShowNotif(false)}><i className="fas fa-times text-slate-400"></i></button></div>
+                                            
+                                            {myRequests.length === 0 ? (
+                                                <div className="text-center py-6 text-slate-400 text-xs italic">No pending requests</div>
+                                            ) : (
+                                                <div className="space-y-3 max-h-80 overflow-y-auto">
+                                                    {myRequests.map((req, i) => (
+                                                        <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div>
+                                                                    <div className="font-bold text-xs text-slate-800">{req.requesterName}</div>
+                                                                    <div className="text-[10px] text-slate-400">{req.requesterEmail}</div>
+                                                                </div>
+                                                                <div className="text-[9px] bg-blue-100 text-blue-600 px-2 py-1 rounded font-bold uppercase">{req.timestamp}</div>
+                                                            </div>
+                                                            <div className="mb-3 text-[10px] text-slate-600">
+                                                                <span className="font-bold">Request:</span> {req.requestedRole} @ {req.requestedSite || 'Global'}
+                                                                <br/>
+                                                                <span className="font-bold">Reason:</span> {req.reason}
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <button onClick={() => handleApproval(req, false)} className="flex-1 py-2 bg-white border border-slate-200 text-slate-500 rounded-lg text-[10px] font-bold hover:bg-red-50 hover:text-red-500">Reject</button>
+                                                                <button onClick={() => handleApproval(req, true)} className="flex-1 py-2 bg-emerald-600 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-500">Approve</button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </header>
+
+                        {/* --- ADMIN LINKS --- */}
+                        <div className="grid grid-cols-2 gap-4 mb-10">
+                            <div className="bg-white p-6 rounded-3xl shadow-md border border-slate-100 flex justify-between items-center group cursor-pointer hover:border-blue-300 transition" onClick={() => window.location.href='users.html'}>
+                                <div><h3 className="font-black text-lg italic uppercase text-slate-800">User Directory</h3><p className="text-[10px] uppercase font-bold text-slate-400">View & Manage Users</p></div>
+                                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition"><i className="fas fa-users"></i></div>
+                            </div>
+                            
+                            {session.role === 'Owner' && (
+                                <div className="bg-white p-6 rounded-3xl shadow-md border border-slate-100 flex justify-between items-center group cursor-pointer hover:border-indigo-300 transition" onClick={() => window.location.href='sites.html'}>
+                                    <div><h3 className="font-black text-lg italic uppercase text-slate-800">Site Registry</h3><p className="text-[10px] uppercase font-bold text-slate-400">Add Sites & Owners</p></div>
+                                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center group-hover:scale-110 transition"><i className="fas fa-building"></i></div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100"><div className="text-4xl font-black text-emerald-500 mb-1">{stats.approved}</div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Documents</div><div className="text-[9px] text-slate-300 mt-2">Context: {activeSite}</div></div>
+                                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100"><div className="text-4xl font-black text-orange-500 mb-1">{stats.drafts}</div><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pending Drafts</div><div className="text-[9px] text-slate-300 mt-2">Context: {activeSite}</div></div>
+                            </div>
+
+                            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                                <h3 className="font-black text-slate-700 uppercase italic mb-6">Approved Registry <span className="text-xs not-italic font-normal text-slate-400 ml-2">({activeSite})</span></h3>
+                                {filteredDocs.length === 0 ? <div className="text-center py-10 text-slate-400"><i className="fas fa-folder-open text-4xl mb-3 opacity-30"></i><p className="text-xs font-bold uppercase">Registry Empty for this view</p></div> : <ul className="space-y-4">{filteredDocs.map((doc, i) => (<li key={i} className="p-4 bg-slate-50 rounded-xl border flex justify-between items-center hover:border-blue-300 transition"><div><span className="font-bold text-slate-700 block">{doc.title || doc.companyName}</span><span className="text-[9px] text-slate-400 uppercase font-bold">{doc.siteCode} | v{doc.version}</span></div><button className="text-blue-600 hover:text-blue-800"><i className="fas fa-eye"></i></button></li>))}</ul>}
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

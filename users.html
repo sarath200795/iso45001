@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ISO 45001 | User Directory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-slate-100 text-slate-900 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const ROLES = [
+            "Safety", "Engineering", "Production", "Quality", 
+            "HR", "Finance", "Procurement", "Legal", "Technician", "Worker", "Supervisor"
+        ];
+
+        const App = () => {
+            const [session, setSession] = useState(null);
+            const [users, setUsers] = useState([]);
+            const [sites, setSites] = useState([]);
+            
+            // Modals
+            const [showAddModal, setShowAddModal] = useState(false); // For Owners
+            const [showRequestModal, setShowRequestModal] = useState(false); // For Users
+
+            // Forms
+            const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Worker', assignedSite: '' });
+            const [requestData, setRequestData] = useState({ targetRole: 'Worker', targetSite: '', reason: '' });
+
+            useEffect(() => {
+                const sessInfo = sessionStorage.getItem('isoSession');
+                if (!sessInfo) { window.location.href = "index.html"; return; }
+                const parsed = JSON.parse(sessInfo);
+                setSession(parsed);
+
+                // Load DB
+                const dbKey = `ISO_DB_${parsed.orgId}`;
+                const db = JSON.parse(localStorage.getItem(dbKey) || '{"users":[], "sites":[]}');
+                setUsers(db.users || []);
+                setSites(db.sites || []);
+            }, []);
+
+            // --- OWNER ACTION: ADD USER ---
+            const handleAddUser = (e) => {
+                e.preventDefault();
+                const dbKey = `ISO_DB_${session.orgId}`;
+                const db = JSON.parse(localStorage.getItem(dbKey));
+
+                if(db.users.find(u => u.email === newUser.email)) { alert("User email already exists!"); return; }
+
+                const userObj = {
+                    ...newUser,
+                    id: `USR-${Date.now().toString().substr(-6)}`,
+                    status: 'Active'
+                };
+
+                const updatedUsers = [...(db.users || []), userObj];
+                db.users = updatedUsers;
+                localStorage.setItem(dbKey, JSON.stringify(db));
+                setUsers(updatedUsers);
+                setShowAddModal(false);
+                setNewUser({ name: '', email: '', password: '', role: 'Worker', assignedSite: '' });
+            };
+
+            // --- OWNER ACTION: DELETE USER ---
+            const handleDelete = (email) => {
+                if(email === session.email) { alert("You cannot delete yourself."); return; }
+                if(!confirm("Remove this user permanently?")) return;
+
+                const dbKey = `ISO_DB_${session.orgId}`;
+                const db = JSON.parse(localStorage.getItem(dbKey));
+                const updatedUsers = db.users.filter(u => u.email !== email);
+                db.users = updatedUsers;
+                localStorage.setItem(dbKey, JSON.stringify(db));
+                setUsers(updatedUsers);
+            };
+
+            // --- USER ACTION: REQUEST PERMISSION ---
+            const handleRequestSubmit = (e) => {
+                e.preventDefault();
+                const dbKey = `ISO_DB_${session.orgId}`;
+                const db = JSON.parse(localStorage.getItem(dbKey));
+
+                const newRequest = {
+                    id: `REQ-${Date.now()}`,
+                    requesterName: session.user,
+                    requesterEmail: session.email,
+                    currentRole: session.role,
+                    requestedRole: requestData.targetRole,
+                    requestedSite: requestData.targetSite, // Empty = Global
+                    reason: requestData.reason,
+                    status: 'Pending',
+                    timestamp: new Date().toLocaleDateString()
+                };
+
+                // Initialize requests array if missing
+                if (!db.accessRequests) db.accessRequests = [];
+                db.accessRequests.push(newRequest);
+                
+                localStorage.setItem(dbKey, JSON.stringify(db));
+                alert("Permission request sent to administration.");
+                setShowRequestModal(false);
+            };
+
+            if (!session) return null;
+            const isOwner = session.role === 'Owner';
+
+            return (
+                <div className="min-h-screen flex bg-slate-50">
+                    <aside className="w-64 bg-slate-900 text-white p-6 flex flex-col">
+                        <div className="mb-8">
+                            <h1 className="font-black italic uppercase text-lg tracking-tighter">Directory</h1>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-widest">{session.orgId}</p>
+                        </div>
+                        <a href="home.html" className="flex items-center gap-3 text-slate-400 hover:text-white mb-4 transition">
+                            <i className="fas fa-arrow-left"></i> <span className="text-xs font-bold uppercase">Back to Dashboard</span>
+                        </a>
+                    </aside>
+
+                    <main className="flex-1 p-10">
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <h2 className="text-3xl font-black text-slate-800 uppercase italic tracking-tighter">User Directory</h2>
+                                <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Personnel & Access Levels</p>
+                            </div>
+                            
+                            {/* DYNAMIC BUTTON BASED ON ROLE */}
+                            {isOwner ? (
+                                <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-black uppercase text-xs shadow-lg transition">
+                                    <i className="fas fa-user-plus mr-2"></i> Add Personnel
+                                </button>
+                            ) : (
+                                <button onClick={() => setShowRequestModal(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-black uppercase text-xs shadow-lg transition">
+                                    <i className="fas fa-hand-paper mr-2"></i> Request Permission
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="bg-white rounded-[2rem] shadow-xl border border-slate-200 overflow-hidden">
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50 border-b border-slate-100">
+                                    <tr>
+                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Name</th>
+                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Role</th>
+                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Assigned Site</th>
+                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Contact</th>
+                                        {isOwner && <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Actions</th>}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {users.map((u, i) => (
+                                        <tr key={i} className="hover:bg-blue-50/30 transition">
+                                            <td className="p-6 font-bold text-slate-700">
+                                                {u.name}
+                                                {u.email === session.email && <span className="ml-2 text-[9px] bg-slate-200 px-1 rounded text-slate-500">(YOU)</span>}
+                                            </td>
+                                            <td className="p-6">
+                                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u.role==='Owner' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                    {u.role}
+                                                </span>
+                                            </td>
+                                            <td className="p-6">
+                                                {u.assignedSite ? (
+                                                    <span className="text-xs font-bold text-slate-600">{sites.find(s => s.code === u.assignedSite)?.name || u.assignedSite}</span>
+                                                ) : (
+                                                    <span className="text-[10px] font-bold text-emerald-500 uppercase bg-emerald-50 px-2 py-1 rounded">Global / All Sites</span>
+                                                )}
+                                            </td>
+                                            <td className="p-6 text-sm text-slate-500 font-mono">{u.email}</td>
+                                            {isOwner && (
+                                                <td className="p-6 text-right">
+                                                    <button onClick={() => handleDelete(u.email)} className="text-red-400 hover:text-red-600 transition">
+                                                        <i className="fas fa-trash-alt"></i>
+                                                    </button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </main>
+
+                    {/* OWNER MODAL: ADD USER */}
+                    {showAddModal && (
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl">
+                                <h3 className="text-xl font-black italic uppercase mb-6">Register New User</h3>
+                                <form onSubmit={handleAddUser} className="space-y-4">
+                                    <input required className="w-full border p-3 rounded-xl text-sm font-bold" placeholder="Full Name" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+                                    <input type="email" required className="w-full border p-3 rounded-xl text-sm" placeholder="Email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                                    <input type="password" required className="w-full border p-3 rounded-xl text-sm" placeholder="Password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <select className="border p-3 rounded-xl text-sm font-bold" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
+                                            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                                        </select>
+                                        <select className="border p-3 rounded-xl text-sm font-bold" value={newUser.assignedSite} onChange={e => setNewUser({...newUser, assignedSite: e.target.value})}>
+                                            <option value="">Global (All Sites)</option>
+                                            {sites.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="flex gap-4 pt-4">
+                                        <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-500 font-bold uppercase text-xs">Cancel</button>
+                                        <button type="submit" className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold uppercase text-xs">Create User</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* USER MODAL: REQUEST PERMISSION */}
+                    {showRequestModal && (
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl">
+                                <h3 className="text-xl font-black italic uppercase mb-2">Request Permission</h3>
+                                <p className="text-xs text-slate-500 mb-6">This request will be sent to Site and Org Owners for approval.</p>
+                                
+                                <form onSubmit={handleRequestSubmit} className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Desired Site Access</label>
+                                        <select className="w-full border p-3 rounded-xl text-sm font-bold bg-white" value={requestData.targetSite} onChange={e => setRequestData({...requestData, targetSite: e.target.value})}>
+                                            <option value="">Request Global / Organization Wide</option>
+                                            {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Desired Role</label>
+                                        <select className="w-full border p-3 rounded-xl text-sm font-bold bg-white" value={requestData.targetRole} onChange={e => setRequestData({...requestData, targetRole: e.target.value})}>
+                                            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                                            {/* Prevent requesting Owner role to avoid mutiny, handled manually */}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Reason for Request</label>
+                                        <textarea required className="w-full border p-3 rounded-xl text-sm" rows="3" placeholder="Why do you need this access?" value={requestData.reason} onChange={e => setRequestData({...requestData, reason: e.target.value})}></textarea>
+                                    </div>
+
+                                    <div className="flex gap-4 pt-4">
+                                        <button type="button" onClick={() => setShowRequestModal(false)} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-500 font-bold uppercase text-xs">Cancel</button>
+                                        <button type="submit" className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold uppercase text-xs">Send Request</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

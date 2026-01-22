@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ISO 45001 | Clause 5 Workstation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- MAIN MANUAL PDF ENGINE ---
+        const generateManualPDF = (doc) => {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('landscape');
+            const pW = pdf.internal.pageSize.getWidth();
+            const prefix = `${doc.orgCode}-${doc.siteCode}`.toUpperCase();
+            
+            const h = (title, id) => {
+                pdf.setFillColor(30, 41, 59); pdf.rect(0, 0, pW, 20, 'F');
+                pdf.setTextColor(255); pdf.setFontSize(10);
+                pdf.text(title, 14, 13);
+                pdf.text(`Doc ID: ${prefix}-C5-${id} | Ver: ${doc.version || 'Draft'}`, pW - 14, 13, { align: 'right' });
+                pdf.setTextColor(0);
+            };
+
+            // P1: Revision history
+            h("REVISION HISTORY (7.5)", "REV");
+            pdf.setFontSize(22); pdf.text(doc.companyName || "LEADERSHIP MANUAL", pW/2, 45, {align:'center'});
+            pdf.autoTable({ startY: 60, head: [['Ver', 'Date', 'Changes']], body: (doc.revisions || []).map(r => [r.ver, r.date, r.change]), theme: 'grid' });
+
+            // P2: OH&S Policy
+            pdf.addPage(); h("OH&S POLICY (5.2)", "POL");
+            pdf.setFontSize(14); pdf.setFont("helvetica", "bold"); pdf.text("OH&S Policy Statement", 14, 35);
+            
+            let y = 45;
+            const labels = { a: "Safe conditions:", b: "Objectives:", c: "Legal Req:", d: "Hazard Elimination:", e: "Improvement:", f: "Consultation:" };
+
+            Object.keys(labels).forEach(k => {
+                if(y > 150) { pdf.addPage(); h("OH&S POLICY (CONT.)", "POL"); y = 30; }
+                pdf.setFontSize(10); pdf.setFont("helvetica", "bold");
+                pdf.text(`5.2(${k}) ${labels[k]}`, 14, y);
+                y += 6;
+                pdf.setFont("helvetica", "normal");
+                const text = doc.policySpecifics?.[k] || "Not specified.";
+                const splitText = pdf.splitTextToSize(text, pW - 28);
+                pdf.text(splitText, 14, y);
+                y += (splitText.length * 5) + 8;
+            });
+
+            // P3: RASCI Matrix
+            pdf.addPage(); h("RASCI RESPONSIBILITY MATRIX (5.3)", "RASCI");
+            const roleCols = doc.definedRoles.map(r => r.title);
+            const headRow = [['Process / Activity', ...roleCols]];
+            const bodyRows = doc.rasciProcesses.map(proc => {
+                const row = [proc.name];
+                roleCols.forEach(roleTitle => {
+                    const assignment = proc.assignments.find(a => a.role === roleTitle);
+                    row.push(assignment ? assignment.code : '-');
+                });
+                return row;
+            });
+            pdf.autoTable({ 
+                startY: 30, 
+                head: headRow, 
+                body: bodyRows, 
+                theme: 'grid', 
+                headStyles: { fillColor: [30, 41, 59], fontSize: 8 },
+                styles: { fontSize: 8, cellPadding: 2, halign: 'center' },
+                columnStyles: { 0: { halign: 'left', fontStyle: 'bold', cellWidth: 50 } }
+            });
+            
+            pdf.save(`${prefix}-Clause5-Manual.pdf`);
+        };
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [graphFilter, setGraphFilter] = useState('Consultation');
+            const [dashFilter, setDashFilter] = useState('Org'); 
+            const [currentUser, setCurrentUser] = useState(null);
+            
+            // RASCI UI States
+            const [newRoleName, setNewRoleName] = useState('');
+            const [newProcessName, setNewProcessName] = useState('');
+
+            // Initial Form State
+            const [formData, setFormData] = useState(() => {
+                const saved = localStorage.getItem('isoDataClause5');
+                const parsed = saved ? JSON.parse(saved) : {};
+                
+                // AUTOMATED CONTEXT RETRIEVAL
+                const globalOrg = localStorage.getItem('orgId') || 'ORG';
+                const globalSite = localStorage.getItem('siteId') || 'SITE';
+                const globalCompany = localStorage.getItem('companyName') || 'My Organization';
+                
+                return {
+                    orgCode: globalOrg,
+                    siteCode: globalSite,
+                    companyName: globalCompany,
+                    version: parsed.version || 'DRAFT',
+                    policyText: parsed.policyText || '', 
+                    policySpecifics: parsed.policySpecifics || { a: '', b: '', c: '', d: '', e: '', f: '' },
+                    approval: parsed.approval || { name: '', title: '', date: '' },
+                    // Default Roles if empty
+                    definedRoles: parsed.definedRoles || [{title: 'Top Management'}, {title: 'Safety Manager'}, {title: 'Worker Rep'}],
+                    // Default Processes if empty
+                    rasciProcesses: parsed.rasciProcesses || [
+                        { name: 'Hazard Identification', assignments: [] },
+                        { name: 'Incident Investigation', assignments: [] },
+                        { name: 'Internal Audit', assignments: [] }
+                    ],
+                    consultationLog: parsed.consultationLog || [],
+                    revisions: parsed.revisions || []
+                };
+            });
+
+            const [newItem, setNewItem] = useState({
+                meeting: '', type: 'Consultation', option: '', actions: '', plan: '', responsible: '', due: '', status: 'Open', closureComments: ''
+            });
+
+            useEffect(() => { 
+                localStorage.setItem('isoDataClause5', JSON.stringify(formData));
+                const sess = JSON.parse(sessionStorage.getItem('isoSession'));
+                if(sess) setCurrentUser(sess);
+            }, [formData]);
+
+            // --- RASCI LOGIC ---
+            const addRole = () => {
+                if(!newRoleName) return;
+                setFormData(prev => ({
+                    ...prev,
+                    definedRoles: [...prev.definedRoles, { title: newRoleName }]
+                }));
+                setNewRoleName('');
+            };
+
+            const removeRole = (roleIndex) => {
+                if(confirm("Remove this role? It will be removed from all RASCI assignments.")){
+                    const roleTitle = formData.definedRoles[roleIndex].title;
+                    setFormData(prev => ({
+                        ...prev,
+                        definedRoles: prev.definedRoles.filter((_, i) => i !== roleIndex),
+                        // Clean up assignments for this deleted role
+                        rasciProcesses: prev.rasciProcesses.map(proc => ({
+                            ...proc,
+                            assignments: proc.assignments.filter(a => a.role !== roleTitle)
+                        }))
+                    }));
+                }
+            };
+
+            const addProcess = () => {
+                if(!newProcessName) return;
+                setFormData(prev => ({
+                    ...prev,
+                    rasciProcesses: [...prev.rasciProcesses, { name: newProcessName, assignments: [] }]
+                }));
+                setNewProcessName('');
+            };
+
+            const removeProcess = (idx) => {
+                if(confirm("Delete this process row?")) {
+                    setFormData(prev => ({
+                        ...prev,
+                        rasciProcesses: prev.rasciProcesses.filter((_, i) => i !== idx)
+                    }));
+                }
+            };
+
+            const updateAssignment = (procIndex, roleTitle, code) => {
+                setFormData(prev => {
+                    const newProcs = [...prev.rasciProcesses];
+                    const proc = newProcs[procIndex];
+                    
+                    // Remove existing assignment for this role if any
+                    let newAssigns = proc.assignments.filter(a => a.role !== roleTitle);
+                    
+                    // Add new assignment if code is not empty
+                    if(code) {
+                        newAssigns.push({ role: roleTitle, code: code });
+                    }
+                    
+                    newProcs[procIndex] = { ...proc, assignments: newAssigns };
+                    return { ...prev, rasciProcesses: newProcs };
+                });
+            };
+
+            const getAssignment = (procIndex, roleTitle) => {
+                const found = formData.rasciProcesses[procIndex].assignments.find(a => a.role === roleTitle);
+                return found ? found.code : '';
+            };
+
+            // --- FILTERING LOGIC ---
+            const filteredLogs = useMemo(() => {
+                if (!currentUser) return formData.consultationLog;
+                if (dashFilter === 'Me') return formData.consultationLog.filter(row => row.responsible?.toLowerCase().includes(currentUser.user?.toLowerCase()) || row.responsible === 'Me');
+                if (dashFilter === 'Role') return formData.consultationLog.filter(row => row.responsible?.toLowerCase().includes(currentUser.role?.toLowerCase()));
+                return formData.consultationLog;
+            }, [formData.consultationLog, dashFilter, currentUser]);
+
+            // --- EXPORT ENGINES ---
+            const exportConsultationPDF = () => {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('landscape');
+                const pW = pdf.internal.pageSize.getWidth();
+                const prefix = `${formData.orgCode}-${formData.siteCode}`.toUpperCase();
+                const docId = `${prefix}-R-CP`; 
+
+                // HEADER
+                pdf.setFillColor(22, 163, 74); pdf.rect(0, 0, pW, 25, 'F');
+                pdf.setTextColor(255); 
+                pdf.setFontSize(14); pdf.setFont("helvetica", "bold");
+                pdf.text(`CONSULTATION & PARTICIPATION REGISTER`, 14, 10);
+                pdf.setFontSize(10); pdf.setFont("helvetica", "normal");
+                pdf.text(formData.companyName, 14, 18);
+                pdf.setFontSize(12); pdf.setFont("helvetica", "bold");
+                pdf.text(`Doc Ref: ${docId}`, pW - 14, 10, { align: 'right' });
+
+                pdf.autoTable({
+                    startY: 30,
+                    head: [['Meeting', 'Type', 'Topic', 'Actions', 'Plan', 'Responsible', 'Due', 'Status']],
+                    body: filteredLogs.map(row => [row.meeting, row.type, row.option, row.actions, row.plan, row.responsible, row.due, row.status]),
+                    theme: 'grid',
+                    headStyles: { fillColor: [22, 163, 74], fontSize: 8 },
+                    styles: { fontSize: 7, cellPadding: 2 }
+                });
+                pdf.save(`${docId}.pdf`);
+            };
+
+            // --- ACTIONS ---
+            const addLogItem = () => {
+                if(!newItem.meeting || !newItem.actions) { alert("Please fill in Meeting Type and Actions."); return; }
+                setFormData(p => ({ ...p, consultationLog: [...p.consultationLog, newItem] }));
+                setNewItem({ meeting: '', type: 'Consultation', option: '', actions: '', plan: '', responsible: '', due: '', status: 'Open', closureComments: '' });
+                alert("Item added.");
+            };
+
+            const deleteLogItem = (originalIndex) => {
+                if(confirm("Delete record?")) {
+                    setFormData(p => ({ ...p, consultationLog: p.consultationLog.filter((_, i) => i !== originalIndex) }));
+                }
+            };
+
+            const handleStatusChange = (originalIndex, newStatus) => {
+                setFormData(p => {
+                    const logs = [...p.consultationLog];
+                    logs[originalIndex].status = newStatus;
+                    if(newStatus === 'Closed') logs[originalIndex].closureComments = prompt("Closure Note:") || "Closed";
+                    return { ...p, consultationLog: logs };
+                });
+            };
+
+            // Stats Calc
+            const stats = useMemo(() => {
+                const s = { open: 0, inProgress: 0, closed: 0 };
+                filteredLogs.forEach(row => {
+                    if (row.status === 'Open') s.open++;
+                    else if (row.status === 'In Progress') s.inProgress++;
+                    else if (row.status === 'Closed') s.closed++;
+                });
+                return s;
+            }, [filteredLogs]);
+
+            const graphData = useMemo(() => {
+                const data = {};
+                filteredLogs.filter(r => r.type === graphFilter).forEach(r => { const m = r.meeting || "Unspecified"; data[m] = (data[m] || 0) + 1; });
+                const arr = Object.keys(data).map(k => ({ label: k, count: data[k] }));
+                const max = Math.max(...arr.map(a => a.count), 1);
+                return { items: arr, max };
+            }, [filteredLogs, graphFilter]);
+
+            const consultOptions = ["1. Needs of interested parties", "2. Establishing Policy", "3. Assigning Roles", "4. Legal Requirements", "5. Objectives", "6. Outsourcing", "7. Monitoring", "8. Audit", "9. Continual Improvement"];
+
+            return (
+                <div className="flex flex-col min-h-screen">
+                    <nav className="bg-slate-900 text-white px-8 py-4 flex justify-between items-center border-b-4 border-blue-600">
+                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-house"></i></a><div className="font-black text-xl italic uppercase">ISO <span className="text-blue-500">Engine 5</span></div></div>
+                        <div className="flex gap-8 text-xs font-bold uppercase"><a href="index5.html" className="text-blue-400 border-b-2 border-blue-400">Generator</a><a href="archive5.html" className="text-slate-400 hover:text-white">Repository</a></div>
+                    </nav>
+
+                    <div className="flex flex-1 overflow-hidden">
+                        <aside className="w-64 bg-slate-800 text-white p-6 space-y-4">
+                            {['dashboard', 'consultation', 'policy', 'rasci'].map(t => (
+                                <button key={t} onClick={() => setActiveTab(t)} className={`w-full text-left p-4 rounded-xl font-bold transition-all ${activeTab===t?'bg-blue-600 shadow-lg':'text-slate-400 hover:bg-slate-800'}`}>{t.toUpperCase()}</button>
+                            ))}
+                            <div className="pt-20 space-y-2">
+                                <div className="text-[10px] text-slate-500 font-mono text-center mb-2">Context: {formData.orgCode}-{formData.siteCode}</div>
+                                <button onClick={() => generateManualPDF(formData)} className="w-full bg-blue-500 py-3 rounded-xl font-bold text-xs"><i className="fas fa-file-pdf mr-2"></i>Download PDF</button>
+                                <button onClick={() => {if(confirm("Reset Data?")){localStorage.removeItem('isoDataClause5'); window.location.reload();}}} className="w-full bg-red-900/30 text-red-400 py-2 rounded-xl text-[10px] font-bold">RESET</button>
+                            </div>
+                        </aside>
+
+                        <main className="flex-1 p-10 overflow-y-auto max-w-7xl mx-auto bg-white m-4 rounded-3xl border shadow-inner">
+                            
+                            {/* --- DASHBOARD TAB --- */}
+                            {activeTab === 'dashboard' && (
+                                <div className="space-y-8">
+                                    <div className="flex justify-between items-center border-b pb-4">
+                                        <h2 className="text-3xl font-black italic uppercase text-slate-800">Consultation Dashboard</h2>
+                                        <div className="bg-slate-100 p-1 rounded-xl flex gap-1">
+                                            {['Me', 'Role', 'Org'].map(f => (
+                                                <button key={f} onClick={() => setDashFilter(f)} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition ${dashFilter===f?'bg-white shadow text-blue-600':'text-slate-400'}`}>{f}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-6">
+                                        <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 flex items-center justify-between"><div><div className="text-3xl font-black text-orange-600">{stats.open}</div><div className="text-[10px] font-bold uppercase text-orange-400">Open</div></div><i className="fas fa-folder-open text-orange-200 text-4xl"></i></div>
+                                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 flex items-center justify-between"><div><div className="text-3xl font-black text-blue-600">{stats.inProgress}</div><div className="text-[10px] font-bold uppercase text-blue-400">In Progress</div></div><i className="fas fa-spinner text-blue-200 text-4xl"></i></div>
+                                        <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 flex items-center justify-between"><div><div className="text-3xl font-black text-emerald-600">{stats.closed}</div><div className="text-[10px] font-bold uppercase text-emerald-400">Closed</div></div><i className="fas fa-check-circle text-emerald-200 text-4xl"></i></div>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-black text-slate-700 uppercase text-sm mb-4">Action Item Tracker</h3>
+                                        <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-lg">
+                                            <table className="w-full text-left text-sm">
+                                                <thead className="bg-slate-900 text-white"><tr><th className="p-4">Meeting</th><th className="p-4">Action</th><th className="p-4">Resp</th><th className="p-4">Due</th><th className="p-4">Status</th><th className="p-4"></th></tr></thead>
+                                                <tbody className="bg-white divide-y divide-slate-100">
+                                                    {filteredLogs.map((row, i) => {
+                                                        const originalIndex = formData.consultationLog.indexOf(row);
+                                                        return (
+                                                            <tr key={i} className="hover:bg-slate-50">
+                                                                <td className="p-4 font-bold text-slate-700">{row.meeting}</td>
+                                                                <td className="p-4 text-xs text-slate-600">{row.plan || '-'}</td>
+                                                                <td className="p-4 text-xs font-bold text-blue-600">{row.responsible}</td>
+                                                                <td className="p-4 text-xs font-mono">{row.due}</td>
+                                                                <td className="p-4">
+                                                                    <select className={`bg-transparent text-xs font-black uppercase outline-none ${row.status==='Closed'?'text-emerald-600': row.status==='In Progress'?'text-blue-500':'text-orange-500'}`} value={row.status} onChange={(e) => handleStatusChange(originalIndex, e.target.value)}>
+                                                                            <option>Open</option><option>In Progress</option><option>Closed</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td className="p-4 text-right">
+                                                                    <button onClick={() => deleteLogItem(originalIndex)} className="text-slate-300 hover:text-red-500 transition"><i className="fas fa-trash-alt"></i></button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* --- CONSULTATION TAB --- */}
+                            {activeTab === 'consultation' && (
+                                <div className="space-y-6">
+                                    <h2 className="text-xl font-black italic">Log New Consultation Point</h2>
+                                    <div className="p-8 bg-slate-50 rounded-[2rem] border border-slate-200 shadow-md space-y-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input className="border p-3 rounded-xl text-sm" placeholder="Meeting Type" value={newItem.meeting} onChange={e => setNewItem({...newItem, meeting: e.target.value})} />
+                                            <select className="border p-3 rounded-xl text-sm" value={newItem.option} onChange={e => setNewItem({...newItem, option: e.target.value})}>
+                                                <option value="">Select Requirement...</option>
+                                                {consultOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                            </select>
+                                        </div>
+                                        <textarea className="w-full border p-3 rounded-xl text-sm" placeholder="Discussion Details..." rows="3" value={newItem.actions} onChange={e => setNewItem({...newItem, actions: e.target.value})}></textarea>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input className="border p-3 rounded-xl text-sm" placeholder="Responsible" value={newItem.responsible} onChange={e => setNewItem({...newItem, responsible: e.target.value})} />
+                                            <input type="date" className="border p-3 rounded-xl text-sm" value={newItem.due} onChange={e => setNewItem({...newItem, due: e.target.value})} />
+                                        </div>
+                                        <button onClick={addLogItem} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold uppercase tracking-widest shadow-lg">Add to Log</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* --- POLICY TAB --- */}
+                            {activeTab === 'policy' && (
+                                <div className="space-y-6">
+                                    <h2 className="text-xl font-black border-b pb-2 italic">OH&S Policy (5.2) Commitments</h2>
+                                    <div className="grid grid-cols-1 gap-6">
+                                        {['a', 'b', 'c', 'd', 'e', 'f'].map(k => (
+                                            <div key={k}><label className="font-bold text-slate-500 text-xs uppercase block mb-1">5.2({k}) Commitment</label><textarea className="w-full border p-3 rounded-xl bg-slate-50 text-xs" rows="2" value={formData.policySpecifics?.[k]} onChange={e => setFormData(p=>({...p, policySpecifics: {...p.policySpecifics, [k]: e.target.value}}))} /></div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                             {/* --- RASCI TAB (RESTORED) --- */}
+                             {activeTab === 'rasci' && (
+                                <div className="space-y-6">
+                                     <div className="flex justify-between items-end border-b pb-2">
+                                         <h2 className="text-xl font-black italic">RASCI Matrix (5.3)</h2>
+                                         <div className="text-xs text-slate-400">R=Resp, A=Accountable, S=Support, C=Consulted, I=Informed</div>
+                                     </div>
+
+                                     {/* 1. MANAGE ROLES */}
+                                     <div className="bg-slate-100 p-4 rounded-xl flex gap-2 items-center">
+                                         <span className="text-xs font-bold uppercase text-slate-500">Add Role:</span>
+                                         <input className="p-2 rounded border text-xs flex-1" placeholder="e.g. Fire Marshal" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} />
+                                         <button onClick={addRole} className="bg-blue-600 text-white px-4 py-2 rounded text-xs font-bold">+ Role</button>
+                                     </div>
+
+                                     {/* 2. MATRIX TABLE */}
+                                     <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                                         <table className="w-full text-xs text-left">
+                                             <thead className="bg-slate-800 text-white">
+                                                 <tr>
+                                                     <th className="p-3 min-w-[200px]">Process / Activity</th>
+                                                     {formData.definedRoles.map((role, i) => (
+                                                         <th key={i} className="p-3 text-center min-w-[80px]">
+                                                             {role.title}
+                                                             <button onClick={() => removeRole(i)} className="ml-1 text-slate-400 hover:text-red-400 text-[9px]"><i className="fas fa-times"></i></button>
+                                                         </th>
+                                                     ))}
+                                                     <th className="p-3 w-10"></th>
+                                                 </tr>
+                                             </thead>
+                                             <tbody className="bg-white divide-y divide-slate-100">
+                                                 {formData.rasciProcesses.map((proc, pIdx) => (
+                                                     <tr key={pIdx} className="hover:bg-slate-50">
+                                                         <td className="p-3 font-bold text-slate-700">{proc.name}</td>
+                                                         {formData.definedRoles.map((role, rIdx) => (
+                                                             <td key={rIdx} className="p-1 text-center border-l border-slate-100">
+                                                                 <select 
+                                                                    className={`w-full text-center font-bold bg-transparent outline-none cursor-pointer ${getAssignment(pIdx, role.title)==='R'?'text-red-600':getAssignment(pIdx, role.title)==='A'?'text-blue-600':''}`}
+                                                                    value={getAssignment(pIdx, role.title)}
+                                                                    onChange={(e) => updateAssignment(pIdx, role.title, e.target.value)}
+                                                                 >
+                                                                     <option value=""></option>
+                                                                     <option value="R">R</option>
+                                                                     <option value="A">A</option>
+                                                                     <option value="S">S</option>
+                                                                     <option value="C">C</option>
+                                                                     <option value="I">I</option>
+                                                                 </select>
+                                                             </td>
+                                                         ))}
+                                                         <td className="p-3 text-center">
+                                                             <button onClick={() => removeProcess(pIdx)} className="text-slate-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
+                                                         </td>
+                                                     </tr>
+                                                 ))}
+                                                 {/* ADD PROCESS ROW */}
+                                                 <tr className="bg-slate-50">
+                                                     <td className="p-2">
+                                                         <input className="w-full p-2 border rounded text-xs" placeholder="+ Add New Process" value={newProcessName} onChange={e => setNewProcessName(e.target.value)} />
+                                                     </td>
+                                                     <td colSpan={formData.definedRoles.length + 1} className="p-2">
+                                                         <button onClick={addProcess} className="bg-emerald-600 text-white px-4 py-2 rounded text-xs font-bold w-full">Add Row</button>
+                                                     </td>
+                                                 </tr>
+                                             </tbody>
+                                         </table>
+                                     </div>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+                </div>
+            );
+        };
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
