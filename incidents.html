@@ -3,19 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Incident Reporting</title>
+    <title>ISO 45001 | Incident Reporting</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script>tailwind.config = { theme: { extend: { fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] }, colors: { 'glass': 'rgba(30, 41, 59, 0.7)' } } } }</script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] },
+                    colors: { 'glass': 'rgba(30, 41, 59, 0.7)' }
+                }
+            }
+        }
+    </script>
     <style>
         body { font-family: 'Space Grotesk', sans-serif; background-color: #0f172a; color: white; }
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
         
-        /* FISHBONE STYLES */
+        /* DIAGRAM STYLES */
         .fishbone-wrapper { position: relative; padding: 40px 20px; overflow-x: auto; min-width: 800px; background: rgba(15, 23, 42, 0.5); border-radius: 16px; border: 1px dashed #334155; }
         .spine-main { position: absolute; top: 50%; left: 20px; right: 140px; height: 4px; background: #94a3b8; transform: translateY(-50%); }
         .spine-main::after { content: ''; position: absolute; right: -20px; top: -8px; width: 0; height: 0; border-left: 20px solid #94a3b8; border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
@@ -39,17 +52,20 @@
         .tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #475569; width: 0; height: 20px; }
         .tree-node { display: inline-block; padding: 10px; border-radius: 8px; background: #1e293b; border: 1px solid #334155; min-width: 140px; position: relative; z-index: 10; }
 
-        /* PRINT */
+        /* PRINT STYLES */
         @media print {
-            body { background: white; color: black; }
+            body { background: white; color: black; -webkit-print-color-adjust: exact; }
             .no-print { display: none !important; }
             .glass-panel { background: white; border: 1px solid #000; color: black; box-shadow: none; margin-bottom: 20px; page-break-inside: avoid; }
-            .text-white, .text-slate-400 { color: black !important; }
-            input, select, textarea { border: 1px solid #ccc !important; color: black !important; }
+            .text-white { color: black !important; }
+            .text-slate-400, .text-slate-500, .text-blue-400, .text-emerald-400 { color: #333 !important; font-weight: bold !important; }
+            input, select, textarea { border: 1px solid #ccc !important; color: black !important; background: transparent !important; }
             .bg-slate-900, .bg-slate-800 { background: white !important; border: 1px solid #ccc !important; }
-            .spine-main, .spine-main::after, .rib-top::after, .rib-bottom::before, .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-color: black !important; }
-            .fish-head, .tree-node { border-color: black !important; color: black !important; background: white !important; }
             .print-section { display: block !important; margin-top: 20px; page-break-inside: avoid; }
+            /* Force diagrams to be visible in print */
+            .fishbone-wrapper, .tree-node { background: white !important; border: 1px solid black !important; color: black !important; }
+            .spine-main, .spine-main::after, .rib-top::after, .rib-bottom::before, .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-color: black !important; }
+            .fish-head { border-color: black !important; color: black !important; background: white !important; }
         }
     </style>
 </head>
@@ -59,7 +75,17 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, set, update, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
+            authDomain: "ohsms-fa534.firebaseapp.com",
+            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
+            projectId: "ohsms-fa534",
+            storageBucket: "ohsms-fa534.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
         window.fb = { get, ref, set, update, push };
@@ -68,6 +94,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
+        // --- TREE NODE COMPONENT ---
         const FaultTreeNode = ({ node, onUpdate, onDelete, onAddSibling }) => {
             const handleAddChild = () => onUpdate({ ...node, children: [...(node.children||[]), { id: Date.now(), label: 'Event', type: 'EVENT', children: [] }] });
             const toggleType = () => onUpdate({ ...node, type: ['EVENT', 'AND', 'OR', 'ROOT'][(['EVENT', 'AND', 'OR', 'ROOT'].indexOf(node.type) + 1) % 4] });
@@ -87,6 +114,7 @@
             );
         };
 
+        // --- FISHBONE COMPONENT ---
         const FishboneDiagram = ({ data, onChange }) => {
             const Rib = ({ title, cat, pos }) => (
                 <div className={pos==='top'?'rib-top':'rib-bottom'}>
@@ -105,23 +133,18 @@
             );
         };
 
-        const IncidentForm = ({ session, siteId, initialData, onBack, onSave }) => {
+        // --- MAIN INCIDENT FORM ---
+        const IncidentForm = ({ session, sites, initialData, selectedSiteContext, onBack, onSave }) => {
             const [step, setStep] = useState(1);
+            
+            // Initialize data with Site Context from URL/Home page
             const [data, setData] = useState(initialData || {
-                siteId: siteId, date: '', time: '', type: 'Near Miss', description: '',
+                siteId: (selectedSiteContext && selectedSiteContext !== 'GLOBAL') ? selectedSiteContext : '', 
+                date: '', time: '', type: 'Near Miss', description: '',
                 investigation: { fiveWhys: ['','','','',''], fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, faultTreeRoot: { id: 1, label: 'Top Event', type: 'AND', children: [] }, rootCause: '' },
                 capa: [], riskUpdated: false
             });
 
-            // Ensure arrays exist
-            useEffect(() => {
-                if(data.investigation && !Array.isArray(data.investigation.fishbone.man)) {
-                    const fb = data.investigation.fishbone;
-                    setData(prev => ({ ...prev, investigation: { ...prev.investigation, fishbone: { man: fb.man?[fb.man]:[], machine: fb.machine?[fb.machine]:[], material: fb.material?[fb.material]:[], method: fb.method?[fb.method]:[], environment: fb.environment?[fb.environment]:[] } } }));
-                }
-            }, []);
-
-            // ID Generation
             useEffect(() => {
                 if(!initialData && data.siteId && data.type && !data.id) {
                     const seq = Math.floor(Math.random()*999).toString().padStart(3,'0');
@@ -145,12 +168,18 @@
                         <p className="text-sm mt-1">ID: {data.id} | Site: {data.siteId}</p>
                     </div>
 
-                    {/* SECTIONS */}
+                    {/* 1. INITIAL */}
                     <div className={`print-section ${step === 1 ? 'block' : 'hidden'}`}>
                         <div className="glass-panel p-8 rounded-2xl mb-6">
                             <h2 className="text-lg font-bold mb-4 text-blue-400 border-b border-white/10 pb-2">1. Incident Overview</h2>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><input className="w-full bg-slate-900/50 border border-slate-700 p-2 rounded text-sm text-slate-400" value={data.siteId} readOnly /></div>
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Site Location</label>
+                                    <select className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.siteId} onChange={e=>setData({...data, siteId:e.target.value})}>
+                                        <option value="">Select Site...</option>
+                                        {sites.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+                                    </select>
+                                </div>
                                 <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.type} onChange={e=>setData({...data, type:e.target.value})}><option>Near Miss</option><option>Accident</option></select></div>
                                 <div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.date} onChange={e=>setData({...data, date:e.target.value})} /></div>
                                 <div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" value={data.time} onChange={e=>setData({...data, time:e.target.value})} /></div>
@@ -160,6 +189,7 @@
                         </div>
                     </div>
 
+                    {/* 2. INVESTIGATION */}
                     <div className={`print-section ${step === 2 ? 'block' : 'hidden'}`}>
                         <div className="glass-panel p-8 rounded-2xl mb-6">
                             <h2 className="text-lg font-bold mb-6 text-purple-400 border-b border-white/10 pb-2">2. Investigation</h2>
@@ -170,6 +200,7 @@
                         </div>
                     </div>
 
+                    {/* 3. CAPA */}
                     <div className={`print-section ${step === 3 ? 'block' : 'hidden'}`}>
                         <div className="glass-panel p-8 rounded-2xl mb-6">
                             <h2 className="text-lg font-bold mb-4 text-orange-400 border-b border-white/10 pb-2">3. Corrective Actions</h2>
@@ -185,11 +216,12 @@
                         </div>
                     </div>
 
+                    {/* 4. REVIEW */}
                     <div className={`print-section ${step === 4 ? 'block' : 'hidden'}`}>
                         <div className="glass-panel p-8 rounded-2xl mb-6">
-                            <h2 className="text-lg font-bold mb-4 text-emerald-400 border-b border-white/10 pb-2">4. Review & Risk</h2>
+                            <h2 className="text-lg font-bold mb-4 text-emerald-400 border-b border-white/10 pb-2">4. Review & Sign-off</h2>
                             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex justify-between items-center mb-6 no-print">
-                                <div><h3 className="font-bold text-white">Risk Assessment Check</h3><p className="text-sm text-slate-400">Update HIRA for Site: <span className="text-emerald-400">{data.siteId}</span>?</p></div>
+                                <div><h3 className="font-bold text-white">Risk Assessment Check</h3><p className="text-sm text-slate-400">Update HIRA for Site: <span className="text-emerald-400">{data.siteId || 'Global'}</span>?</p></div>
                                 <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold text-sm">Open Risk Module</a>
                             </div>
                             <div className="flex gap-2 items-center mb-6"><input type="checkbox" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} className="w-4 h-4"/><label className="text-sm text-white">Risk Assessment Reviewed</label></div>
@@ -203,6 +235,7 @@
         const App = () => {
             const [view, setView] = useState('list');
             const [session, setSession] = useState(null);
+            const [sites, setSites] = useState([]);
             const [incidents, setIncidents] = useState([]);
             const [currentData, setCurrentData] = useState(null);
             const [siteContext, setSiteContext] = useState(null);
@@ -213,27 +246,32 @@
                 const sess = JSON.parse(s);
                 setSession(sess);
                 
-                // Get Site Context from URL
-                const params = new URLSearchParams(window.location.search);
-                const site = params.get('site');
-                setSiteContext(site);
+                // Fetch Sites
+                const dbRef = window.fb.ref(window.db);
+                window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}/sites`)).then(snap => {
+                    if (snap.exists()) setSites(Object.values(snap.val()));
+                });
 
-                if(site && site !== 'GLOBAL') {
-                    // Load incidents for this site
-                    const dbRef = window.fb.ref(window.db);
-                    window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}/incidents`)).then(snap => {
-                        if(snap.exists()) {
-                            const all = Object.entries(snap.val()).map(([k,v]) => ({firebaseKey:k, ...v}));
-                            setIncidents(all.filter(i => i.siteId === site));
-                        }
-                    });
-                }
+                // Get URL Context
+                const params = new URLSearchParams(window.location.search);
+                const ctx = params.get('site');
+                setSiteContext(ctx);
+
+                // Fetch Incidents
+                window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}/incidents`)).then(snap => {
+                    if(snap.exists()) {
+                        let all = Object.entries(snap.val()).map(([k,v]) => ({firebaseKey:k, ...v}));
+                        if (ctx && ctx !== 'GLOBAL') all = all.filter(i => i.siteId === ctx);
+                        setIncidents(all);
+                    }
+                });
             }, []);
 
             const handleSave = async (data) => {
                 const dbPath = `organizations/${session.orgId}/incidents`;
                 if(data.firebaseKey) await window.fb.update(window.fb.ref(window.db, `${dbPath}/${data.firebaseKey}`), data);
                 else await window.fb.push(window.fb.ref(window.db, dbPath), data);
+                // Refresh logic would go here
                 setView('list');
             };
 
@@ -243,7 +281,7 @@
                 <div className="flex flex-col h-full bg-slate-950 text-white min-h-screen">
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
                         <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-home"></i></a><h1 className="font-bold">Incidents</h1></div>
-                        <div className="flex gap-4 items-center"><span className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900">Site: {siteContext}</span></div>
+                        <span className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900">Context: {siteContext || 'Global'}</span>
                     </div>
                     <div className="p-6 flex-1 overflow-y-auto">
                         {view === 'list' && (
@@ -253,7 +291,7 @@
                                     <button onClick={()=>{setCurrentData(null); setView('form')}} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow">+ Report New</button>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {incidents.length === 0 && <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-800 rounded-3xl"><h3 className="text-xl font-bold text-slate-500">No Incidents Reported for {siteContext}</h3></div>}
+                                    {incidents.length === 0 && <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-800 rounded-3xl"><h3 className="text-xl font-bold text-slate-500">No Incidents Found</h3></div>}
                                     {incidents.map(inc => (
                                         <div key={inc.id} className="glass-panel p-5 rounded-2xl border-l-4 border-blue-500 relative group transition-all hover:-translate-y-1">
                                             <div className="flex justify-between items-start mb-2"><div><span className="text-[10px] font-mono bg-slate-800 px-2 py-1 rounded text-blue-300">{inc.id}</span><h3 className="font-bold text-lg mt-2">{inc.type === 'Accident' ? '🚨 Accident' : '⚠️ ' + inc.type}</h3></div></div>
@@ -264,7 +302,7 @@
                                 </div>
                             </div>
                         )}
-                        {view === 'form' && <IncidentForm session={session} siteId={siteContext} initialData={currentData} onBack={()=>setView('list')} onSave={handleSave} />}
+                        {view === 'form' && <IncidentForm session={session} sites={sites} selectedSiteContext={siteContext} initialData={currentData} onBack={()=>setView('list')} onSave={handleSave} />}
                     </div>
                 </div>
             );
