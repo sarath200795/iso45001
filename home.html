@@ -81,13 +81,15 @@
                 // 2. Routing with Context
                 switch(moduleId) {
                     case 'incidents':
-                        window.location.href = `incidents.html?site=${selectedSite}`; // Passes Context
+                        // --- UPDATED: No URL Parameter ---
+                        // This allows the user to select the site freely inside the module
+                        window.location.href = 'incidents.html'; 
                         break;
                     case 'sites':
-                        window.location.href = 'sites.html'; // Admin tool, no site context needed
+                        window.location.href = 'sites.html'; // Admin tool
                         break;
                     case 'users':
-                        window.location.href = 'users.html'; // Admin tool, no site context needed
+                        window.location.href = 'users.html'; // Admin tool
                         break;
                     case 'risk':
                         window.location.href = `risk.html?site=${selectedSite}`; // Passes Context
