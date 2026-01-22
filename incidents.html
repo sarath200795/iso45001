@@ -231,34 +231,30 @@
         };
 
         const App = () => {
-            // STATE INITIALIZATION with URL Parameter Logic
-            const [view, setView] = useState('list');
+            // --- FIX START: Initialize State Synchronously from URL ---
+            const [view, setView] = useState(() => {
+                const params = new URLSearchParams(window.location.search);
+                const ctx = params.get('site');
+                // If a site is present and not 'GLOBAL', default to FORM view
+                return (ctx && ctx !== 'GLOBAL') ? 'form' : 'list';
+            });
+
+            const [siteContext, setSiteContext] = useState(() => {
+                const params = new URLSearchParams(window.location.search);
+                return params.get('site') || 'GLOBAL';
+            });
+            // --- FIX END ---
+
             const [session, setSession] = useState(null);
             const [sites, setSites] = useState([]);
             const [incidents, setIncidents] = useState([]);
             const [currentData, setCurrentData] = useState(null);
-            const [siteContext, setSiteContext] = useState(null);
 
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href = 'index.html'; return; }
                 const sess = JSON.parse(s);
                 setSession(sess);
-                
-                // --- CRITICAL CHANGE START ---
-                // Get URL Context
-                const params = new URLSearchParams(window.location.search);
-                const ctx = params.get('site');
-                
-                // If a specific site is in URL (and not Global), force view to 'form'
-                if (ctx && ctx !== 'GLOBAL') {
-                    setSiteContext(ctx);
-                    setView('form'); // <--- AUTO-NAVIGATE TO FORM
-                } else {
-                    setSiteContext(ctx || 'GLOBAL');
-                    setView('list'); // Default to List
-                }
-                // --- CRITICAL CHANGE END ---
 
                 const dbRef = window.fb.ref(window.db);
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}/sites`)).then(snap => {
@@ -302,11 +298,11 @@
                             <div className="relative">
                                 <i className="fas fa-filter absolute left-3 top-2.5 text-blue-400 text-xs"></i>
                                 <select 
-                                    value={siteContext || 'GLOBAL'} 
+                                    value={siteContext} 
                                     onChange={(e) => {
                                         setSiteContext(e.target.value);
-                                        // Optional: If user changes context in dropdown while in form, maybe reset to list?
-                                        // For now, we keep them in whatever view they are in.
+                                        // Optional: Reset to list if context changes manually
+                                        if(view === 'form' && !currentData) setView('list');
                                     }}
                                     className="bg-slate-800 border border-slate-700 text-white text-xs rounded-lg py-2 pl-8 pr-4 outline-none focus:border-blue-500 appearance-none font-bold"
                                 >
@@ -323,7 +319,7 @@
                                 <div className="flex justify-between mb-8">
                                     <div>
                                         <h2 className="text-3xl font-bold">Incident Dashboard</h2>
-                                        <p className="text-slate-400 text-sm mt-1">Showing data for: <span className="text-emerald-400 font-bold">{siteContext || 'Global'}</span></p>
+                                        <p className="text-slate-400 text-sm mt-1">Showing data for: <span className="text-emerald-400 font-bold">{siteContext}</span></p>
                                     </div>
                                     <button onClick={()=>{setCurrentData(null); setView('form')}} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-500 transition-colors">+ Report New</button>
                                 </div>
@@ -346,7 +342,17 @@
                                 </div>
                             </div>
                         )}
-                        {view === 'form' && <IncidentForm session={session} sites={sites} selectedSiteContext={siteContext} initialData={currentData} onBack={()=>setView('list')} onSave={handleSave} />}
+                        {view === 'form' && (
+                            <IncidentForm 
+                                key={currentData ? currentData.id : siteContext} 
+                                session={session} 
+                                sites={sites} 
+                                selectedSiteContext={siteContext} 
+                                initialData={currentData} 
+                                onBack={()=>setView('list')} 
+                                onSave={handleSave} 
+                            />
+                        )}
                     </div>
                 </div>
             );
