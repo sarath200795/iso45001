@@ -83,7 +83,9 @@
         const GoogleMapPicker = ({ onConfirm, onClose }) => {
             const mapContainerRef = useRef(null);
             const [selectedLocation, setSelectedLocation] = useState(null);
+            const [mapInstance, setMapInstance] = useState(null);
             const [markerInstance, setMarkerInstance] = useState(null);
+            const [loadingLoc, setLoadingLoc] = useState(false);
 
             useEffect(() => {
                 if (!window.isGoogleMapsLoaded) {
@@ -103,32 +105,66 @@
                         { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
                     ]
                 });
+                setMapInstance(map);
 
                 map.addListener("click", (e) => {
-                    const lat = e.latLng.lat();
-                    const lng = e.latLng.lng();
-                    const loc = { lat, lng };
-
-                    // Clear previous marker (hacky but functional for simple use case)
-                    // In a real app, we'd track the marker in a ref properly
-                    if(document.querySelector('.gm-style img')) {
-                         // This is just a visual refresh reliance
-                    }
-
-                    const newMarker = new google.maps.Marker({
-                        position: loc,
-                        map: map,
-                        animation: google.maps.Animation.DROP
-                    });
-
-                    // Geocode
-                    const geocoder = new google.maps.Geocoder();
-                    geocoder.geocode({ location: loc }, (results, status) => {
-                        const addr = (status === "OK" && results[0]) ? results[0].formatted_address : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-                        setSelectedLocation({ lat, lng, address: addr });
-                    });
+                    placeMarkerAndPanTo(e.latLng, map);
                 });
             }, []);
+
+            const placeMarkerAndPanTo = (latLng, map) => {
+                const lat = latLng.lat();
+                const lng = latLng.lng();
+                const loc = { lat, lng };
+
+                // Handle Marker - using a simpler approach for React/Google Maps closure
+                // We clear ALL markers from the map instance by clearing the previous one stored in ref if possible, 
+                // but since we are re-rendering, let's just create a new one and let the user see it update.
+                // For a robust app, we'd store marker in a useRef to clear it.
+                // Here we use a query selector hack to clear visual clutter if needed, or just let the user move it.
+                
+                // Better approach: remove old marker using state logic
+                if (window.currentMarker) window.currentMarker.setMap(null); // Global temp hack for this component instance
+                
+                const newMarker = new google.maps.Marker({
+                    position: loc,
+                    map: map,
+                    animation: google.maps.Animation.DROP
+                });
+                window.currentMarker = newMarker; // Store ref globally for this session
+
+                const geocoder = new google.maps.Geocoder();
+                geocoder.geocode({ location: loc }, (results, status) => {
+                    const addr = (status === "OK" && results[0]) ? results[0].formatted_address : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+                    setSelectedLocation({ lat, lng, address: addr });
+                });
+                
+                map.panTo(latLng);
+            };
+
+            const handleCurrentLocation = () => {
+                if (navigator.geolocation && mapInstance) {
+                    setLoadingLoc(true);
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const pos = {
+                                lat: position.coords.latitude,
+                                lng: position.coords.longitude,
+                            };
+                            const latLng = new google.maps.LatLng(pos.lat, pos.lng);
+                            placeMarkerAndPanTo(latLng, mapInstance);
+                            mapInstance.setZoom(15);
+                            setLoadingLoc(false);
+                        },
+                        () => {
+                            alert("Error: The Geolocation service failed.");
+                            setLoadingLoc(false);
+                        }
+                    );
+                } else {
+                    alert("Error: Your browser doesn't support geolocation.");
+                }
+            };
 
             return (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
@@ -139,19 +175,39 @@
                         </div>
                         <div className="flex-1 relative bg-slate-800">
                             <div ref={mapContainerRef} id="google-map"></div>
+                            
+                            {/* Overlay Controls */}
                             <div className="absolute bottom-6 left-6 right-6 z-[100] flex justify-between items-end pointer-events-none">
-                                <div className="bg-slate-900/90 backdrop-blur p-4 rounded-xl border border-slate-700 shadow-xl pointer-events-auto max-w-md">
-                                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Selected Location</p>
-                                    {selectedLocation ? (
-                                        <div>
-                                            <div className="text-white text-sm font-bold truncate">{selectedLocation.address}</div>
-                                            <div className="font-mono text-emerald-400 text-xs mt-1">{selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}</div>
-                                        </div>
-                                    ) : (
-                                        <div className="text-slate-500 text-sm italic">Click map to drop pin</div>
-                                    )}
+                                <div className="flex gap-4 items-end w-full">
+                                    <div className="bg-slate-900/90 backdrop-blur p-4 rounded-xl border border-slate-700 shadow-xl pointer-events-auto flex-1 max-w-md">
+                                        <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Selected Location</p>
+                                        {selectedLocation ? (
+                                            <div>
+                                                <div className="text-white text-sm font-bold truncate">{selectedLocation.address}</div>
+                                                <div className="font-mono text-emerald-400 text-xs mt-1">{selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}</div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-slate-500 text-sm italic">Click map or use 'My Location'</div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-2 pointer-events-auto">
+                                        <button 
+                                            onClick={handleCurrentLocation} 
+                                            className="h-12 w-12 rounded-xl bg-slate-700 hover:bg-slate-600 text-white shadow-xl flex items-center justify-center transition-all border border-slate-600"
+                                            title="Use Current Location"
+                                        >
+                                            {loadingLoc ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-crosshairs"></i>}
+                                        </button>
+                                        <button 
+                                            onClick={() => selectedLocation && onConfirm(selectedLocation)} 
+                                            disabled={!selectedLocation} 
+                                            className={`px-6 h-12 rounded-xl font-bold shadow-xl transition-all flex items-center ${selectedLocation ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+                                        >
+                                            Confirm <i className="fas fa-check ml-2"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <button onClick={() => selectedLocation && onConfirm(selectedLocation)} disabled={!selectedLocation} className={`pointer-events-auto px-6 py-3 rounded-xl font-bold shadow-xl transition-all ${selectedLocation ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>Confirm Location</button>
                             </div>
                         </div>
                     </div>
@@ -287,7 +343,6 @@
             const [data, setData] = useState({ sites: [] });
             const [selectedSite, setSelectedSite] = useState('GLOBAL');
             const [promptModal, setPromptModal] = useState(null);
-            // NEW: State for dropdown open/close to fix selection issues
             const [isDropdownOpen, setIsDropdownOpen] = useState(false);
             const dropdownRef = useRef(null);
 
@@ -298,8 +353,6 @@
                 setSession(sess);
                 if(sess.role !== 'Owner' && sess.assignedSite) setSelectedSite(sess.assignedSite);
                 fetchData(sess.orgId);
-
-                // Click outside listener
                 const handleClickOutside = (event) => {
                     if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                         setIsDropdownOpen(false);
@@ -333,7 +386,7 @@
 
             const handleSiteSelect = (siteCode) => {
                 setSelectedSite(siteCode);
-                setIsDropdownOpen(false); // Close dropdown
+                setIsDropdownOpen(false);
                 if (promptModal) { setView(promptModal); setPromptModal(null); }
             };
 
@@ -353,7 +406,6 @@
                             <div><h1 className="text-base font-bold text-white flex items-center gap-2"><i className="fas fa-shield-halved text-blue-500"></i> ISO 45001 Hub</h1></div>
                             <div className="h-6 w-[1px] bg-slate-700 mx-2"></div>
                             
-                            {/* FIXED DROPDOWN */}
                             <div className="relative" ref={dropdownRef}>
                                 <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="flex items-center gap-2 text-xs font-bold bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:text-white hover:border-blue-500 transition-all">
                                     <i className="fas fa-location-dot text-emerald-400"></i>
