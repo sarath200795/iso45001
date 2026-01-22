@@ -3,304 +3,295 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OHS Management Dashboard</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>ISO 45001 | Enterprise Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] },
+                    colors: { 'glass': 'rgba(30, 41, 59, 0.7)' }
+                }
+            }
+        }
+    </script>
     <style>
-        :root {
-            --primary-color: #0d47a1; /* Deep Blue */
-            --secondary-color: #1976d2; /* Lighter Blue */
-            --bg-color: #f4f7fa;
-            --text-color: #333;
-            --sidebar-width: 260px;
-        }
-
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); }
-
-        /* --- LAYOUT --- */
-        .dashboard-container { display: flex; height: 100vh; }
+        body { font-family: 'Space Grotesk', sans-serif; background-color: #0f172a; color: white; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .glass-panel:hover { border-color: rgba(59, 130, 246, 0.3); transform: translateY(-2px); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); }
         
-        /* Sidebar */
-        .sidebar {
-            width: var(--sidebar-width);
-            background-color: white;
-            border-right: 1px solid #ddd;
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100%;
-        }
-        .sidebar-header {
-            padding: 20px;
-            background-color: var(--primary-color);
-            color: white;
-            text-align: center;
-            font-weight: bold;
-            font-size: 1.2rem;
-        }
-        .nav-links { list-style: none; padding: 0; margin: 0; flex: 1; }
-        .nav-links li { border-bottom: 1px solid #f0f0f0; }
-        .nav-links button {
-            width: 100%;
-            padding: 15px 20px;
-            background: none;
-            border: none;
-            text-align: left;
-            cursor: pointer;
-            font-size: 1rem;
-            color: #555;
-            transition: 0.2s;
-            display: flex;
-            align-items: center;
-        }
-        .nav-links button i { margin-right: 12px; width: 20px; text-align: center; }
-        .nav-links button:hover { background-color: #e3f2fd; color: var(--primary-color); }
-        .nav-links button.active { background-color: #e3f2fd; color: var(--primary-color); border-right: 4px solid var(--primary-color); }
-        
-        /* Main Content */
-        .main-content {
-            margin-left: var(--sidebar-width); /* Offset for fixed sidebar */
-            flex: 1;
-            padding: 30px;
-            overflow-y: auto;
-        }
-        
-        /* Section Styling */
-        .section-header { margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-        .content-card {
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            display: none; /* Hidden by default */
-        }
-        .content-card.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        /* Card Hover Glow */
+        .card-glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.1), transparent 70%); opacity: 0; transition: opacity 0.3s; }
+        .glass-panel:hover .card-glow { opacity: 1; }
 
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-        /* --- UI ELEMENTS (Forms & Tables) --- */
-        .btn-primary { background: var(--secondary-color); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
-        .btn-danger { background: #d32f2f; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
-        
-        input, select, textarea { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; }
-        label { font-weight: 600; display: block; margin-bottom: 5px; color: #555; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
-        th { background-color: #f8f9fa; color: #555; }
-
-        /* Grid for Cards */
-        .grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
     </style>
 </head>
-<body>
+<body class="min-h-screen flex flex-col overflow-hidden">
+    <div id="root" class="h-full flex flex-col"></div>
 
-<div class="dashboard-container">
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <i class="fas fa-shield-alt"></i> OHS Manager
-        </div>
-        <ul class="nav-links">
-            <li><button class="active" onclick="showTab('incident')"><i class="fas fa-exclamation-triangle"></i> Incident Reporting</button></li>
-            <li><button onclick="showTab('audit')"><i class="fas fa-clipboard-check"></i> Internal Audit</button></li>
-            <li><button onclick="showTab('improve')"><i class="fas fa-chart-line"></i> Continuous Improve</button></li>
-            <li><button onclick="showTab('sites')"><i class="fas fa-building"></i> Site Registration</button></li>
-            <li><button onclick="showTab('users')"><i class="fas fa-users"></i> User Management</button></li>
-        </ul>
-        <div style="padding: 20px; border-top: 1px solid #ddd;">
-            <button class="btn-primary" style="width: 100%; background-color: #555;">Logout</button>
-        </div>
-    </aside>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, get, set, update, remove, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    <main class="main-content">
-        
-        <div id="incident" class="content-card active">
-            <div class="section-header">
-                <h2>Incident Reporting</h2>
-                <button class="btn-primary">+ Log New Incident</button>
-            </div>
-            <div class="grid-row">
-                <div style="background: #fafafa; padding: 20px; border-radius: 8px;">
-                    <h4>Quick Report</h4>
-                    <label>Incident Type</label>
-                    <select>
-                        <option>Near Miss</option>
-                        <option>Injury</option>
-                        <option>Property Damage</option>
-                    </select>
-                    <label>Severity</label>
-                    <select>
-                        <option>Low</option>
-                        <option>Medium</option>
-                        <option>Critical</option>
-                    </select>
-                    <label>Description</label>
-                    <textarea rows="3" placeholder="Describe what happened..."></textarea>
-                    <button class="btn-primary">Submit Report</button>
-                </div>
-                <div>
-                    <h4>Recent Logs</h4>
-                    <table>
-                        <tr>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                        </tr>
-                        <tr>
-                            <td>2023-10-24</td>
-                            <td>Injury</td>
-                            <td><span style="color:orange">Investigating</span></td>
-                        </tr>
-                        <tr>
-                            <td>2023-10-20</td>
-                            <td>Near Miss</td>
-                            <td><span style="color:green">Closed</span></td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-        </div>
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY", // <--- REPLACE THIS
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
 
-        <div id="audit" class="content-card">
-            <div class="section-header">
-                <h2>Internal Audit Management</h2>
-                <button class="btn-primary">Schedule Audit</button>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Audit ID</th>
-                        <th>Department</th>
-                        <th>Auditor</th>
-                        <th>Scheduled Date</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>AUD-001</td>
-                        <td>Manufacturing Floor</td>
-                        <td>Jane Doe</td>
-                        <td>2023-11-01</td>
-                        <td>Pending</td>
-                        <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;">Start</button></td>
-                    </tr>
-                    <tr>
-                        <td>AUD-002</td>
-                        <td>Chemical Storage</td>
-                        <td>John Smith</td>
-                        <td>2023-11-05</td>
-                        <td>Scheduled</td>
-                        <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;">Edit</button></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { get, ref, set, update, remove, child };
+    </script>
 
-        <div id="improve" class="content-card">
-            <div class="section-header">
-                <h2>Continuous Improvement (CAPA)</h2>
-            </div>
-            <div class="grid-row">
-                <div>
-                    <h3>Opportunity Log</h3>
-                    <label>Source</label>
-                    <input type="text" placeholder="e.g. Audit Finding, Employee Suggestion">
-                    <label>Action Required</label>
-                    <textarea rows="2"></textarea>
-                    <button class="btn-primary">Add Action</button>
-                </div>
-                <div>
-                    <h3>Action Tracker</h3>
-                    <div style="background: #fff3cd; padding: 10px; margin-bottom: 10px; border-left: 4px solid orange;">
-                        <strong>#45: Fix Safety Guard</strong><br>
-                        <small>Due: Tomorrow</small>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- MODULE CONFIG ---
+        const MODULES = [
+            { id: 'dashboard', label: 'Analytics Dashboard', desc: 'KPIs, Trends & Real-time Stats', icon: 'fa-chart-pie', color: 'text-purple-400' },
+            { id: 'incidents', label: 'Incident Reporting', desc: 'Log accidents, near misses & hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
+            { id: 'audit', label: 'Internal Audit', desc: 'Schedule & track compliance audits', icon: 'fa-clipboard-check', color: 'text-emerald-400' },
+            { id: 'improvement', label: 'Continuous Improvement', desc: 'CAPA & Suggestion Tracking', icon: 'fa-chart-line', color: 'text-blue-400' },
+            { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & Job Safety Analysis', icon: 'fa-shield-virus', color: 'text-red-400' },
+            { id: 'consultation', label: 'Participation', desc: 'Safety Committee & Feedback', icon: 'fa-comments', color: 'text-teal-400' },
+            { id: 'doc_gen', label: 'Document Generation', desc: 'Create Reports & Permits', icon: 'fa-file-signature', color: 'text-indigo-400' },
+            { id: 'doc_inv', label: 'Document Inventory', desc: 'Centralized File Storage', icon: 'fa-folder-open', color: 'text-yellow-400' },
+            { id: 'users', label: 'User Management', desc: 'Roles, Access & Profiles', icon: 'fa-users-gear', color: 'text-slate-300', admin: true },
+            { id: 'sites', label: 'Site Management', desc: 'Locations & Facility Data', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
+        ];
+
+        // --- SUB-COMPONENTS ---
+
+        const NavCard = ({ module, onClick }) => (
+            <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group cursor-pointer flex flex-col h-48 justify-between">
+                <div className="card-glow"></div>
+                <div className="relative z-10 flex justify-between items-start">
+                    <div className={`w-12 h-12 rounded-xl bg-slate-800/80 flex items-center justify-center text-xl shadow-lg ${module.color}`}>
+                        <i className={`fas ${module.icon}`}></i>
                     </div>
-                    <div style="background: #d4edda; padding: 10px; margin-bottom: 10px; border-left: 4px solid green;">
-                        <strong>#42: Update Training Manual</strong><br>
-                        <small>Completed</small>
-                    </div>
+                    {module.admin && <span className="text-[10px] font-bold uppercase bg-slate-700 text-slate-300 px-2 py-1 rounded">Admin</span>}
+                </div>
+                <div className="relative z-10">
+                    <h3 className="text-lg font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{module.label}</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">{module.desc}</p>
                 </div>
             </div>
-        </div>
+        );
 
-        <div id="sites" class="content-card">
-            <div class="section-header">
-                <h2>Site Registration</h2>
+        const UserModule = ({ session, users, sites, refresh }) => {
+            if(session.role !== 'Owner') return <div className="p-10 text-center text-red-400">Access Denied: Owner Permissions Required</div>;
+            const [selected, setSelected] = useState(null);
+            
+            const updateRole = async (uid, role, site) => {
+                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/users/${uid}`), { role, assignedSite: site, status: 'Active' });
+                refresh(); setSelected(null);
+            };
+
+            return (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="glass-panel p-6 rounded-2xl">
+                        <table className="w-full text-left">
+                            <thead className="text-xs uppercase text-slate-500 border-b border-slate-700">
+                                <tr><th className="pb-3 pl-2">User</th><th className="pb-3">Role</th><th className="pb-3">Site</th><th className="pb-3">Status</th><th className="pb-3 text-right">Action</th></tr>
+                            </thead>
+                            <tbody className="text-sm divide-y divide-slate-800">
+                                {users.map(u => (
+                                    <tr key={u.id}>
+                                        <td className="py-3 pl-2"><div>{u.name}</div><div className="text-xs text-slate-500">{u.email}</div></td>
+                                        <td className="py-3"><span className="bg-slate-800 px-2 py-1 rounded text-xs">{u.role}</span></td>
+                                        <td className="py-3 text-slate-400">{u.assignedSite || 'Global'}</td>
+                                        <td className="py-3">{u.status === 'Pending' ? <span className="text-orange-400 text-xs">Pending</span> : <span className="text-emerald-400 text-xs">Active</span>}</td>
+                                        <td className="py-3 text-right"><button onClick={() => setSelected(u)} className="text-blue-400 text-xs hover:underline">Edit</button></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {selected && (
+                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                            <div className="glass-panel bg-slate-900 p-6 rounded-2xl w-80">
+                                <h3 className="font-bold mb-4">Edit {selected.name}</h3>
+                                <select id="role" className="w-full bg-slate-800 mb-3 p-2 rounded text-white">{['Worker','Supervisor','Manager','Auditor'].map(r=><option key={r} value={r}>{r}</option>)}</select>
+                                <select id="site" className="w-full bg-slate-800 mb-4 p-2 rounded text-white"><option value="">Global</option>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select>
+                                <button onClick={() => updateRole(selected.id, document.getElementById('role').value, document.getElementById('site').value)} className="w-full bg-blue-600 py-2 rounded font-bold">Save</button>
+                                <button onClick={() => setSelected(null)} className="w-full mt-2 text-slate-400 text-xs">Cancel</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const SiteModule = ({ session, sites, refresh }) => {
+            const [form, setForm] = useState({ name: '', code: '', location: '' });
+            const addSite = async (e) => {
+                e.preventDefault();
+                await window.fb.set(window.fb.ref(window.db, `organizations/${session.orgId}/sites/${form.code}`), { ...form, id: Date.now() });
+                setForm({ name: '', code: '', location: '' }); refresh();
+            };
+            return (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+                    <div className="glass-panel p-6 rounded-2xl h-fit">
+                        <h3 className="font-bold mb-4">Add Site</h3>
+                        <form onSubmit={addSite} className="space-y-3">
+                            <input className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white outline-none" placeholder="Name" value={form.name} onChange={e=>setForm({...form, name:e.target.value})} required />
+                            <input className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white outline-none uppercase" placeholder="Code (Unique)" value={form.code} onChange={e=>setForm({...form, code:e.target.value.toUpperCase()})} required />
+                            <input className="w-full bg-slate-900/50 border border-slate-700 p-3 rounded-lg text-white outline-none" placeholder="Location" value={form.location} onChange={e=>setForm({...form, location:e.target.value})} required />
+                            <button className="w-full bg-blue-600 py-3 rounded-lg font-bold hover:bg-blue-500">Register</button>
+                        </form>
+                    </div>
+                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {sites.map(s => (
+                            <div key={s.code} className="glass-panel p-5 rounded-2xl border-l-4 border-blue-500">
+                                <h4 className="font-bold">{s.name}</h4>
+                                <p className="text-xs text-slate-400 font-mono">{s.code}</p>
+                                <p className="text-sm mt-2"><i className="fas fa-map-pin text-red-400 mr-2"></i>{s.location}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const DashboardModule = ({ users, sites }) => (
+            <div className="space-y-6 animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="glass-panel p-6 rounded-2xl border-b-4 border-blue-500"><p className="text-xs text-slate-400 uppercase">Users</p><h3 className="text-3xl font-bold">{users.length}</h3></div>
+                    <div className="glass-panel p-6 rounded-2xl border-b-4 border-emerald-500"><p className="text-xs text-slate-400 uppercase">Sites</p><h3 className="text-3xl font-bold">{sites.length}</h3></div>
+                    <div className="glass-panel p-6 rounded-2xl border-b-4 border-orange-500"><p className="text-xs text-slate-400 uppercase">Open Incidents</p><h3 className="text-3xl font-bold">0</h3></div>
+                    <div className="glass-panel p-6 rounded-2xl border-b-4 border-purple-500"><p className="text-xs text-slate-400 uppercase">Audit Score</p><h3 className="text-3xl font-bold">98%</h3></div>
+                </div>
+                <div className="glass-panel p-10 rounded-2xl flex items-center justify-center h-64 text-slate-500">
+                    <p>Interactive Analytics Charts will appear here.</p>
+                </div>
             </div>
-            <div style="max-width: 600px;">
-                <label>Site Name</label>
-                <input type="text" placeholder="e.g. Hyderabad Plant 1">
-                
-                <label>Location / Address</label>
-                <input type="text" placeholder="Full Address">
-                
-                <label>Site Manager Name</label>
-                <input type="text" placeholder="Full Name">
-                
-                <label>Emergency Contact Number</label>
-                <input type="text" placeholder="+91 ...">
-                
-                <button class="btn-primary">Register Site</button>
-            </div>
-        </div>
+        );
 
-        <div id="users" class="content-card">
-            <div class="section-header">
-                <h2>User Management</h2>
-                <button class="btn-primary">Invite User</button>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Organization ID</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Admin User</td>
-                        <td>admin@company.com</td>
-                        <td><strong>Administrator</strong></td>
-                        <td>ORG-8821</td>
-                        <td><button class="btn-danger">Remove</button></td>
-                    </tr>
-                    <tr>
-                        <td>Site Supervisor</td>
-                        <td>user1@company.com</td>
-                        <td>Editor</td>
-                        <td>ORG-8821</td>
-                        <td><button class="btn-danger">Remove</button></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        // --- MAIN APP ---
 
-    </main>
-</div>
+        const App = () => {
+            const [session, setSession] = useState(null);
+            const [view, setView] = useState('hub'); // 'hub' or module ID
+            const [data, setData] = useState({ users: [], sites: [] });
 
-<script>
-    function showTab(tabId) {
-        // 1. Hide all Content Cards
-        const contents = document.querySelectorAll('.content-card');
-        contents.forEach(card => card.classList.remove('active'));
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if (!s) { window.location.href = "index.html"; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+                fetchData(sess.orgId);
+            }, []);
 
-        // 2. Remove 'active' class from all Sidebar buttons
-        const buttons = document.querySelectorAll('.nav-links button');
-        buttons.forEach(btn => btn.classList.remove('active'));
+            const fetchData = async (orgId) => {
+                const dbRef = window.fb.ref(window.db);
+                const snapshot = await window.fb.get(window.fb.child(dbRef, `organizations/${orgId}`));
+                if (snapshot.exists()) {
+                    const val = snapshot.val();
+                    setData({
+                        users: val.users ? Object.values(val.users) : [],
+                        sites: val.sites ? Object.values(val.sites) : []
+                    });
+                }
+            };
 
-        // 3. Show the selected Content Card
-        document.getElementById(tabId).classList.add('active');
+            const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
 
-        // 4. Add 'active' class to the clicked button
-        // (Using event.currentTarget to ensure we get the button even if icon is clicked)
-        event.currentTarget.classList.add('active');
-    }
-</script>
+            if (!session) return null;
 
+            const activeModule = MODULES.find(m => m.id === view);
+
+            return (
+                <div className="flex flex-col h-screen relative overflow-hidden bg-slate-950">
+                    
+                    {/* Background Elements */}
+                    <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+                    <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-purple-600/5 rounded-full blur-[100px] pointer-events-none"></div>
+
+                    {/* Top Bar */}
+                    <header className="h-20 px-8 flex items-center justify-between z-20 backdrop-blur-sm bg-slate-900/50 border-b border-white/5">
+                        <div className="flex items-center gap-4">
+                            {view !== 'hub' && (
+                                <button onClick={() => setView('hub')} className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 transition-colors">
+                                    <i className="fas fa-arrow-left"></i>
+                                </button>
+                            )}
+                            <div>
+                                <h1 className="text-xl font-bold text-white tracking-tight">
+                                    {view === 'hub' ? `Welcome back, ${session.user.split(' ')[0]}` : activeModule?.label}
+                                </h1>
+                                <p className="text-[10px] text-blue-400 font-mono uppercase tracking-widest">
+                                    {session.orgName} <span className="text-slate-600 mx-2">|</span> {session.orgId}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-6">
+                            <div className="hidden md:flex flex-col items-end">
+                                <span className="text-xs font-bold text-slate-300">{session.user}</span>
+                                <span className="text-[10px] text-slate-500 uppercase bg-slate-800 px-2 py-0.5 rounded-full mt-1">{session.role}</span>
+                            </div>
+                            <button onClick={handleLogout} className="w-10 h-10 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-colors">
+                                <i className="fas fa-power-off"></i>
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Content */}
+                    <main className="flex-1 overflow-y-auto p-8 z-10 relative">
+                        
+                        {/* HUB VIEW (CARDS) */}
+                        {view === 'hub' && (
+                            <div className="max-w-7xl mx-auto">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fade-in">
+                                    {MODULES.map(module => (
+                                        <NavCard key={module.id} module={module} onClick={() => setView(module.id)} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* MODULE VIEWS */}
+                        {view === 'dashboard' && <DashboardModule users={data.users} sites={data.sites} />}
+                        {view === 'users' && <UserModule session={session} users={data.users} sites={data.sites} refresh={() => fetchData(session.orgId)} />}
+                        {view === 'sites' && <SiteModule session={session} sites={data.sites} refresh={() => fetchData(session.orgId)} />}
+                        
+                        {/* GENERIC PLACEHOLDER FOR OTHER MODULES */}
+                        {['incidents','audit','improvement','risk','consultation','doc_gen','doc_inv'].includes(view) && (
+                            <div className="max-w-4xl mx-auto text-center py-20 animate-fade-in">
+                                <div className={`w-24 h-24 rounded-3xl bg-slate-800/50 flex items-center justify-center mx-auto mb-6 text-4xl shadow-xl ${activeModule?.color}`}>
+                                    <i className={`fas ${activeModule?.icon}`}></i>
+                                </div>
+                                <h2 className="text-3xl font-bold text-white mb-4">{activeModule?.label}</h2>
+                                <p className="text-slate-400 mb-8 max-w-lg mx-auto">This module is part of the Enterprise Suite. Workflows for {activeModule?.label.toLowerCase()} will be loaded here.</p>
+                                <button className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-500 rounded-xl font-bold text-white hover:shadow-lg hover:shadow-blue-500/25 transition-all">
+                                    Initialize Workflow
+                                </button>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    <style>
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
 </body>
 </html>
