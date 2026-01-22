@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISO 45001 | Incident Management</title>
+    <title>ISO 45001 | Incident Reporting</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <script>
@@ -26,18 +28,49 @@
         body { font-family: 'Space Grotesk', sans-serif; background-color: #0f172a; color: white; }
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
         
-        /* Print Styles for Report Generation */
-        @media print {
-            body { background-color: white; color: black; }
-            .no-print { display: none !important; }
-            .glass-panel { background: white; border: 1px solid #ddd; color: black; box-shadow: none; }
-            .print-only { display: block !important; }
-            input, textarea, select { border: none; background: transparent; color: black; padding: 0; }
-            .text-white { color: black !important; }
-            .text-slate-400 { color: #666 !important; }
-            .bg-slate-900 { background: white !important; }
+        /* TREE DIAGRAM CSS */
+        .tree ul { padding-top: 20px; position: relative; transition: all 0.5s; display: flex; justify-content: center; }
+        .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; transition: all 0.5s; }
+        /* Connectors */
+        .tree li::before, .tree li::after {
+            content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #475569; width: 50%; height: 20px;
         }
-        .print-only { display: none; }
+        .tree li::after { right: auto; left: 50%; border-left: 2px solid #475569; }
+        .tree li:only-child::after, .tree li:only-child::before { display: none; }
+        .tree li:only-child { padding-top: 0; }
+        .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
+        .tree li:last-child::before { border-right: 2px solid #475569; border-radius: 0 5px 0 0; }
+        .tree li:first-child::after { border-radius: 5px 0 0 0; }
+        .tree ul ul::before {
+            content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #475569; width: 0; height: 20px;
+        }
+        /* Node Styling */
+        .tree-node {
+            display: inline-block; padding: 10px; text-decoration: none; border-radius: 8px;
+            background: #1e293b; border: 1px solid #334155; color: white; min-width: 140px; position: relative;
+        }
+        
+        /* Logic Gate Icons */
+        .gate-icon {
+            position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%);
+            background: #0f172a; border: 1px solid #475569; border-radius: 50%; width: 24px; height: 24px;
+            display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; z-index: 10;
+        }
+
+        /* PRINT STYLES */
+        @media print {
+            body { background-color: white; color: black; -webkit-print-color-adjust: exact; }
+            .no-print { display: none !important; }
+            .glass-panel { background: white; border: 1px solid #000; color: black; box-shadow: none; margin-bottom: 20px; page-break-inside: avoid; }
+            .text-white { color: black !important; }
+            .text-slate-400, .text-slate-500 { color: #333 !important; }
+            input, select, textarea { border: 1px solid #ccc !important; background: white !important; color: black !important; }
+            .bg-slate-900, .bg-slate-800, .bg-slate-950 { background: white !important; }
+            /* Tree Fixes for Print */
+            .tree li::before, .tree li::after, .tree ul ul::before { border-color: #000 !important; }
+            .tree-node { border: 1px solid #000 !important; background: #fff !important; color: #000 !important; }
+            .gate-icon { border-color: #000 !important; background: #fff !important; color: #000 !important; }
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -45,7 +78,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, set, update, push, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, get, set, update, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
@@ -65,277 +98,255 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- HELPER: CALCULATE COMPLETION ---
-        const checkStatus = (inc) => {
-            let missing = [];
-            if (!inc.investigation || !inc.investigation.rootCause) missing.push("Investigation");
-            if (!inc.capa || inc.capa.length === 0) missing.push("CAPA");
-            if (!inc.riskReview) missing.push("Risk Review");
-            
-            const isOverdue = inc.capa && inc.capa.some(c => new Date(c.dueDate) < new Date() && c.status !== 'Closed');
-            
-            return {
-                pct: Math.round(((3 - missing.length) / 3) * 100),
-                missing,
-                isOverdue
+        // --- RECURSIVE FAULT TREE COMPONENT ---
+        const FaultTreeNode = ({ node, onUpdate, onDelete }) => {
+            const handleAddChild = () => {
+                const newChild = { id: Date.now(), label: 'New Event', type: 'EVENT', children: [] };
+                onUpdate({ ...node, children: [...(node.children || []), newChild] });
             };
-        };
 
-        // --- SUB-COMPONENT: INCIDENT LIST CARD ---
-        const IncidentCard = ({ incident, onView }) => {
-            const status = checkStatus(incident);
+            const handleUpdateChild = (childIndex, updatedChild) => {
+                const newChildren = [...node.children];
+                newChildren[childIndex] = updatedChild;
+                onUpdate({ ...node, children: newChildren });
+            };
+
+            const handleDeleteChild = (childIndex) => {
+                const newChildren = node.children.filter((_, i) => i !== childIndex);
+                onUpdate({ ...node, children: newChildren });
+            };
+
+            // Toggle Logic Gate: EVENT -> AND -> OR -> ROOT -> EVENT
+            const toggleType = () => {
+                const types = ['EVENT', 'AND', 'OR', 'ROOT'];
+                const next = types[(types.indexOf(node.type) + 1) % types.length];
+                onUpdate({ ...node, type: next });
+            };
+
             return (
-                <div className="glass-panel p-5 rounded-2xl border-l-4 border-blue-500 relative group transition-all hover:-translate-y-1">
-                    <div className="flex justify-between items-start mb-2">
-                        <div>
-                            <span className="text-[10px] font-mono bg-slate-800 px-2 py-1 rounded text-blue-300">{incident.id}</span>
-                            <h3 className="font-bold text-lg mt-1">{incident.type === 'Accident' ? '🚨 Accident' : '⚠️ Near Miss'}</h3>
+                <li>
+                    <div className="tree-node group relative">
+                        {/* Header Actions */}
+                        <div className="absolute -top-3 right-0 opacity-0 group-hover:opacity-100 flex gap-1 no-print">
+                            <button onClick={handleAddChild} className="bg-blue-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center shadow" title="Add Child">+</button>
+                            {onDelete && <button onClick={onDelete} className="bg-red-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center shadow" title="Remove Node">x</button>}
                         </div>
-                        {status.isOverdue && <span className="bg-red-500/20 text-red-400 text-[10px] font-bold px-2 py-1 rounded uppercase animate-pulse">Overdue Actions</span>}
-                    </div>
-                    
-                    <p className="text-sm text-slate-400 line-clamp-2 mb-4">{incident.description}</p>
-                    
-                    <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
-                        <span><i className="fas fa-calendar mr-1"></i> {incident.date}</span>
-                        <span><i className="fas fa-map-marker-alt mr-1"></i> {incident.siteId}</span>
+
+                        {/* Node Content */}
+                        <input 
+                            value={node.label} 
+                            onChange={(e) => onUpdate({...node, label: e.target.value})}
+                            className="bg-transparent text-center w-full text-xs font-bold outline-none border-b border-transparent focus:border-blue-500 pb-1"
+                        />
+                        
+                        {/* Logic Gate Indicator */}
+                        <div className="mt-2 cursor-pointer no-print" onClick={toggleType}>
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold border 
+                                ${node.type === 'AND' ? 'border-purple-500 text-purple-400' : 
+                                  node.type === 'OR' ? 'border-orange-500 text-orange-400' : 
+                                  node.type === 'ROOT' ? 'border-emerald-500 text-emerald-400' : 'border-slate-600 text-slate-500'}`}>
+                                {node.type === 'EVENT' ? 'Event' : node.type}
+                            </span>
+                        </div>
+                        {/* Print View for Gate */}
+                        <div className="hidden print:block text-[10px] font-bold mt-1 uppercase">[{node.type}]</div>
+
+                        {/* Connector Icon */}
+                        {node.children && node.children.length > 0 && (
+                            <div className="gate-icon text-slate-300">
+                                {node.type === 'AND' ? '&' : (node.type === 'OR' ? '≥1' : '↓')}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="w-full bg-slate-800 h-1.5 rounded-full mb-2 overflow-hidden">
-                        <div className={`h-full ${status.pct === 100 ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{width: `${status.pct}%`}}></div>
-                    </div>
-                    
-                    <div className="flex justify-between items-end">
-                        <div className="text-[10px] text-slate-400">
-                            {status.pct === 100 ? 
-                                <span className="text-emerald-400 font-bold"><i className="fas fa-check-circle"></i> Completed</span> : 
-                                <span>Missing: {status.missing.join(', ')}</span>
-                            }
-                        </div>
-                        <button onClick={() => onView(incident)} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg">View Report</button>
-                    </div>
-                </div>
+                    {node.children && node.children.length > 0 && (
+                        <ul>
+                            {node.children.map((child, index) => (
+                                <FaultTreeNode 
+                                    key={child.id} 
+                                    node={child} 
+                                    onUpdate={(updated) => handleUpdateChild(index, updated)}
+                                    onDelete={() => handleDeleteChild(index)}
+                                />
+                            ))}
+                        </ul>
+                    )}
+                </li>
             );
         };
 
-        // --- MAIN FORM COMPONENT ---
-        const IncidentForm = ({ session, sites, existingData, onBack, onSave }) => {
+        // --- INCIDENT FORM ---
+        const IncidentForm = ({ session, sites, initialData, onBack, onSave }) => {
             const [step, setStep] = useState(1);
-            const [data, setData] = useState(existingData || {
+            const [data, setData] = useState(initialData || {
                 siteId: '', date: '', time: '', type: 'Near Miss', description: '',
-                investigation: { fiveWhys: ['','','','',''], fishbone: { man:[], machine:[], material:[], method:[], env:[] }, faultTree: [] },
-                capa: [], riskReview: false, riskId: ''
+                investigation: { 
+                    fiveWhys: ['','','','',''], 
+                    fishbone: { man:[], machine:[], material:[], method:[], environment:[] },
+                    // Default Root of Fault Tree
+                    faultTreeRoot: { id: 1, label: 'Incident Event', type: 'AND', children: [] },
+                    rootCause: ''
+                },
+                capa: [],
+                riskUpdated: false
             });
 
-            // Generate ID on Site/Type change
+            // ID Generation Logic
             useEffect(() => {
-                if(!existingData && data.siteId && data.type) {
-                    const typeCode = data.type === 'Near Miss' ? 'NM' : 'AC';
-                    const seq = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // In real app, fetch count
+                if(!initialData && data.siteId && data.type && !data.id) {
+                    const typeCode = data.type === 'Near Miss' ? 'NM' : (data.type === 'Accident' ? 'AC' : 'HZ');
+                    const seq = Math.floor(Math.random() * 999).toString().padStart(3,'0');
                     const newId = `${session.orgId}-${data.siteId}-${typeCode}-${seq}`;
-                    setData(d => ({ ...d, id: newId }));
+                    setData(prev => ({ ...prev, id: newId }));
                 }
             }, [data.siteId, data.type]);
 
-            const handleSave = () => {
-                onSave(data);
+            // Fishbone Helpers
+            const updateFishbone = (cat, idx, val) => {
+                const arr = [...(data.investigation.fishbone[cat] || [])];
+                arr[idx] = val;
+                setData({...data, investigation: {...data.investigation, fishbone: {...data.investigation.fishbone, [cat]: arr}}});
+            };
+            const addFishboneItem = (cat) => {
+                const arr = [...(data.investigation.fishbone[cat] || []), ''];
+                setData({...data, investigation: {...data.investigation, fishbone: {...data.investigation.fishbone, [cat]: arr}}});
             };
 
-            const printReport = () => {
-                window.print();
-            };
+            const handlePrint = () => window.print();
 
             return (
-                <div className="max-w-5xl mx-auto w-full animate-fade-in pb-20">
+                <div className="max-w-7xl mx-auto w-full pb-20 animate-fade-in">
                     
-                    {/* Header / Nav */}
+                    {/* NAV (Screen Only) */}
                     <div className="flex items-center justify-between mb-6 no-print">
-                        <button onClick={onBack} className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</button>
-                        <div className="flex gap-2">
-                            {[1,2,3,4].map(i => (
-                                <div key={i} onClick={() => setStep(i)} 
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold cursor-pointer border ${step === i ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-700 text-slate-500'}`}>
-                                    {i}
-                                </div>
+                        <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</button>
+                        <div className="flex gap-2 bg-slate-900 p-1 rounded-full border border-slate-700">
+                            {['Initial', 'Investigate', 'CAPA', 'Review'].map((label, i) => (
+                                <button key={i} onClick={() => setStep(i+1)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${step === i+1 ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{label}</button>
                             ))}
                         </div>
-                        <button onClick={printReport} className="text-blue-400 hover:text-white"><i className="fas fa-print"></i> PDF</button>
+                        <button onClick={handlePrint} className="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 font-bold text-sm bg-emerald-900/20 px-4 py-2 rounded-lg border border-emerald-500/50">
+                            <i className="fas fa-file-pdf"></i> Generate Full Report
+                        </button>
                     </div>
 
-                    {/* REPORT HEADER (PRINT ONLY) */}
-                    <div className="print-only mb-8 text-center border-b border-black pb-4">
-                        <h1 className="text-2xl font-bold">Incident Investigation Report</h1>
-                        <p className="text-sm">Report ID: {data.id} | Organization: {session.orgId}</p>
-                    </div>
-
-                    {/* STEP 1: INITIAL INFO */}
-                    <div className={`${step === 1 ? 'block' : 'hidden'} glass-panel p-8 rounded-2xl`}>
-                        <h2 className="text-xl font-bold mb-6 text-blue-400 border-b border-white/10 pb-2">1. Initial Information</h2>
-                        <div className="grid grid-cols-2 gap-6 mb-6">
-                            <div>
-                                <label className="block text-xs uppercase text-slate-500 font-bold mb-1">Site Location</label>
-                                <select value={data.siteId} onChange={e=>setData({...data, siteId: e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white">
-                                    <option value="">Select Site</option>
-                                    {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs uppercase text-slate-500 font-bold mb-1">Incident ID (Auto)</label>
-                                <input value={data.id || ''} readOnly className="w-full bg-slate-800 border border-slate-700 p-3 rounded-lg text-slate-400 font-mono" />
-                            </div>
-                            <div>
-                                <label className="block text-xs uppercase text-slate-500 font-bold mb-1">Date & Time</label>
-                                <div className="flex gap-2">
-                                    <input type="date" value={data.date} onChange={e=>setData({...data, date: e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" />
-                                    <input type="time" value={data.time} onChange={e=>setData({...data, time: e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs uppercase text-slate-500 font-bold mb-1">Type</label>
-                                <select value={data.type} onChange={e=>setData({...data, type: e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white">
-                                    <option>Near Miss</option>
-                                    <option>Accident</option>
-                                    <option>Hazard Observation</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-xs uppercase text-slate-500 font-bold mb-1">Description of Incident</label>
-                            <textarea rows="5" value={data.description} onChange={e=>setData({...data, description: e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-white" placeholder="Describe exactly what happened..."></textarea>
+                    {/* PRINT HEADER */}
+                    <div className="hidden print:block text-center border-b-2 border-black pb-4 mb-6">
+                        <h1 className="text-3xl font-bold uppercase tracking-widest">Incident Investigation Report</h1>
+                        <div className="flex justify-between mt-2 text-sm">
+                            <span><strong>ID:</strong> {data.id}</span>
+                            <span><strong>Site:</strong> {data.siteId}</span>
+                            <span><strong>Date:</strong> {data.date}</span>
                         </div>
                     </div>
 
-                    {/* STEP 2: INVESTIGATION */}
-                    <div className={`${step === 2 ? 'block' : 'hidden'} space-y-6`}>
-                        <div className="glass-panel p-8 rounded-2xl">
-                            <h2 className="text-xl font-bold mb-6 text-blue-400 border-b border-white/10 pb-2">2. Investigation Tools</h2>
+                    {/* SECTION 1: INITIAL DATA */}
+                    <div className={step === 1 ? 'block' : 'hidden print:block'}>
+                        <div className="glass-panel p-8 rounded-2xl mb-6">
+                            <h2 className="text-xl font-bold mb-6 text-blue-400 border-b border-white/10 pb-2">1. Initial Information</h2>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-4">
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Site Location</label><select className="w-full bg-transparent border border-slate-600 rounded p-2 text-sm text-white" value={data.siteId} onChange={e=>setData({...data, siteId:e.target.value})}><option value="">Select</option>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select className="w-full bg-transparent border border-slate-600 rounded p-2 text-sm text-white" value={data.type} onChange={e=>setData({...data, type:e.target.value})}><option>Near Miss</option><option>Accident</option></select></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" className="w-full bg-transparent border border-slate-600 rounded p-2 text-sm text-white" value={data.date} onChange={e=>setData({...data, date:e.target.value})} /></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" className="w-full bg-transparent border border-slate-600 rounded p-2 text-sm text-white" value={data.time} onChange={e=>setData({...data, time:e.target.value})} /></div>
+                            </div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" className="w-full bg-transparent border border-slate-600 rounded p-2 text-sm text-white" value={data.description} onChange={e=>setData({...data, description:e.target.value})}></textarea></div>
+                        </div>
+                    </div>
+
+                    {/* SECTION 2: INVESTIGATION */}
+                    <div className={step === 2 ? 'block' : 'hidden print:block'}>
+                        <div className="glass-panel p-8 rounded-2xl mb-6">
+                            <h2 className="text-xl font-bold mb-6 text-purple-400 border-b border-white/10 pb-2">2. Investigation & Root Cause</h2>
                             
-                            {/* 5 Whys */}
-                            <div className="mb-8">
-                                <h3 className="font-bold mb-3 text-white"><i className="fas fa-question-circle text-purple-400 mr-2"></i> 5 Whys Analysis</h3>
-                                <div className="space-y-2 pl-4 border-l-2 border-slate-700">
-                                    {data.investigation.fiveWhys.map((why, idx) => (
-                                        <div key={idx} className="flex gap-2 items-center">
-                                            <span className="text-xs font-bold text-slate-500 w-12">Why {idx+1}?</span>
-                                            <input value={why} onChange={e => {
-                                                const newWhys = [...data.investigation.fiveWhys];
-                                                newWhys[idx] = e.target.value;
-                                                setData({...data, investigation: {...data.investigation, fiveWhys: newWhys}});
-                                            }} className="flex-1 bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" placeholder={`Reason ${idx+1}`} />
-                                        </div>
-                                    ))}
-                                    <div className="mt-2">
-                                        <label className="text-xs font-bold text-emerald-400">Root Cause Conclusion:</label>
-                                        <input value={data.investigation.rootCause || ''} onChange={e => setData({...data, investigation: {...data.investigation, rootCause: e.target.value}})} className="w-full bg-emerald-900/20 border border-emerald-500/30 p-2 rounded text-white mt-1" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Fishbone Simplified */}
-                            <div className="mb-8">
-                                <h3 className="font-bold mb-3 text-white"><i className="fas fa-fish text-blue-400 mr-2"></i> Fishbone (6M) Factors</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {['Man', 'Machine', 'Material', 'Method', 'Environment'].map(cat => (
-                                        <div key={cat} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
-                                            <label className="text-xs font-bold uppercase text-slate-400">{cat}</label>
-                                            <textarea className="w-full bg-transparent text-sm text-white border-none focus:ring-0 mt-1 resize-none" rows="2" 
-                                                placeholder={`Issues with ${cat}...`}
-                                                value={data.investigation.fishbone[cat.toLowerCase()] || ''}
-                                                onChange={e => {
-                                                    const fb = {...data.investigation.fishbone, [cat.toLowerCase()]: e.target.value};
-                                                    setData({...data, investigation: {...data.investigation, fishbone: fb}});
-                                                }}
-                                            ></textarea>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Fault Tree Simplified */}
-                            <div>
-                                <h3 className="font-bold mb-3 text-white"><i className="fas fa-sitemap text-orange-400 mr-2"></i> Fault Tree Analysis</h3>
-                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                                    <div className="flex gap-2 mb-2">
-                                        <input id="newFault" className="flex-1 bg-slate-800 border-none rounded p-2 text-sm text-white" placeholder="Add contributing factor..." />
-                                        <button onClick={() => {
-                                            const val = document.getElementById('newFault').value;
-                                            if(val) {
-                                                setData({...data, investigation: {...data.investigation, faultTree: [...data.investigation.faultTree, val]}});
-                                                document.getElementById('newFault').value = '';
-                                            }
-                                        }} className="bg-orange-500 text-white px-3 rounded font-bold">+</button>
-                                    </div>
-                                    <ul className="list-disc pl-5 text-sm text-slate-300">
-                                        {data.investigation.faultTree.map((f, i) => <li key={i}>{f}</li>)}
+                            {/* Visual Fault Tree */}
+                            <div className="mb-10 overflow-x-auto pb-4">
+                                <h3 className="font-bold text-white mb-2 flex items-center gap-2"><i className="fas fa-sitemap text-orange-400"></i> Fault Tree Analysis</h3>
+                                <p className="text-xs text-slate-400 mb-4 no-print">Click items to edit text. Click logic gates (AND/OR) to toggle type. Use + to add branches.</p>
+                                <div className="tree">
+                                    <ul>
+                                        <FaultTreeNode 
+                                            node={data.investigation.faultTreeRoot || { id: 1, label: 'Incident', type: 'AND', children: [] }} 
+                                            onUpdate={(root) => setData({...data, investigation: {...data.investigation, faultTreeRoot: root}})} 
+                                        />
                                     </ul>
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    {/* STEP 3: CAPA */}
-                    <div className={`${step === 3 ? 'block' : 'hidden'} glass-panel p-8 rounded-2xl`}>
-                        <h2 className="text-xl font-bold mb-6 text-blue-400 border-b border-white/10 pb-2">3. Corrective & Preventive Actions</h2>
-                        
-                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 mb-4 no-print">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                                <input id="actDesc" placeholder="Action Description" className="md:col-span-2 bg-slate-800 border border-slate-700 p-2 rounded text-white" />
-                                <input id="actOwner" placeholder="Assigned Dept/User" className="bg-slate-800 border border-slate-700 p-2 rounded text-white" />
-                                <input id="actDate" type="date" className="bg-slate-800 border border-slate-700 p-2 rounded text-white" />
-                            </div>
-                            <button onClick={() => {
-                                const desc = document.getElementById('actDesc').value;
-                                const owner = document.getElementById('actOwner').value;
-                                const date = document.getElementById('actDate').value;
-                                if(desc && owner && date) {
-                                    setData({...data, capa: [...data.capa, { desc, owner, dueDate: date, status: 'Open' }]});
-                                    document.getElementById('actDesc').value = '';
-                                }
-                            }} className="w-full mt-2 bg-blue-600 hover:bg-blue-500 py-2 rounded font-bold text-sm">Add Action</button>
-                        </div>
+                            <hr className="border-slate-700 my-8"/>
 
-                        <table className="w-full text-left text-sm">
-                            <thead className="text-xs uppercase text-slate-500 border-b border-slate-700">
-                                <tr><th>Action</th><th>Owner</th><th>Due Date</th><th>Status</th></tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800">
-                                {data.capa.map((action, idx) => (
-                                    <tr key={idx}>
-                                        <td className="py-3 pr-2">{action.desc}</td>
-                                        <td className="py-3">{action.owner}</td>
-                                        <td className="py-3 font-mono">{action.dueDate}</td>
-                                        <td className="py-3"><span className="bg-orange-500/20 text-orange-400 px-2 py-1 rounded text-xs">{action.status}</span></td>
-                                    </tr>
+                            {/* 5 Whys */}
+                            <div className="mb-8">
+                                <h3 className="font-bold text-white mb-2"><i className="fas fa-question-circle text-blue-400"></i> 5-Whys Analysis</h3>
+                                {data.investigation.fiveWhys.map((w,i) => (
+                                    <div key={i} className="flex gap-2 mb-2 items-center">
+                                        <span className="text-xs font-bold w-12 text-slate-500">Why {i+1}?</span>
+                                        <input className="flex-1 bg-transparent border-b border-slate-700 focus:border-blue-500 outline-none text-sm text-white py-1" value={w} onChange={e=>{const fw=[...data.investigation.fiveWhys]; fw[i]=e.target.value; setData({...data, investigation: {...data.investigation, fiveWhys: fw}})}} />
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
+                            </div>
+
+                            {/* Fishbone Inputs */}
+                            <div className="grid grid-cols-2 gap-6">
+                                {['Man', 'Machine', 'Material', 'Method'].map(cat => (
+                                    <div key={cat} className="bg-slate-800/30 p-3 rounded border border-slate-700">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-[10px] font-bold uppercase text-slate-400">{cat}</label>
+                                            <button onClick={()=>addFishboneItem(cat.toLowerCase())} className="text-xs text-blue-400 no-print">+ Add</button>
+                                        </div>
+                                        {(data.investigation.fishbone[cat.toLowerCase()] || []).map((cause, i) => (
+                                            <input key={i} className="w-full bg-transparent border-b border-slate-600 text-xs text-white mb-1 outline-none" value={cause} onChange={e=>updateFishbone(cat.toLowerCase(), i, e.target.value)} placeholder={`Cause ${i+1}`} />
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="mt-6">
+                                <label className="text-xs font-bold text-emerald-400 uppercase">Final Root Cause</label>
+                                <textarea rows="2" className="w-full bg-emerald-900/10 border border-emerald-500/30 rounded p-2 text-white mt-1" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation: {...data.investigation, rootCause: e.target.value}})}></textarea>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* STEP 4: REVIEW & SUBMIT */}
-                    <div className={`${step === 4 ? 'block' : 'hidden'} glass-panel p-8 rounded-2xl`}>
-                        <h2 className="text-xl font-bold mb-6 text-blue-400 border-b border-white/10 pb-2">4. Review & Risk Linkage</h2>
-                        
-                        <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700 flex justify-between items-center mb-6">
-                            <div>
-                                <h3 className="font-bold text-white">Risk Assessment Update</h3>
-                                <p className="text-sm text-slate-400">Does this incident require updating the HIRA/Risk Register?</p>
+                    {/* SECTION 3: CAPA */}
+                    <div className={step === 3 ? 'block' : 'hidden print:block'}>
+                        <div className="glass-panel p-8 rounded-2xl mb-6">
+                            <h2 className="text-xl font-bold mb-6 text-orange-400 border-b border-white/10 pb-2">3. Corrective Actions (CAPA)</h2>
+                            <div className="bg-slate-900/50 p-4 rounded mb-4 no-print">
+                                <div className="grid grid-cols-4 gap-2 mb-2">
+                                    <input id="cDesc" placeholder="Action Required" className="col-span-2 bg-slate-800 border border-slate-700 rounded p-2 text-white text-xs"/>
+                                    <input id="cOwn" placeholder="Responsibility" className="bg-slate-800 border border-slate-700 rounded p-2 text-white text-xs"/>
+                                    <input id="cDate" type="date" className="bg-slate-800 border border-slate-700 rounded p-2 text-white text-xs"/>
+                                </div>
+                                <button onClick={()=>{
+                                    const d=document.getElementById('cDesc').value, o=document.getElementById('cOwn').value, t=document.getElementById('cDate').value;
+                                    if(d){ setData({...data, capa: [...data.capa, {desc:d, owner:o, dueDate:t, status:'Open'}]}); document.getElementById('cDesc').value=''; }
+                                }} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded">Add Action</button>
                             </div>
-                            <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2">
-                                <i className="fas fa-external-link-alt"></i> Open Risk Register
-                            </a>
+                            <table className="w-full text-left text-sm">
+                                <thead className="border-b border-slate-700 text-xs uppercase text-slate-500"><tr><th>Action</th><th>Responsibility</th><th>Due Date</th><th>Status</th></tr></thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {data.capa.map((c,i)=>(<tr key={i}><td className="py-2">{c.desc}</td><td>{c.owner}</td><td>{c.dueDate}</td><td>{c.status}</td></tr>))}
+                                </tbody>
+                            </table>
                         </div>
-                        
-                        <div className="flex items-center gap-3 mb-8">
-                            <input type="checkbox" id="riskCheck" checked={data.riskReview} onChange={e => setData({...data, riskReview: e.target.checked})} className="w-5 h-5" />
-                            <label htmlFor="riskCheck" className="text-sm text-white">I confirm that the Risk Assessment has been reviewed/updated based on this incident.</label>
-                        </div>
+                    </div>
 
-                        <div className="border-t border-slate-700 pt-6 flex justify-end gap-4 no-print">
-                            <button onClick={onBack} className="px-6 py-3 rounded-xl border border-slate-600 text-slate-300 font-bold">Cancel</button>
-                            <button onClick={handleSave} className="px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/20">
-                                <i className="fas fa-save mr-2"></i> Save & Close Case
-                            </button>
+                    {/* SECTION 4: REVIEW */}
+                    <div className={step === 4 ? 'block' : 'hidden print:block'}>
+                        <div className="glass-panel p-8 rounded-2xl mb-6">
+                            <h2 className="text-xl font-bold mb-6 text-emerald-400 border-b border-white/10 pb-2">4. Review & Sign-off</h2>
+                            <div className="flex justify-between items-center bg-slate-800 p-4 rounded mb-6 no-print">
+                                <div><h4 className="font-bold text-white">Risk Register Update</h4><p className="text-xs text-slate-400">Update HIRA with new controls?</p></div>
+                                <a href="risk.html" target="_blank" className="bg-purple-600 text-white text-xs font-bold px-4 py-2 rounded">Go to Risk Module</a>
+                            </div>
+                            <div className="flex gap-2 items-center mb-6">
+                                <input type="checkbox" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} className="w-4 h-4"/>
+                                <label className="text-sm text-white">I confirm the Risk Assessment has been reviewed.</label>
+                            </div>
+                            <div className="flex justify-end no-print">
+                                <button onClick={()=>onSave(data)} className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold px-8 py-3 rounded-xl shadow-lg">Save & Close</button>
+                            </div>
                         </div>
                     </div>
 
@@ -343,41 +354,35 @@
             );
         };
 
-        // --- ROOT APP ---
         const App = () => {
-            const [view, setView] = useState('list'); // 'list' or 'form'
+            const [view, setView] = useState('list');
             const [session, setSession] = useState(null);
             const [sites, setSites] = useState([]);
             const [incidents, setIncidents] = useState([]);
-            const [editData, setEditData] = useState(null);
+            const [currentData, setCurrentData] = useState(null);
 
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
-                if(!s) window.location.href = 'index.html';
-                setSession(JSON.parse(s));
-                fetchData(JSON.parse(s).orgId);
+                if(!s) { window.location.href = 'index.html'; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+                fetchData(sess.orgId);
             }, []);
 
             const fetchData = async (orgId) => {
                 const dbRef = window.fb.ref(window.db);
-                const snapshot = await window.fb.get(window.fb.child(dbRef, `organizations/${orgId}`));
-                if(snapshot.exists()) {
-                    const val = snapshot.val();
+                const snap = await window.fb.get(window.fb.child(dbRef, `organizations/${orgId}`));
+                if(snap.exists()) {
+                    const val = snap.val();
                     setSites(val.sites ? Object.values(val.sites) : []);
-                    const incList = val.incidents ? Object.entries(val.incidents).map(([k,v]) => ({firebaseKey: k, ...v})) : [];
-                    setIncidents(incList);
+                    setIncidents(val.incidents ? Object.entries(val.incidents).map(([k,v]) => ({firebaseKey:k, ...v})) : []);
                 }
             };
 
-            const saveIncident = async (data) => {
+            const handleSave = async (data) => {
                 const dbPath = `organizations/${session.orgId}/incidents`;
-                if(data.firebaseKey) {
-                    // Update
-                    await window.fb.update(window.fb.ref(window.db, `${dbPath}/${data.firebaseKey}`), data);
-                } else {
-                    // New
-                    await window.fb.push(window.fb.ref(window.db, dbPath), data);
-                }
+                if(data.firebaseKey) await window.fb.update(window.fb.ref(window.db, `${dbPath}/${data.firebaseKey}`), data);
+                else await window.fb.push(window.fb.ref(window.db, dbPath), data);
                 fetchData(session.orgId);
                 setView('list');
             };
@@ -385,40 +390,25 @@
             if(!session) return null;
 
             return (
-                <div className="flex-1 flex flex-col p-6 max-w-7xl mx-auto w-full">
-                    {view === 'list' && (
-                        <div className="animate-fade-in">
-                            <div className="flex justify-between items-center mb-8">
-                                <div>
-                                    <h1 className="text-3xl font-bold text-white">Incident Dashboard</h1>
-                                    <p className="text-slate-400">Track and investigate safety events</p>
+                <div className="flex flex-col h-full bg-slate-950 text-white min-h-screen">
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
+                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-home"></i></a><h1 className="font-bold">Incidents</h1></div>
+                        <span className="text-xs bg-slate-800 px-3 py-1 rounded text-slate-400">{session.orgId}</span>
+                    </div>
+                    <div className="p-6 flex-1 overflow-y-auto">
+                        {view === 'list' && (
+                            <div className="max-w-7xl mx-auto animate-fade-in">
+                                <div className="flex justify-between mb-8">
+                                    <h2 className="text-3xl font-bold">Incident Dashboard</h2>
+                                    <button onClick={()=>{setCurrentData(null); setView('form')}} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow">+ Report New</button>
                                 </div>
-                                <div className="flex gap-4">
-                                    <a href="home.html" className="px-4 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white font-bold">Back to Hub</a>
-                                    <button onClick={() => { setEditData(null); setView('form'); }} className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg">
-                                        + Report Incident
-                                    </button>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {incidents.map(inc => <IncidentCard key={inc.id} data={inc} onView={(d)=>{setCurrentData(d); setView('form')}} />)}
                                 </div>
                             </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {incidents.length === 0 && <div className="col-span-full text-center py-20 text-slate-500">No incidents reported yet.</div>}
-                                {incidents.map(inc => (
-                                    <IncidentCard key={inc.id} incident={inc} onView={(data) => { setEditData(data); setView('form'); }} />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {view === 'form' && (
-                        <IncidentForm 
-                            session={session} 
-                            sites={sites} 
-                            existingData={editData} 
-                            onBack={() => setView('list')} 
-                            onSave={saveIncident} 
-                        />
-                    )}
+                        )}
+                        {view === 'form' && <IncidentForm session={session} sites={sites} initialData={currentData} onBack={()=>setView('list')} onSave={handleSave} />}
+                    </div>
                 </div>
             );
         };
