@@ -3,61 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISO 45001 | Enterprise Login</title>
+    <title>ISO 45001 | Enterprise Access</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        'display': ['Space Grotesk', 'sans-serif'],
-                        'mono': ['JetBrains Mono', 'monospace'],
-                    }
-                }
-            }
-        }
-    </script>
+    <script>tailwind.config = { theme: { extend: { fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'], } } } }</script>
     <style>
         body { font-family: 'Space Grotesk', sans-serif; }
-        .glass-panel { 
-            background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%);
-            backdrop-filter: blur(20px); 
-            border: 1px solid rgba(59, 130, 246, 0.2);
-        }
-        .glow-effect {
-            box-shadow: 0 0 60px rgba(59, 130, 246, 0.3), 0 0 120px rgba(59, 130, 246, 0.1);
-        }
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(5deg); }
-        }
-        .animate-float { animation: float 6s ease-in-out infinite; }
-        .animate-float-delayed { animation: float 6s ease-in-out infinite 2s; }
+        .glass-panel { background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(59, 130, 246, 0.2); }
         .input-field { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .input-field:focus { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
     </style>
 </head>
-<body class="bg-slate-950 min-h-screen flex items-center justify-center overflow-hidden relative">
+<body class="bg-slate-950 min-h-screen flex items-center justify-center relative overflow-hidden">
 
-    <div class="absolute inset-0 z-0 overflow-hidden">
-        <div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-[150px] animate-float"></div>
-        <div class="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-emerald-600/15 rounded-full blur-[120px] animate-float-delayed"></div>
-        <div class="absolute inset-0" style="background-image: radial-gradient(circle at 1px 1px, rgba(59, 130, 246, 0.05) 1px, transparent 0); background-size: 40px 40px;"></div>
-    </div>
+    <div class="absolute inset-0 z-0"><div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-900/20 rounded-full blur-[150px]"></div></div>
 
     <div id="root" class="z-10 w-full max-w-md px-6"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, get, set, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY", 
+            apiKey: "YOUR_API_KEY", // <--- REPLACE THIS
             authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
             databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
             projectId: "YOUR_PROJECT_ID",
@@ -68,162 +40,141 @@
 
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
-        
-        // Expose Firebase functions
-        window.firebase_get = get;
-        window.firebase_ref = ref;
-        window.firebase_child = child;
+        window.fb = { get, ref, set, child };
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState } = React;
 
-        // FIXED: InputField is now defined OUTSIDE the Login component
-        const InputField = ({ type = "text", id, label, icon, placeholder, value, onChange, uppercase = false, onFocus, onBlur, focusedId }) => (
-            <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 ml-1 flex items-center gap-2">
-                    <i className={`fas ${icon} text-blue-400`}></i> {label}
-                </label>
-                <input 
-                    type={type}
-                    required
-                    className={`input-field w-full bg-slate-900/50 border-2 ${focusedId === id ? 'border-blue-500' : 'border-slate-700/50'} rounded-xl py-4 px-5 outline-none text-white font-medium ${uppercase ? 'uppercase tracking-wider font-mono' : ''} placeholder:text-slate-500`}
-                    placeholder={placeholder}
-                    value={value}
-                    onChange={e => onChange(uppercase ? e.target.value.toUpperCase() : e.target.value)}
-                    onFocus={() => onFocus(id)}
-                    onBlur={() => onBlur(null)}
-                />
-            </div>
-        );
-
-        const Login = () => {
-            const [formData, setFormData] = useState({ orgId: '', email: '', password: '' });
+        const Auth = () => {
+            const [mode, setMode] = useState('login'); // 'login' or 'join'
+            const [data, setData] = useState({ orgId: '', email: '', password: '', name: '' });
             const [loading, setLoading] = useState(false);
-            const [error, setError] = useState('');
-            const [focusedField, setFocusedField] = useState(null);
+            const [msg, setMsg] = useState({ text: '', type: '' });
 
-            useEffect(() => {
-                if (sessionStorage.getItem('isoSession')) {
-                    window.location.href = "home.html";
-                }
-            }, []);
-
-            const handleLogin = async (e) => {
+            const handleSubmit = async (e) => {
                 e.preventDefault();
                 setLoading(true);
-                setError('');
-
-                const cleanOrgId = formData.orgId.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                setMsg({ text: '', type: '' });
                 
+                const cleanOrgId = data.orgId.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+
                 try {
-                    const dbRef = window.firebase_ref(window.db);
-                    const snapshot = await window.firebase_get(window.firebase_child(dbRef, `organizations/${cleanOrgId}`));
+                    const dbRef = window.fb.ref(window.db);
+                    const orgSnap = await window.fb.get(window.fb.child(dbRef, `organizations/${cleanOrgId}`));
 
-                    if (!snapshot.exists()) {
-                        setError("Organization ID not found.");
-                        setLoading(false);
-                        return;
+                    if (!orgSnap.exists()) {
+                        throw new Error("Organization ID not found.");
                     }
 
-                    const orgData = snapshot.val();
+                    const orgData = orgSnap.val();
                     const users = orgData.users || {};
-                    const userList = Array.isArray(users) ? users : Object.values(users);
-                    
-                    const user = userList.find(u => 
-                        u.email.toLowerCase() === formData.email.toLowerCase() && 
-                        u.password === formData.password
-                    );
+                    // Find user by email (Object.values handles the Firebase object structure)
+                    const userEntry = Object.entries(users).find(([key, u]) => u.email.toLowerCase() === data.email.toLowerCase());
 
-                    if (!user) {
-                        setError("Invalid email or password.");
-                        setLoading(false);
-                        return;
+                    if (mode === 'login') {
+                        // --- LOGIN LOGIC ---
+                        if (!userEntry) throw new Error("User not found.");
+                        const [uid, user] = userEntry;
+
+                        if (user.password !== data.password) throw new Error("Incorrect password.");
+                        
+                        // CHECK STATUS
+                        if (user.status === 'Pending') throw new Error("Account pending Owner approval.");
+
+                        const session = {
+                            orgId: cleanOrgId, orgName: orgData.meta.name,
+                            user: user.name, email: user.email, role: user.role,
+                            assignedSite: user.assignedSite || '', uid: uid
+                        };
+                        sessionStorage.setItem('isoSession', JSON.stringify(session));
+                        window.location.href = "home.html";
+                    
+                    } else {
+                        // --- JOIN TEAM LOGIC ---
+                        if (userEntry) throw new Error("Email already registered in this organization.");
+
+                        const newUid = `USR-${Date.now().toString().substr(-6)}`;
+                        const newUser = {
+                            id: newUid,
+                            name: data.name,
+                            email: data.email,
+                            password: data.password, // In real app, hash this!
+                            role: 'Guest',         // Default role
+                            status: 'Pending',     // <--- KEY: Pending Approval
+                            assignedSite: ''
+                        };
+
+                        await window.fb.set(window.fb.ref(window.db, `organizations/${cleanOrgId}/users/${newUid}`), newUser);
+                        
+                        setMsg({ text: "Request sent! Ask your Owner to approve you.", type: "success" });
+                        setMode('login');
+                        setData({ ...data, password: '' });
                     }
 
-                    const session = {
-                        orgId: cleanOrgId,
-                        orgName: orgData.meta.name,
-                        user: user.name,
-                        email: user.email,
-                        role: user.role,
-                        assignedSite: user.assignedSite || '',
-                        token: Date.now().toString(36)
-                    };
-
-                    sessionStorage.setItem('isoSession', JSON.stringify(session));
-                    localStorage.setItem('orgId', cleanOrgId);
-                    window.location.href = "home.html";
-                    
                 } catch (err) {
-                    console.error(err);
-                    setError("Connection failed. Check API Key/Config.");
-                    setLoading(false);
+                    setMsg({ text: err.message, type: "error" });
                 }
+                setLoading(false);
             };
 
+            const Input = ({ label, type="text", val, field, placeholder, icon }) => (
+                <div className="mb-4">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">{label}</label>
+                    <div className="relative">
+                        <i className={`fas ${icon} absolute left-4 top-4 text-slate-500`}></i>
+                        <input type={type} required 
+                            className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-blue-500 outline-none transition-all"
+                            placeholder={placeholder}
+                            value={data[field]}
+                            onChange={e => setData({...data, [field]: e.target.value})}
+                        />
+                    </div>
+                </div>
+            );
+
             return (
-                <div className="glass-panel rounded-3xl p-10 shadow-2xl glow-effect relative overflow-hidden">
-                    <div className="text-center mb-10 relative">
-                        <div className="relative inline-block">
-                            <div className="absolute inset-0 bg-blue-500/30 rounded-2xl blur-xl"></div>
-                            <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl mx-auto flex items-center justify-center shadow-xl">
-                                <i className="fas fa-shield-halved text-4xl text-white"></i>
-                            </div>
-                        </div>
-                        <h1 className="text-3xl font-bold text-white mt-6 tracking-tight">ISO 45001</h1>
-                        <p className="text-blue-400 text-xs font-mono uppercase tracking-[0.3em] mt-2">Enterprise Login</p>
+                <div className="glass-panel rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+                    <div className="text-center mb-8">
+                        <h1 className="text-2xl font-bold text-white">ISO 45001</h1>
+                        <p className="text-blue-400 text-xs font-mono uppercase tracking-widest mt-1">
+                            {mode === 'login' ? 'Secure Login' : 'Join Organization'}
+                        </p>
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-5 relative">
-                        {error && (
-                            <div className="bg-red-500/20 border border-red-500/50 p-4 rounded-xl text-sm text-red-200 text-center font-medium flex items-center gap-3 justify-center">
-                                <i className="fas fa-exclamation-circle"></i> {error}
-                            </div>
+                    {msg.text && (
+                        <div className={`p-3 rounded-lg text-xs font-bold text-center mb-4 ${msg.type === 'error' ? 'bg-red-500/20 text-red-200' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                            {msg.text}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit}>
+                        <Input label="Organization ID" field="orgId" val={data.orgId} placeholder="ORG-001" icon="fa-building" />
+                        
+                        {mode === 'join' && (
+                            <Input label="Full Name" field="name" val={data.name} placeholder="John Doe" icon="fa-user" />
                         )}
                         
-                        <InputField 
-                            id="org" label="Organization ID" icon="fa-building" placeholder="ORG-001"
-                            value={formData.orgId} 
-                            onChange={(v) => setFormData(prev => ({...prev, orgId: v}))} 
-                            uppercase={true}
-                            onFocus={setFocusedField} onBlur={setFocusedField} focusedId={focusedField}
-                        />
+                        <Input label="Email" type="email" field="email" val={data.email} placeholder="user@company.com" icon="fa-envelope" />
+                        <Input label="Password" type="password" field="password" val={data.password} placeholder="••••••••" icon="fa-lock" />
 
-                        <InputField 
-                            id="email" type="email" label="User Email" icon="fa-envelope" placeholder="admin@company.com"
-                            value={formData.email} 
-                            onChange={(v) => setFormData(prev => ({...prev, email: v}))}
-                            onFocus={setFocusedField} onBlur={setFocusedField} focusedId={focusedField}
-                        />
-
-                        <InputField 
-                            id="password" type="password" label="Password" icon="fa-lock" placeholder="••••••••"
-                            value={formData.password} 
-                            onChange={(v) => setFormData(prev => ({...prev, password: v}))}
-                            onFocus={setFocusedField} onBlur={setFocusedField} focusedId={focusedField}
-                        />
-
-                        <button 
-                            type="submit" disabled={loading}
-                            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-blue-500/25 transition-all duration-300 mt-4 flex items-center justify-center gap-3"
-                        >
-                            {loading ? <i className="fas fa-circle-notch fa-spin text-lg"></i> : <span>Secure Login</span>}
+                        <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold uppercase text-sm tracking-wider shadow-lg shadow-blue-500/20 transition-all mt-2">
+                            {loading ? <i className="fas fa-spinner fa-spin"></i> : (mode === 'login' ? 'Login' : 'Send Request')}
                         </button>
                     </form>
-                    
-                    <div className="mt-10 text-center pt-6 border-t border-slate-700/50">
-                        <p className="text-slate-500 text-xs mb-3">New Organization?</p>
-                        <a href="register.html" className="inline-flex items-center gap-2 text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors group">
-                            Initialize System <i className="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
-                        </a>
+
+                    <div className="mt-6 pt-6 border-t border-slate-700/50 flex justify-between items-center text-xs">
+                        <button onClick={() => setMode(mode === 'login' ? 'join' : 'login')} className="text-slate-400 hover:text-white transition-colors">
+                            {mode === 'login' ? 'Join Existing Team' : 'Back to Login'}
+                        </button>
+                        <a href="register.html" className="text-blue-400 hover:text-blue-300 font-bold">New Org?</a>
                     </div>
                 </div>
             );
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<Login />);
+        root.render(<Auth />);
     </script>
 </body>
 </html>
