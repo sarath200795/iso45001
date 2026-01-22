@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OHS Management System</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; background-color: #f4f6f8; }
+        .container { max-width: 400px; margin: 50px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .dashboard-container { display: none; max-width: 1200px; margin: 0 auto; }
+        
+        /* Forms */
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #0056b3; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #004494; }
+        .toggle-link { text-align: center; margin-top: 10px; font-size: 0.9em; color: #0056b3; cursor: pointer; }
+        
+        /* Dashboard Sidebar & Content */
+        .app-header { background: #0056b3; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .app-body { display: flex; height: 100vh; }
+        .sidebar { width: 250px; background: white; border-right: 1px solid #ddd; }
+        .sidebar button { background: none; color: #333; text-align: left; padding: 15px; margin: 0; border-bottom: 1px solid #eee; border-radius: 0; }
+        .sidebar button:hover, .sidebar button.active { background-color: #f0f0f0; font-weight: bold; border-left: 4px solid #0056b3; }
+        .main-content { flex: 1; padding: 20px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Utility */
+        .hidden { display: none; }
+        .error { color: red; font-size: 0.9em; margin-bottom: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div id="login-page" class="container">
+        <h2 style="text-align: center;">Login</h2>
+        <div id="login-error" class="error"></div>
+        <input type="text" id="login-email" placeholder="Email (User ID)">
+        <input type="password" id="login-password" placeholder="Password">
+        <input type="text" id="login-org-id" placeholder="Organization ID">
+        <button onclick="handleLogin()">Log In</button>
+        <div class="toggle-link" onclick="showSignup()">Don't have an account? Sign Up</div>
+    </div>
+
+    <div id="signup-page" class="container hidden">
+        <h2 style="text-align: center;">Sign Up</h2>
+        <div id="signup-error" class="error"></div>
+        <input type="text" id="signup-email" placeholder="Email (User ID)">
+        <input type="password" id="signup-password" placeholder="Password">
+        <input type="text" id="signup-org-id" placeholder="Organization ID (Required)">
+        <button onclick="handleSignup()">Sign Up</button>
+        <div class="toggle-link" onclick="showLogin()">Already have an account? Log In</div>
+    </div>
+
+    <div id="dashboard-page" class="dashboard-container">
+        <div class="app-header">
+            <span id="header-title">ISO 45001 Management System</span>
+            <button style="width: auto; background: #003d6b;" onclick="handleLogout()">Logout</button>
+        </div>
+        <div class="app-body">
+            <nav class="sidebar">
+                <button onclick="switchTab('incident')" class="active">Incident Reporting</button>
+                <button onclick="switchTab('audit')">Internal Audit</button>
+                <button onclick="switchTab('improvement')">Continuous Improvement</button>
+                <button onclick="switchTab('sites')">Site Registration</button>
+                <button onclick="switchTab('users')">User Management</button>
+            </nav>
+            <main class="main-content">
+                <div id="incident" class="tab-content active">
+                    <h3>Incident Reporting</h3>
+                    <p>Log and track workplace incidents here.</p>
+                    <button style="width: 200px;">+ New Incident</button>
+                </div>
+                <div id="audit" class="tab-content">
+                    <h3>Internal Audit</h3>
+                    <p>Manage audit schedules and findings.</p>
+                </div>
+                <div id="improvement" class="tab-content">
+                    <h3>Continuous Improvement</h3>
+                    <p>Track corrective actions and opportunities.</p>
+                </div>
+                <div id="sites" class="tab-content">
+                    <h3>Site Registration</h3>
+                    <p>Register and manage organization sites.</p>
+                </div>
+                <div id="users" class="tab-content">
+                    <h3>User Management</h3>
+                    <p>Administer user roles and access.</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } 
+            from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getDatabase, ref, set, get, child } 
+            from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // TODO: Replace the following with your app's Firebase project configuration
+        // You get this from Firebase Console > Project Settings
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY_HERE",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://iso-45001-bd98d-default-rtdb.firebaseio.com/",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        // --- GLOBAL FUNCTIONS (Attached to window for HTML access) ---
+
+        window.handleSignup = async () => {
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const orgId = document.getElementById('signup-org-id').value;
+            const errorDiv = document.getElementById('signup-error');
+
+            if(!orgId) { errorDiv.innerText = "Organization ID is required"; return; }
+
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                
+                // Save extra user details (Org ID) to Realtime Database
+                await set(ref(db, 'users/' + user.uid), {
+                    email: email,
+                    orgId: orgId,
+                    role: 'admin' // Defaulting to admin for the first user
+                });
+                
+                // Also create the Org node if it doesn't exist
+                await set(ref(db, 'organizations/' + orgId + '/metadata'), {
+                    created_by: user.uid,
+                    created_at: new Date().toISOString()
+                });
+
+                alert("Account created successfully!");
+            } catch (error) {
+                errorDiv.innerText = error.message;
+            }
+        };
+
+        window.handleLogin = async () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const inputOrgId = document.getElementById('login-org-id').value; // Optional check
+            const errorDiv = document.getElementById('login-error');
+
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                
+                // Verify Org ID matches (if you want strict Org ID enforcement on login)
+                const snapshot = await get(child(ref(db), `users/${user.uid}`));
+                if (snapshot.exists()) {
+                    const userData = snapshot.val();
+                    if(inputOrgId && userData.orgId !== inputOrgId) {
+                         throw new Error("User does not belong to this Organization ID");
+                    }
+                } else {
+                    console.log("No data available");
+                }
+            } catch (error) {
+                errorDiv.innerText = error.message;
+            }
+        };
+
+        window.handleLogout = () => {
+            signOut(auth).then(() => {
+                window.location.reload();
+            });
+        };
+
+        // --- UI LOGIC ---
+
+        // Listen for auth state changes
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in
+                document.getElementById('login-page').style.display = 'none';
+                document.getElementById('signup-page').style.display = 'none';
+                document.getElementById('dashboard-page').style.display = 'block';
+            } else {
+                // User is signed out
+                document.getElementById('dashboard-page').style.display = 'none';
+                document.getElementById('login-page').style.display = 'block';
+            }
+        });
+
+        window.showSignup = () => {
+            document.getElementById('login-page').classList.add('hidden');
+            document.getElementById('signup-page').classList.remove('hidden');
+            document.getElementById('signup-page').style.display = 'block'; // Ensure visibility
+            document.getElementById('login-page').style.display = 'none';
+        };
+
+        window.showLogin = () => {
+            document.getElementById('signup-page').classList.add('hidden');
+            document.getElementById('login-page').classList.remove('hidden');
+            document.getElementById('login-page').style.display = 'block';
+            document.getElementById('signup-page').style.display = 'none';
+        };
+
+        window.switchTab = (tabId) => {
+            // Hide all contents
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            // Show selected content
+            document.getElementById(tabId).classList.add('active');
+            
+            // Update sidebar active state
+            document.querySelectorAll('.sidebar button').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+        };
+    </script>
+</body>
+</html>
