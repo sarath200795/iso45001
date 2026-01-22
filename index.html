@@ -46,11 +46,32 @@
     <script type="text/babel">
         const { useState } = React;
 
+        // FIXED: Component defined OUTSIDE the main Auth component
+        // This prevents the "lose focus on every character" bug.
+        const Input = ({ label, type="text", value, onChange, placeholder, icon }) => (
+            <div className="mb-4">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">{label}</label>
+                <div className="relative">
+                    <i className={`fas ${icon} absolute left-4 top-4 text-slate-500`}></i>
+                    <input type={type} required 
+                        className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-blue-500 outline-none transition-all"
+                        placeholder={placeholder}
+                        value={value}
+                        onChange={onChange}
+                    />
+                </div>
+            </div>
+        );
+
         const Auth = () => {
-            const [mode, setMode] = useState('login'); // 'login' or 'join'
+            const [mode, setMode] = useState('login');
             const [data, setData] = useState({ orgId: '', email: '', password: '', name: '' });
             const [loading, setLoading] = useState(false);
             const [msg, setMsg] = useState({ text: '', type: '' });
+
+            const handleChange = (field, value) => {
+                setData(prev => ({ ...prev, [field]: value }));
+            };
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
@@ -69,17 +90,15 @@
 
                     const orgData = orgSnap.val();
                     const users = orgData.users || {};
-                    // Find user by email (Object.values handles the Firebase object structure)
                     const userEntry = Object.entries(users).find(([key, u]) => u.email.toLowerCase() === data.email.toLowerCase());
 
                     if (mode === 'login') {
-                        // --- LOGIN LOGIC ---
+                        // LOGIN LOGIC
                         if (!userEntry) throw new Error("User not found.");
                         const [uid, user] = userEntry;
 
                         if (user.password !== data.password) throw new Error("Incorrect password.");
                         
-                        // CHECK STATUS
                         if (user.status === 'Pending') throw new Error("Account pending Owner approval.");
 
                         const session = {
@@ -91,7 +110,7 @@
                         window.location.href = "home.html";
                     
                     } else {
-                        // --- JOIN TEAM LOGIC ---
+                        // JOIN LOGIC
                         if (userEntry) throw new Error("Email already registered in this organization.");
 
                         const newUid = `USR-${Date.now().toString().substr(-6)}`;
@@ -99,9 +118,9 @@
                             id: newUid,
                             name: data.name,
                             email: data.email,
-                            password: data.password, // In real app, hash this!
-                            role: 'Guest',         // Default role
-                            status: 'Pending',     // <--- KEY: Pending Approval
+                            password: data.password,
+                            role: 'Guest',
+                            status: 'Pending',
                             assignedSite: ''
                         };
 
@@ -109,7 +128,7 @@
                         
                         setMsg({ text: "Request sent! Ask your Owner to approve you.", type: "success" });
                         setMode('login');
-                        setData({ ...data, password: '' });
+                        setData(prev => ({ ...prev, password: '' }));
                     }
 
                 } catch (err) {
@@ -117,21 +136,6 @@
                 }
                 setLoading(false);
             };
-
-            const Input = ({ label, type="text", val, field, placeholder, icon }) => (
-                <div className="mb-4">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">{label}</label>
-                    <div className="relative">
-                        <i className={`fas ${icon} absolute left-4 top-4 text-slate-500`}></i>
-                        <input type={type} required 
-                            className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-blue-500 outline-none transition-all"
-                            placeholder={placeholder}
-                            value={data[field]}
-                            onChange={e => setData({...data, [field]: e.target.value})}
-                        />
-                    </div>
-                </div>
-            );
 
             return (
                 <div className="glass-panel rounded-3xl p-8 shadow-2xl relative overflow-hidden">
@@ -149,14 +153,37 @@
                     )}
 
                     <form onSubmit={handleSubmit}>
-                        <Input label="Organization ID" field="orgId" val={data.orgId} placeholder="ORG-001" icon="fa-building" />
+                        <Input 
+                            label="Organization ID" 
+                            value={data.orgId} 
+                            onChange={(e) => handleChange('orgId', e.target.value)} 
+                            placeholder="ORG-001" icon="fa-building" 
+                        />
                         
                         {mode === 'join' && (
-                            <Input label="Full Name" field="name" val={data.name} placeholder="John Doe" icon="fa-user" />
+                            <Input 
+                                label="Full Name" 
+                                value={data.name} 
+                                onChange={(e) => handleChange('name', e.target.value)} 
+                                placeholder="John Doe" icon="fa-user" 
+                            />
                         )}
                         
-                        <Input label="Email" type="email" field="email" val={data.email} placeholder="user@company.com" icon="fa-envelope" />
-                        <Input label="Password" type="password" field="password" val={data.password} placeholder="••••••••" icon="fa-lock" />
+                        <Input 
+                            label="Email" 
+                            type="email" 
+                            value={data.email} 
+                            onChange={(e) => handleChange('email', e.target.value)} 
+                            placeholder="user@company.com" icon="fa-envelope" 
+                        />
+                        
+                        <Input 
+                            label="Password" 
+                            type="password" 
+                            value={data.password} 
+                            onChange={(e) => handleChange('password', e.target.value)} 
+                            placeholder="••••••••" icon="fa-lock" 
+                        />
 
                         <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold uppercase text-sm tracking-wider shadow-lg shadow-blue-500/20 transition-all mt-2">
                             {loading ? <i className="fas fa-spinner fa-spin"></i> : (mode === 'login' ? 'Login' : 'Send Request')}
