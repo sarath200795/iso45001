@@ -21,13 +21,18 @@
     </script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
-        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.2s; }
+        .glass-panel:hover { border-color: rgba(59, 130, 246, 0.4); transform: translateY(-2px); cursor: pointer; }
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
         /* Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        /* Status Colors */
+        .status-Open { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+        .status-InProgress { color: #facc15; background: rgba(250, 204, 21, 0.1); }
+        .status-Closed { color: #34d399; background: rgba(52, 211, 153, 0.1); }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -35,7 +40,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, push, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, get, push, update, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
@@ -49,7 +54,7 @@
 
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
-        window.fb = { ref, get, push, update };
+        window.fb = { ref, get, push, update, set };
     </script>
 
     <script type="text/babel">
@@ -60,7 +65,83 @@
             "Objective & Targets", "Legal Aspects", "Continual Improvement Plans", "Program Management"
         ];
 
-        // --- COMPONENT: NEW MEETING FORM ---
+        // --- COMPONENT: MEETING DETAIL MODAL (NEW) ---
+        const MeetingDetailModal = ({ meeting, onClose, onUpdateStatus }) => {
+            if (!meeting) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+                    <div className="bg-slate-900 border border-slate-700 w-full max-w-5xl h-[90vh] rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-fade-in">
+                        
+                        {/* Header */}
+                        <div className="p-6 border-b border-slate-700 flex justify-between items-start bg-slate-850">
+                            <div>
+                                <span className="text-xs uppercase font-bold text-blue-400 tracking-wider">{meeting.interaction}</span>
+                                <h2 className="text-2xl font-bold text-white mt-1">{meeting.category}</h2>
+                                <div className="flex gap-4 text-sm text-slate-400 mt-2 font-mono">
+                                    <span><i className="fas fa-calendar mr-2"></i>{meeting.date}</span>
+                                    <span><i className="fas fa-clock mr-2"></i>{meeting.time}</span>
+                                </div>
+                            </div>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white transition text-xl"><i className="fas fa-times"></i></button>
+                        </div>
+
+                        {/* Agenda */}
+                        <div className="p-6 bg-slate-800/50 border-b border-slate-700">
+                            <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Meeting Agenda</h3>
+                            <p className="text-slate-300 text-sm leading-relaxed">{meeting.agenda}</p>
+                        </div>
+
+                        {/* Action Points Table */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <h3 className="text-xs font-bold uppercase text-slate-500 mb-4">Minutes & Action Items</h3>
+                            <div className="overflow-hidden rounded-xl border border-slate-700">
+                                <table className="w-full text-left text-sm text-slate-300">
+                                    <thead className="bg-slate-800 text-xs uppercase font-bold text-slate-400">
+                                        <tr>
+                                            <th className="p-4">Discussion Point</th>
+                                            <th className="p-4">Action Required</th>
+                                            <th className="p-4">Owner / Dept</th>
+                                            <th className="p-4">Due Date</th>
+                                            <th className="p-4 w-40">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-700 bg-slate-900/50">
+                                        {(meeting.minutes || []).map((row, idx) => (
+                                            <tr key={idx} className="hover:bg-slate-800/30 transition">
+                                                <td className="p-4 font-medium text-white">{row.point}</td>
+                                                <td className="p-4 text-blue-300">{row.action}</td>
+                                                <td className="p-4">
+                                                    <div>{row.owner}</div>
+                                                    <div className="text-xs text-slate-500">{row.dept}</div>
+                                                </td>
+                                                <td className="p-4 font-mono text-xs">{row.due}</td>
+                                                <td className="p-4">
+                                                    <select 
+                                                        value={row.status || 'Open'} 
+                                                        onChange={(e) => onUpdateStatus(meeting.id, idx, e.target.value)}
+                                                        className={`text-xs font-bold border-none rounded px-2 py-1.5 cursor-pointer status-${(row.status || 'Open').replace(' ','')}`}
+                                                    >
+                                                        <option value="Open">Open</option>
+                                                        <option value="In Progress">In Progress</option>
+                                                        <option value="Closed">Closed</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {(!meeting.minutes || meeting.minutes.length === 0) && (
+                                            <tr><td colSpan="5" className="p-8 text-center text-slate-500 italic">No action points recorded.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- COMPONENT: MEETING FORM ---
         const MeetingForm = ({ siteId, onSave }) => {
             const [data, setData] = useState({
                 interaction: 'Consultation', category: 'Committee Meeting', date: '', time: '', agenda: '',
@@ -80,78 +161,84 @@
             };
 
             const handleSubmit = () => {
-                if(!data.date || !data.agenda) { alert("Please fill required fields"); return; }
+                if(!data.date || !data.agenda) { alert("Please fill required fields (Date & Agenda)"); return; }
                 onSave(data);
             };
 
             return (
                 <div className="animate-fade-in space-y-6">
-                    <div className="glass-panel p-6 rounded-2xl">
-                        <h3 className="text-blue-400 font-bold mb-4 uppercase text-sm border-b border-white/10 pb-2">1. Meeting Info</h3>
+                    <div className="glass-panel p-6 rounded-2xl cursor-default hover:transform-none hover:border-slate-700">
+                        <h3 className="text-blue-400 font-bold mb-4 uppercase text-sm border-b border-white/10 pb-2">1. Meeting Details</h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                            <div><label className="text-xs text-slate-400">Interaction Type</label><select value={data.interaction} onChange={e=>setData({...data, interaction:e.target.value})}><option>Consultation</option><option>Participation</option></select></div>
-                            <div><label className="text-xs text-slate-400">Meeting Name</label><select value={data.category} onChange={e=>setData({...data, category:e.target.value})}>{MEETING_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
-                            <div><label className="text-xs text-slate-400">Date</label><input type="date" value={data.date} onChange={e=>setData({...data, date:e.target.value})} /></div>
-                            <div><label className="text-xs text-slate-400">Time</label><input type="time" value={data.time} onChange={e=>setData({...data, time:e.target.value})} /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Interaction Type</label><select value={data.interaction} onChange={e=>setData({...data, interaction:e.target.value})}><option>Consultation</option><option>Participation</option></select></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Meeting Category</label><select value={data.category} onChange={e=>setData({...data, category:e.target.value})}>{MEETING_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" value={data.date} onChange={e=>setData({...data, date:e.target.value})} /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" value={data.time} onChange={e=>setData({...data, time:e.target.value})} /></div>
                         </div>
-                        <div><label className="text-xs text-slate-400">Agenda</label><textarea rows="2" value={data.agenda} onChange={e=>setData({...data, agenda:e.target.value})} placeholder="Purpose of meeting..."></textarea></div>
+                        <div><label className="text-[10px] uppercase font-bold text-slate-500">Agenda / Objective</label><textarea rows="2" value={data.agenda} onChange={e=>setData({...data, agenda:e.target.value})} placeholder="Purpose of meeting..."></textarea></div>
                     </div>
 
-                    <div className="glass-panel p-6 rounded-2xl">
+                    <div className="glass-panel p-6 rounded-2xl cursor-default hover:transform-none hover:border-slate-700">
                         <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
-                            <h3 className="text-purple-400 font-bold uppercase text-sm">2. Minutes of Meeting (MOM) & Actions</h3>
-                            <button onClick={addRow} className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded transition">+ Add Point</button>
+                            <h3 className="text-purple-400 font-bold uppercase text-sm">2. Minutes & Action Plan</h3>
+                            <button onClick={addRow} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded transition shadow">+ Add Discussion Point</button>
                         </div>
                         {data.minutes.map((row, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-2 mb-4 bg-slate-800/50 p-3 rounded border border-slate-700 relative group">
-                                <div className="md:col-span-3"><input placeholder="Discussion Point" value={row.point} onChange={e=>updateRow(i,'point',e.target.value)} /></div>
-                                <div className="md:col-span-3"><input placeholder="Action Required" value={row.action} onChange={e=>updateRow(i,'action',e.target.value)} /></div>
-                                <div className="md:col-span-2"><input placeholder="Responsible Person" value={row.owner} onChange={e=>updateRow(i,'owner',e.target.value)} /></div>
-                                <div className="md:col-span-2"><input placeholder="Department" value={row.dept} onChange={e=>updateRow(i,'dept',e.target.value)} /></div>
-                                <div className="md:col-span-2"><input type="date" value={row.due} onChange={e=>updateRow(i,'due',e.target.value)} /></div>
-                                <button onClick={()=>removeRow(i)} className="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition">x</button>
+                            <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-2 mb-3 bg-slate-800/50 p-3 rounded-lg border border-slate-700 relative group items-start">
+                                <div className="md:col-span-3"><input placeholder="Discussion Point" value={row.point} onChange={e=>updateRow(i,'point',e.target.value)} className="text-sm bg-slate-900" /></div>
+                                <div className="md:col-span-3"><input placeholder="Action Required" value={row.action} onChange={e=>updateRow(i,'action',e.target.value)} className="text-sm bg-slate-900 border-blue-900/50 focus:border-blue-500" /></div>
+                                <div className="md:col-span-2"><input placeholder="Owner" value={row.owner} onChange={e=>updateRow(i,'owner',e.target.value)} className="text-sm bg-slate-900" /></div>
+                                <div className="md:col-span-2"><input placeholder="Dept" value={row.dept} onChange={e=>updateRow(i,'dept',e.target.value)} className="text-sm bg-slate-900" /></div>
+                                <div className="md:col-span-2"><input type="date" value={row.due} onChange={e=>updateRow(i,'due',e.target.value)} className="text-sm bg-slate-900" /></div>
+                                <button onClick={()=>removeRow(i)} className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-400 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-lg">x</button>
                             </div>
                         ))}
-                        {data.minutes.length === 0 && <p className="text-slate-500 text-center text-sm italic py-4">No minutes recorded yet.</p>}
+                        {data.minutes.length === 0 && <div className="text-slate-600 text-center text-sm py-8 border-2 border-dashed border-slate-800 rounded-xl">No minutes added yet. Click "+ Add Discussion Point" to begin.</div>}
                     </div>
 
                     <div className="flex justify-end">
-                        <button onClick={handleSubmit} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition">Save Meeting Record</button>
+                        <button onClick={handleSubmit} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition transform hover:-translate-y-1">Save Meeting Record</button>
                     </div>
                 </div>
             );
         };
 
-        // --- COMPONENT: MEETING CARDS ---
-        const MeetingList = ({ meetings }) => {
+        // --- COMPONENT: MEETING LIST ---
+        const MeetingList = ({ meetings, onOpenDetail }) => {
             const formatDate = (dateStr) => {
                 if(!dateStr) return '';
-                return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+                const d = new Date(dateStr);
+                return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
             };
 
             const getStatus = (minutes) => {
-                if(!minutes) return { label: 'No Actions', color: 'text-slate-400' };
+                if(!minutes || minutes.length === 0) return { label: 'No Actions', color: 'text-slate-500', bg: 'bg-slate-800' };
                 const pending = minutes.filter(m => m.status !== 'Closed').length;
                 return pending > 0 
-                    ? { label: `${pending} Pending Points`, color: 'text-orange-400' }
-                    : { label: 'All Closed', color: 'text-emerald-400' };
+                    ? { label: `${pending} Pending`, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30' }
+                    : { label: 'All Closed', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' };
             };
 
             return (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
-                    {meetings.length === 0 && <div className="col-span-full text-center py-20 text-slate-500">No meetings recorded for this site.</div>}
+                    {meetings.length === 0 && <div className="col-span-full text-center py-20 text-slate-500 border-2 border-dashed border-slate-800 rounded-3xl"><h3 className="text-xl font-bold mb-2">No Meetings Found</h3><p>Switch to the "Record Meeting" tab to add one.</p></div>}
                     {meetings.map(m => {
                         const status = getStatus(m.minutes);
                         return (
-                            <div key={m.id} className="glass-panel p-5 rounded-2xl border-l-4 border-blue-500 hover:-translate-y-1 transition duration-300">
+                            <div key={m.id} onClick={() => onOpenDetail(m)} className="glass-panel p-5 rounded-2xl border-l-4 border-blue-500 relative group">
                                 <div className="flex justify-between items-start mb-3">
                                     <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">{m.interaction}</span>
-                                    <span className={`text-[10px] font-bold px-2 py-1 rounded bg-slate-800 ${status.color}`}>{status.label}</span>
+                                    <span className={`text-[10px] font-bold px-2 py-1 rounded border ${status.bg} ${status.color}`}>{status.label}</span>
                                 </div>
-                                <h3 className="text-lg font-bold text-white mb-1">{m.category}</h3>
-                                <p className="text-xs text-slate-400 font-mono mb-4"><i className="fas fa-calendar-alt mr-2"></i>{formatDate(m.date)}</p>
-                                <div className="border-t border-slate-700 pt-3 mt-auto">
-                                    <p className="text-sm text-slate-300 line-clamp-2">{m.agenda}</p>
+                                <h3 className="text-lg font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{m.category}</h3>
+                                <div className="text-xs text-slate-400 font-mono mb-4 flex items-center gap-4">
+                                    <span><i className="fas fa-calendar-alt mr-1.5 text-blue-500"></i>{formatDate(m.date)}</span>
+                                </div>
+                                <div className="border-t border-slate-700/50 pt-3 mt-auto">
+                                    <p className="text-xs text-slate-400 line-clamp-2 italic">"{m.agenda}"</p>
+                                </div>
+                                <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-blue-400 font-bold">
+                                    View Details <i className="fas fa-arrow-right ml-1"></i>
                                 </div>
                             </div>
                         );
@@ -165,12 +252,11 @@
             const [filterCat, setFilterCat] = useState('All');
             const [filterMonth, setFilterMonth] = useState('All');
 
-            // 1. Flatten Data & Filter
             const filteredData = useMemo(() => {
                 let flat = [];
                 meetings.forEach(m => {
                     const mDate = new Date(m.date);
-                    const mMonth = mDate.toLocaleString('default', { month: 'long' });
+                    const mMonth = isNaN(mDate.getTime()) ? 'Unknown' : mDate.toLocaleString('default', { month: 'long' });
                     
                     if (filterCat !== 'All' && m.category !== filterCat) return;
                     if (filterMonth !== 'All' && mMonth !== filterMonth) return;
@@ -192,9 +278,8 @@
                 return flat;
             }, [meetings, filterCat, filterMonth]);
 
-            // 2. Calculate Stats
             const stats = useMemo(() => {
-                const meetingsCount = new Set(filteredData.map(d => d.date + d.meetingName)).size; // Approx distinct meetings based on filter
+                const meetingsCount = new Set(filteredData.map(d => d.date + d.meetingName)).size;
                 const total = filteredData.length;
                 const open = filteredData.filter(d => d.status === 'Open').length;
                 const progress = filteredData.filter(d => d.status === 'In Progress').length;
@@ -202,17 +287,11 @@
                 return { meetings: meetingsCount, total, open, progress, closed };
             }, [filteredData]);
 
-            // 3. Export
             const exportExcel = () => {
-                const csvContent = "data:text/csv;charset=utf-8," 
-                    + "Meeting Name,Date,Point,Action,Owner,Status\n"
-                    + filteredData.map(e => `${e.meetingName},${e.date},"${e.point}","${e.action}",${e.owner},${e.status}`).join("\n");
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", "consultation_points.csv");
-                document.body.appendChild(link);
-                link.click();
+                const ws = XLSX.utils.json_to_sheet(filteredData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "ActionPoints");
+                XLSX.writeFile(wb, "consultation_points.xlsx");
             };
 
             const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -220,47 +299,45 @@
             return (
                 <div className="space-y-6 animate-fade-in">
                     {/* Filters */}
-                    <div className="glass-panel p-4 rounded-xl flex gap-4 items-center flex-wrap">
-                        <div className="flex items-center gap-2 text-sm text-slate-400"><i className="fas fa-filter"></i> Filters:</div>
-                        <select className="w-40" value={filterCat} onChange={e=>setFilterCat(e.target.value)}>
+                    <div className="glass-panel p-4 rounded-xl flex gap-4 items-center flex-wrap border-l-4 border-purple-500">
+                        <div className="flex items-center gap-2 text-sm font-bold text-white"><i className="fas fa-filter text-purple-400"></i> Filters:</div>
+                        <select className="w-40 bg-slate-800 border-slate-700 text-sm" value={filterCat} onChange={e=>setFilterCat(e.target.value)}>
                             <option value="All">All Categories</option>
                             {MEETING_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
                         </select>
-                        <select className="w-40" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}>
+                        <select className="w-40 bg-slate-800 border-slate-700 text-sm" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}>
                             <option value="All">All Months</option>
                             {months.map(m=><option key={m} value={m}>{m}</option>)}
                         </select>
-                        <button onClick={exportExcel} className="ml-auto bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center gap-2">
-                            <i className="fas fa-file-excel"></i> Export CSV
+                        <button onClick={exportExcel} className="ml-auto bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg">
+                            <i className="fas fa-file-excel"></i> Export Data
                         </button>
                     </div>
 
                     {/* KPI Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-xs uppercase">Meetings</div><div className="text-2xl font-bold text-white">{stats.meetings}</div></div>
-                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-xs uppercase">Total Points</div><div className="text-2xl font-bold text-blue-400">{stats.total}</div></div>
-                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-xs uppercase">Open</div><div className="text-2xl font-bold text-red-400">{stats.open}</div></div>
-                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-xs uppercase">In Progress</div><div className="text-2xl font-bold text-yellow-400">{stats.progress}</div></div>
-                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-xs uppercase">Closed</div><div className="text-2xl font-bold text-emerald-400">{stats.closed}</div></div>
+                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Meetings</div><div className="text-2xl font-bold text-white mt-1">{stats.meetings}</div></div>
+                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Total Actions</div><div className="text-2xl font-bold text-blue-400 mt-1">{stats.total}</div></div>
+                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Open</div><div className="text-2xl font-bold text-red-400 mt-1">{stats.open}</div></div>
+                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">In Progress</div><div className="text-2xl font-bold text-yellow-400 mt-1">{stats.progress}</div></div>
+                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700"><div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Closed</div><div className="text-2xl font-bold text-emerald-400 mt-1">{stats.closed}</div></div>
                     </div>
 
-                    {/* Table */}
-                    <div className="glass-panel rounded-xl overflow-hidden">
+                    {/* Data Table */}
+                    <div className="glass-panel rounded-xl overflow-hidden border border-slate-700">
                         <table className="w-full text-left text-sm text-slate-300">
                             <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
-                                <tr><th className="p-4">Meeting</th><th className="p-4">Point & Action</th><th className="p-4">Owner</th><th className="p-4">Status</th></tr>
+                                <tr><th className="p-4">Meeting</th><th className="p-4">Discussion Point</th><th className="p-4">Action</th><th className="p-4">Owner</th><th className="p-4">Status</th></tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-700">
+                            <tbody className="divide-y divide-slate-800">
                                 {filteredData.map((d, i) => (
                                     <tr key={i} className="hover:bg-slate-800/50">
                                         <td className="p-4">
                                             <div className="font-bold text-white">{d.meetingName}</div>
                                             <div className="text-xs text-slate-500">{d.date}</div>
                                         </td>
-                                        <td className="p-4">
-                                            <div className="font-bold mb-1">{d.point}</div>
-                                            <div className="text-xs text-blue-400"><i className="fas fa-arrow-right mr-1"></i> {d.action}</div>
-                                        </td>
+                                        <td className="p-4">{d.point}</td>
+                                        <td className="p-4 text-blue-300">{d.action}</td>
                                         <td className="p-4">{d.owner}</td>
                                         <td className="p-4">
                                             <span className={`px-2 py-1 rounded text-[10px] font-bold ${d.status==='Closed'?'bg-emerald-500/10 text-emerald-400':(d.status==='In Progress'?'bg-yellow-500/10 text-yellow-400':'bg-red-500/10 text-red-400')}`}>
@@ -269,6 +346,7 @@
                                         </td>
                                     </tr>
                                 ))}
+                                {filteredData.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-500">No data matches your filters.</td></tr>}
                             </tbody>
                         </table>
                     </div>
@@ -282,6 +360,7 @@
             const [session, setSession] = useState(null);
             const [siteId, setSiteId] = useState('GLOBAL');
             const [meetings, setMeetings] = useState([]);
+            const [selectedMeeting, setSelectedMeeting] = useState(null); // For Modal
 
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
@@ -293,57 +372,87 @@
                 const ctx = params.get('site');
                 if(ctx && ctx !== 'GLOBAL') setSiteId(ctx);
 
-                // Fetch Data
                 const dbRef = window.fb.ref(window.db);
                 window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}/consultation`)).then(snap => {
                     if(snap.exists()) {
                         const all = Object.entries(snap.val()).map(([k,v]) => ({id:k, ...v}));
-                        // Filter by site if specific site selected
                         const filtered = (ctx && ctx !== 'GLOBAL') ? all.filter(m => m.siteId === ctx) : all;
                         setMeetings(filtered);
                     }
                 });
             }, []);
 
+            // Handle Meeting Save
             const handleSave = async (data) => {
                 const payload = { ...data, siteId: siteId, timestamp: Date.now() };
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/consultation`), payload);
                 alert("Meeting Saved!");
-                window.location.reload(); // Simple reload to refresh data
+                window.location.reload();
+            };
+
+            // Handle Action Point Status Update
+            const handleUpdateStatus = async (meetingId, pointIdx, newStatus) => {
+                // 1. Update Local State (Optimistic UI)
+                const updatedMeetings = meetings.map(m => {
+                    if (m.id === meetingId) {
+                        const newMinutes = [...m.minutes];
+                        newMinutes[pointIdx].status = newStatus;
+                        return { ...m, minutes: newMinutes };
+                    }
+                    return m;
+                });
+                setMeetings(updatedMeetings);
+                
+                // Update selected meeting too so modal reflects change
+                const targetMeeting = updatedMeetings.find(m => m.id === meetingId);
+                setSelectedMeeting(targetMeeting);
+
+                // 2. Update Firebase
+                const meetingRef = window.fb.ref(window.db, `organizations/${session.orgId}/consultation/${meetingId}/minutes/${pointIdx}/status`);
+                await window.fb.set(meetingRef, newStatus);
             };
 
             if(!session) return null;
 
             return (
-                <div className="flex flex-col h-screen bg-slate-950 text-white">
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans">
                     {/* Header */}
-                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 shadow-lg z-10">
                         <div className="flex items-center gap-4">
-                            <a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a>
-                            <h1 className="font-bold text-lg">Consultation & Participation</h1>
+                            <a href="home.html" className="text-slate-400 hover:text-white transition"><i className="fas fa-arrow-left"></i> Back</a>
+                            <h1 className="font-bold text-lg tracking-tight">Consultation & Participation</h1>
                         </div>
-                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900">{siteId}</div>
+                        <div className="text-xs font-mono bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900 shadow-inner">{siteId}</div>
                     </div>
 
-                    {/* Navigation Tabs */}
-                    <div className="flex justify-center border-b border-slate-800 bg-slate-900/50">
+                    {/* Tabs */}
+                    <div className="flex justify-center border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
                         {['form', 'list', 'dashboard'].map(tab => (
                             <button 
                                 key={tab} 
                                 onClick={()=>setView(tab)} 
-                                className={`px-8 py-3 text-sm font-bold uppercase tracking-wider transition-all border-b-2 ${view===tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-white'}`}
+                                className={`px-8 py-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${view===tab ? 'border-blue-500 text-blue-400 bg-blue-500/5' : 'border-transparent text-slate-500 hover:text-white'}`}
                             >
                                 {tab === 'form' ? 'Record Meeting' : (tab === 'list' ? 'Meeting History' : 'Analytics')}
                             </button>
                         ))}
                     </div>
 
-                    {/* Content Area */}
+                    {/* Content */}
                     <div className="p-6 flex-1 overflow-y-auto max-w-7xl mx-auto w-full">
                         {view === 'form' && <MeetingForm siteId={siteId} onSave={handleSave} />}
-                        {view === 'list' && <MeetingList meetings={meetings} />}
+                        {view === 'list' && <MeetingList meetings={meetings} onOpenDetail={setSelectedMeeting} />}
                         {view === 'dashboard' && <Dashboard meetings={meetings} />}
                     </div>
+
+                    {/* Detail Modal */}
+                    {selectedMeeting && (
+                        <MeetingDetailModal 
+                            meeting={selectedMeeting} 
+                            onClose={() => setSelectedMeeting(null)} 
+                            onUpdateStatus={handleUpdateStatus} 
+                        />
+                    )}
                 </div>
             );
         };
@@ -351,5 +460,6 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
+    <style>.animate-fade-in { animation: fadeIn 0.3s ease-out; } @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }</style>
 </body>
 </html>
