@@ -56,31 +56,28 @@
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
 
-        /* --- PRINT STYLES (CRITICAL FIX) --- */
+        /* --- PDF GENERATION STYLES (UNIFIED) --- */
         @media print {
             @page { size: A4; margin: 10mm; }
             
-            /* RESET LAYOUT */
-            body, html, #root, .flex-col, .h-screen { 
-                width: 100% !important; 
-                height: auto !important; 
-                overflow: visible !important; 
+            body, html, #root { 
+                width: 100%; 
+                height: auto; 
+                overflow: visible; 
                 background: white !important; 
                 color: black !important; 
                 display: block !important;
             }
 
-            /* REMOVE SCROLLBARS & UI */
-            .flex-1, .overflow-y-auto { 
-                overflow: visible !important; 
-                height: auto !important; 
-            }
-            .no-print, header, .glass-panel-filters, button { display: none !important; }
+            /* Hide Navigation & Buttons */
+            .no-print, header, .glass-panel-filters, button, .flex.bg-slate-900.p-1 { display: none !important; }
 
-            /* FORCE SHOW HIDDEN SECTIONS */
-            /* This targets the div that holds the step content */
+            /* Show Report Sections */
+            /* Using specificity to override 'hidden' classes */
             div[class*="report-section"] { 
                 display: block !important; 
+                opacity: 1 !important;
+                visibility: visible !important;
                 margin-bottom: 25px; 
                 page-break-inside: avoid;
                 border: 1px solid #000;
@@ -88,7 +85,7 @@
                 border-radius: 4px;
             }
 
-            /* STYLING */
+            /* Styles */
             .section-heading { 
                 border-bottom: 2px solid black !important; 
                 color: black !important; 
@@ -109,12 +106,12 @@
             .text-white, .text-slate-400, .text-emerald-400, .text-blue-400, .text-purple-400 { color: black !important; }
             .bg-slate-900, .bg-slate-800, .bg-slate-850 { background: white !important; border: none !important; }
 
-            /* DIAGRAMS */
+            /* Diagrams */
             .rib-box, .tree-node { border: 1px solid black !important; background: white !important; color: black !important; }
             .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-color: black !important; }
             .head { border-color: black !important; color: black !important; background: white !important; }
 
-            /* PDF HEADER */
+            /* Header */
             .pdf-header { display: flex !important; justify-content: space-between; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px; }
         }
         
@@ -239,9 +236,9 @@
                             <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg"><i className="fas fa-file-excel"></i> Export</button>
                         </div>
                         <div className="flex gap-4 items-end flex-wrap">
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">From Date</label><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">To Date</label><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Site ID</label><select value={filterSite} onChange={e=>setFilterSite(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2">{uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">From</label><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">To</label><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Site</label><select value={filterSite} onChange={e=>setFilterSite(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2">{uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                             <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Type</label><select value={filterType} onChange={e=>setFilterType(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2"><option value="All">All Types</option><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
                             <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Severity</label><select value={filterLevel} onChange={e=>setFilterLevel(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2"><option value="All">All Levels</option><option value="Level A">Level A</option><option value="Level B">Level B</option><option value="Level C">Level C</option><option value="Level D">Level D</option></select></div>
                         </div>
@@ -327,6 +324,7 @@
                 });
             }, []);
 
+            // Dynamic ID Updater
             useEffect(() => {
                 if(session && !data.firebaseKey) {
                     const sId = data.siteId ? data.siteId : 'GEN';
@@ -343,7 +341,7 @@
                 } else {
                     await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/incidents`), data);
                 }
-                alert("Incident Saved!");
+                alert("Saved!");
                 window.location.reload();
             };
 
@@ -381,21 +379,11 @@
                 window.open(`consultation.html?${params.toString()}`, '_blank');
             };
 
-            const addFiveWhyPath = () => {
-                const newCount = data.investigation.fiveWhys.length + 1;
-                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: [...prev.investigation.fiveWhys, { id: Date.now(), name: `Analysis Path ${newCount}`, whys: ['','','','',''] }] } }));
-            };
-            const updateFiveWhy = (pIdx, wIdx, val) => {
-                const paths = [...data.investigation.fiveWhys]; paths[pIdx].whys[wIdx] = val;
-                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } }));
-            };
-            const updatePathName = (pIdx, val) => {
-                const paths = [...data.investigation.fiveWhys]; paths[pIdx].name = val;
-                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } }));
-            };
-            const removeFiveWhyPath = (idx) => {
-                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: prev.investigation.fiveWhys.filter((_, i) => i !== idx) } }));
-            };
+            // 5-Why Helpers
+            const addFiveWhyPath = () => { const newCount = data.investigation.fiveWhys.length + 1; setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: [...prev.investigation.fiveWhys, { id: Date.now(), name: `Analysis Path ${newCount}`, whys: ['','','','',''] }] } })); };
+            const updateFiveWhy = (pIdx, wIdx, val) => { const paths = [...data.investigation.fiveWhys]; paths[pIdx].whys[wIdx] = val; setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } })); };
+            const updatePathName = (pIdx, val) => { const paths = [...data.investigation.fiveWhys]; paths[pIdx].name = val; setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } })); };
+            const removeFiveWhyPath = (idx) => { setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: prev.investigation.fiveWhys.filter((_, i) => i !== idx) } })); };
 
             if(!session) return null;
 
@@ -403,6 +391,7 @@
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    {/* Header */}
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 shadow-lg z-10 no-print">
                         <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white transition"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg tracking-tight">Incident Management</h1></div>
                         <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-700 shadow-inner">
@@ -416,6 +405,7 @@
                         {view === 'repo' && <IncidentRepository incidents={incidentsList} onEdit={handleEdit} onPrint={handleRepoPrint} onDelete={handleDelete} userRole={session.role} siteContext={isGlobal ? 'GLOBAL' : data.siteId} />}
                         {view === 'form' && (
                             <div className="animate-fade-in pb-20">
+                                {/* PDF HEADER */}
                                 <div className="pdf-header">
                                     <div><h1 className="text-2xl font-bold uppercase">Incident Report</h1><p className="text-sm">Org: {session.orgId}</p></div>
                                     <div className="text-right"><p className="text-xl font-mono font-bold">{data.id}</p><p className="text-sm">Date: {data.date}</p></div>
@@ -432,6 +422,7 @@
                                     }} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2"><i className="fas fa-print"></i> PDF</button>
                                 </div>
 
+                                {/* CRITICAL: CSS-based visibility ensures ALL sections exist in DOM for printing */}
                                 <div className={`report-section ${step === 1 ? 'block' : 'hidden print:block'}`}>
                                     <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-info-circle"></i> 1. Initial Information</h2>
                                     <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
