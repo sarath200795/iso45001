@@ -63,8 +63,8 @@
             { id: 'dashboard', label: 'Dashboard', desc: 'KPIs & Stats', icon: 'fa-chart-pie', color: 'text-purple-400', allowGlobal: true },
             { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
             { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
-            { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' }, // ADDED THIS
-            { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' },
+            { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' },
+            { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' }, // CONNECTED
             { id: 'improvement', label: 'Improvement', desc: 'CAPA Tracking', icon: 'fa-chart-line', color: 'text-blue-400' },
             { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true },
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
@@ -128,16 +128,21 @@
                     window.location.href = `consultation.html?site=${selectedSite}`;
                     return;
                 }
+                if (moduleId === 'audit') {
+                    // NEW: Connect Audit Module
+                    window.location.href = `audit.html?site=${selectedSite}`;
+                    return;
+                }
+                if (moduleId === 'risk') {
+                    window.location.href = `risk.html?site=${selectedSite}`;
+                    return;
+                }
                 if (moduleId === 'sites') {
                     window.location.href = 'sites.html';
                     return;
                 }
                 if (moduleId === 'users') {
                     window.location.href = 'users.html';
-                    return;
-                }
-                if (moduleId === 'risk') {
-                    window.location.href = `risk.html?site=${selectedSite}`;
                     return;
                 }
 
