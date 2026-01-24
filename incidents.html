@@ -56,65 +56,79 @@
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
 
-        /* PRINT STYLES */
+        /* --- PDF GENERATION STYLES --- */
         @media print {
             @page { size: A4; margin: 10mm; }
             
+            /* RESET LAYOUT */
             body, html, #root { 
-                height: auto !important; 
-                overflow: visible !important; 
-                background: white !important;
-                color: black !important;
-                display: block !important;
+                width: 100%; 
+                height: auto; 
+                overflow: visible; 
+                background: white !important; 
+                color: black !important; 
+                font-family: 'Times New Roman', serif;
             }
 
-            .no-print, header, .glass-panel-filters { display: none !important; }
+            /* HIDE UI ELEMENTS */
+            .no-print, header, button, .glass-panel-filters { display: none !important; }
 
+            /* FORCE SHOW ALL SECTIONS */
             .tab-content { 
                 display: block !important; 
                 margin-bottom: 20px; 
-                page-break-inside: avoid; 
-                border: 1px solid #ccc; 
-                padding: 15px; 
-                border-radius: 8px; 
+                page-break-inside: avoid;
+                border: 1px solid #000;
+                padding: 10px;
+                border-radius: 0;
             }
 
-            .section-heading { 
-                color: black !important; 
-                border-bottom: 2px solid black !important; 
-                margin-bottom: 10px; 
-                font-size: 14pt; 
-                font-weight: bold;
-                display: block !important;
-            }
-
-            input, textarea, select { 
+            /* TEXT & INPUTS */
+            input, textarea, select, .bg-slate-900, .bg-slate-800 { 
                 background: white !important; 
-                border: 1px solid #ddd !important; 
+                border: 1px solid #ccc !important; 
                 color: black !important; 
-                font-size: 10pt;
+                width: 100%;
+                font-size: 11px;
                 resize: none;
+                box-shadow: none !important;
+                height: auto !important; /* Force expand height */
             }
-            .bg-slate-900, .bg-slate-800, .bg-slate-850 { background: white !important; color: black !important; border: none !important; }
-            .text-white, .text-slate-400, .text-slate-500 { color: black !important; }
-
-            .rib-box, .tree-node { 
-                background: white !important; 
-                border: 1px solid black !important; 
+            
+            .text-white, .text-slate-400, .text-emerald-400, .text-blue-400 { 
                 color: black !important; 
-                box-shadow: none !important; 
+            }
+
+            /* HEADINGS */
+            .section-heading { 
+                border-bottom: 2px solid black !important; 
+                color: black !important; 
+                font-weight: bold; 
+                margin-bottom: 10px; 
+                display: flex !important;
+            }
+
+            /* DIAGRAMS FOR PRINT */
+            .rib-box, .tree-node { 
+                border: 1px solid black !important; 
+                background: white !important; 
+                color: black !important; 
             }
             .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, .tree li::before, .tree li::after, .tree ul ul::before { 
                 background: black !important; 
-                border-left-color: black !important; 
                 border-color: black !important; 
             }
-            .head { background: white !important; color: black !important; border-color: black !important; }
+            .head { 
+                border-color: black !important; 
+                color: black !important; 
+                background: white !important; 
+            }
 
+            /* PDF HEADER */
             .pdf-header { 
                 display: flex !important; 
                 justify-content: space-between; 
-                border-bottom: 2px solid black; 
+                border-bottom: 3px solid black; 
                 padding-bottom: 10px; 
                 margin-bottom: 20px; 
             }
@@ -287,7 +301,7 @@
             const [data, setData] = useState({
                 id: '', siteId: '', date: new Date().toISOString().split('T')[0], time: '', 
                 type: 'Near Miss', severity: 'Level A', description: '',
-                consultationSummary: '', // NEW FIELD
+                consultationSummary: '', // NEW FIELD FOR PDF
                 investigation: { 
                     fiveWhys: [ { id: 1, name: 'Analysis Path 1', whys: ['','','','',''] } ], 
                     fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, 
@@ -297,7 +311,6 @@
                 capa: [], riskUpdated: false
             });
 
-            // Helper to get type code
             const getTypeCode = (type) => {
                 if(type === 'Near Miss') return 'NM';
                 if(type === 'Accident') return 'AC';
@@ -306,7 +319,6 @@
                 return 'XX';
             };
 
-            // Initial Load
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
@@ -317,17 +329,12 @@
                 let ctxSite = params.get('site');
                 if (!ctxSite || ctxSite === 'GLOBAL') { setIsGlobal(true); ctxSite = ''; } else { setIsGlobal(false); }
 
-                // Generate random sequence once on mount
                 const newSeq = Math.floor(100000 + Math.random() * 900000); 
                 setSeq(newSeq);
 
-                // Initialize Data
-                setData(prev => ({ 
-                    ...prev, 
-                    siteId: ctxSite
-                }));
+                // Initial Data Setup
+                setData(prev => ({ ...prev, siteId: ctxSite }));
 
-                // Fetch Repo Data
                 window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}/incidents`)).then(snap => {
                     if(snap.exists()) {
                         const all = Object.entries(snap.val()).map(([k,v]) => ({firebaseKey:k, ...v}));
@@ -338,7 +345,7 @@
 
             // DYNAMIC ID GENERATION LISTENER
             useEffect(() => {
-                if(session && !data.firebaseKey) { // Only auto-generate ID for NEW records
+                if(session && !data.firebaseKey) {
                     const sId = data.siteId ? data.siteId : 'GEN';
                     const typeCode = getTypeCode(data.type);
                     const newId = `${session.orgId}-${sId}-${typeCode}-${seq}`;
@@ -375,9 +382,18 @@
                 setStep(1);
             };
 
+            // Enhanced Print Handler
             const handleRepoPrint = (incident) => {
                 handleEdit(incident);
-                setTimeout(() => { window.print(); }, 800); 
+                setTimeout(() => {
+                    // Auto-resize textareas before printing
+                    const textareas = document.querySelectorAll('textarea');
+                    textareas.forEach(ta => {
+                        ta.style.height = 'auto';
+                        ta.style.height = ta.scrollHeight + 'px';
+                    });
+                    window.print();
+                }, 800); 
             };
 
             const openInvestigationMeeting = () => {
@@ -455,23 +471,16 @@
                                 {data.severity !== 'Level D' && (
                                     <div className={`tab-content ${step===2?'active':''} section-card`}>
                                         <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4"><i className="fas fa-users"></i> 2. Team & Consultation</h2>
-                                        
-                                        {/* LAUNCH BUTTON (Screen Only) */}
                                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center text-center space-y-6 no-print">
                                             <div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-3xl text-teal-400"><i className="fas fa-comments"></i></div>
-                                            <div><h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3><p className="text-slate-400 text-sm max-w-lg mx-auto">Open Consultation module to record minutes.</p></div>
+                                            <div><h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3><p className="text-slate-400 text-sm max-w-lg mx-auto">Open Consultation module to record minutes for "Incident Investigation".</p></div>
                                             <button onClick={openInvestigationMeeting} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition transform hover:-translate-y-1 flex items-center gap-3">Launch Meeting <i className="fas fa-external-link-alt"></i></button>
                                         </div>
-
-                                        {/* CONSULTATION SUMMARY FIELD (PDF & Screen) */}
+                                        
+                                        {/* CONSULTATION SUMMARY FOR PDF */}
                                         <div className="mt-6">
                                             <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Consultation Key Outcomes & Team Inputs</label>
-                                            <textarea 
-                                                className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white h-32 focus:border-teal-500 outline-none resize-none" 
-                                                value={data.consultationSummary} 
-                                                onChange={e=>setData({...data, consultationSummary:e.target.value})}
-                                                placeholder="Paste key points from the consultation meeting here for the report..."
-                                            ></textarea>
+                                            <textarea className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white h-32 focus:border-teal-500 outline-none resize-none" value={data.consultationSummary} onChange={e=>setData({...data, consultationSummary:e.target.value})} placeholder="Paste key points from the consultation meeting here for the report..."></textarea>
                                         </div>
                                     </div>
                                 )}
