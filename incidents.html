@@ -130,6 +130,7 @@
             const [step, setStep] = useState(1);
             const [session, setSession] = useState(null);
             const [isGlobal, setIsGlobal] = useState(false);
+            
             const [data, setData] = useState({
                 id: '', siteId: '', date: new Date().toISOString().split('T')[0], time: '', type: 'Near Miss', description: '',
                 investigation: { fiveWhys: ['','','','',''], fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, faultTree: { id:1, label:'Top Event', type:'AND', children:[] }, rootCause: '' },
@@ -158,32 +159,52 @@
                 window.location.href = 'home.html';
             };
 
+            // --- FUNCTION TO OPEN CONSULTATION MODULE ---
+            const openInvestigationMeeting = () => {
+                if(!data.siteId) { alert("Please enter a Site ID first."); return; }
+                
+                const agendaText = `Discussion on Incident ${data.id}: ${data.description.substring(0, 100)}...`;
+                
+                // Construct URL with parameters
+                const params = new URLSearchParams({
+                    site: data.siteId,
+                    interaction: 'Consultation',
+                    category: 'Incident Investigation',
+                    date: data.date,
+                    time: data.time,
+                    agenda: agendaText
+                });
+
+                // Open in new tab so user doesn't lose current report progress
+                window.open(`consultation.html?${params.toString()}`, '_blank');
+            };
+
             if(!session) return null;
 
             const STEPS = [
                 { id: 1, label: 'Initial' },
-                { id: 2, label: 'Investigate' },
-                { id: 3, label: 'CAPA' },
-                { id: 4, label: 'Review' }
+                { id: 2, label: 'Team & Consult' }, // NEW STEP
+                { id: 3, label: 'Investigate' },
+                { id: 4, label: 'CAPA' },
+                { id: 5, label: 'Review' }
             ];
 
             return (
                 <div className="max-w-6xl mx-auto p-6 animate-fade-in">
                     
-                    {/* Header with Navigation */}
+                    {/* Header */}
                     <div className="flex flex-col md:flex-row justify-between items-center mb-8 no-print gap-4">
                         <div className="flex items-center gap-4 w-full md:w-auto">
                             <a href="home.html" className="text-slate-400 hover:text-white transition-colors p-2 rounded hover:bg-slate-800"><i className="fas fa-arrow-left"></i> Back</a>
                             <h1 className="text-2xl font-bold text-white tracking-tight">New Incident Report</h1>
                         </div>
                         
-                        {/* Progress Stepper */}
                         <div className="flex bg-slate-900 p-1 rounded-full border border-slate-700">
                             {STEPS.map(s => (
                                 <button 
                                     key={s.id} 
                                     onClick={()=>setStep(s.id)} 
-                                    className={`px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 ${step===s.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-slate-800'}`}
+                                    className={`px-4 py-2 rounded-full text-[10px] sm:text-xs font-bold transition-all duration-300 ${step===s.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-slate-800'}`}
                                 >
                                     {s.id}. {s.label}
                                 </button>
@@ -191,7 +212,7 @@
                         </div>
 
                         <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2">
-                            <i className="fas fa-print"></i> Save PDF
+                            <i className="fas fa-print"></i> PDF
                         </button>
                     </div>
 
@@ -240,10 +261,40 @@
                         </div>
                     </div>
 
-                    {/* STEP 2: INVESTIGATION */}
+                    {/* STEP 2: TEAM & CONSULTATION (NEW) */}
                     <div className={`tab-content ${step===2?'active':''} section-card`}>
+                        <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4">
+                            <i className="fas fa-users"></i> 2. Investigation Team & Consultation
+                        </h2>
+                        
+                        <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center text-center space-y-6">
+                            <div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-3xl text-teal-400">
+                                <i className="fas fa-comments"></i>
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3>
+                                <p className="text-slate-400 text-sm max-w-lg mx-auto">
+                                    Click below to open the Consultation Module. This will auto-generate a meeting record for "Incident Investigation" with the details from this incident.
+                                </p>
+                            </div>
+                            
+                            <button 
+                                onClick={openInvestigationMeeting}
+                                className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-teal-500/20 transition-all transform hover:-translate-y-1 flex items-center gap-3"
+                            >
+                                Launch Investigation Meeting <i className="fas fa-external-link-alt"></i>
+                            </button>
+
+                            <div className="text-xs text-slate-500 bg-slate-900 p-3 rounded border border-slate-800 mt-4">
+                                Note: This will open in a new tab so you don't lose your current incident report data.
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* STEP 3: INVESTIGATION */}
+                    <div className={`tab-content ${step===3?'active':''} section-card`}>
                         <h2 className="section-heading text-xl font-bold text-purple-400 mb-6 flex items-center gap-3 border-b border-purple-500/20 pb-4">
-                            <i className="fas fa-search"></i> 2. Root Cause Analysis
+                            <i className="fas fa-search"></i> 3. Root Cause Analysis
                         </h2>
 
                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 space-y-10 shadow-xl">
@@ -257,7 +308,10 @@
                                 <h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500">Fault Tree Analysis</h3>
                                 <p className="text-xs text-slate-400 mb-4 pl-3 no-print">Use <span className="text-blue-400 font-bold">↓</span> for sub-events and <span className="text-purple-400 font-bold">→</span> for parallel causes.</p>
                                 <div className="tree overflow-x-auto pb-4">
-                                    <ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} /></ul>
+                                    <ul>
+                                        {/* Root Node has no siblings/delete, only children */}
+                                        <FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} />
+                                    </ul>
                                 </div>
                             </div>
 
@@ -273,10 +327,10 @@
                         </div>
                     </div>
 
-                    {/* STEP 3: CAPA */}
-                    <div className={`tab-content ${step===3?'active':''} section-card`}>
+                    {/* STEP 4: CAPA */}
+                    <div className={`tab-content ${step===4?'active':''} section-card`}>
                         <h2 className="section-heading text-xl font-bold text-orange-400 mb-6 flex items-center gap-3 border-b border-orange-500/20 pb-4">
-                            <i className="fas fa-clipboard-check"></i> 3. Corrective & Preventive Actions
+                            <i className="fas fa-clipboard-check"></i> 4. Corrective & Preventive Actions
                         </h2>
 
                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
@@ -299,10 +353,10 @@
                         </div>
                     </div>
 
-                    {/* STEP 4: REVIEW */}
-                    <div className={`tab-content ${step===4?'active':''} section-card`}>
+                    {/* STEP 5: REVIEW */}
+                    <div className={`tab-content ${step===5?'active':''} section-card`}>
                         <h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4">
-                            <i className="fas fa-check-double"></i> 4. Review & Approval
+                            <i className="fas fa-check-double"></i> 5. Review & Approval
                         </h2>
 
                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
