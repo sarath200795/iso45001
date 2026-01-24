@@ -137,9 +137,15 @@
                 date: new Date().toISOString().split('T')[0], 
                 time: '', 
                 type: 'Near Miss', 
-                severity: 'Level A', // NEW FIELD
+                severity: 'Level A', 
                 description: '',
-                investigation: { fiveWhys: ['','','','',''], fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, faultTree: { id:1, label:'Top Event', type:'AND', children:[] }, rootCause: '' },
+                investigation: { 
+                    // Changed fiveWhys from simple array to array of objects
+                    fiveWhys: [ { id: 1, whys: ['','','','',''] } ], 
+                    fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, 
+                    faultTree: { id:1, label:'Top Event', type:'AND', children:[] }, 
+                    rootCause: '' 
+                },
                 capa: [], 
                 riskUpdated: false
             });
@@ -156,7 +162,25 @@
                 if (!ctxSite || ctxSite === 'GLOBAL') { setIsGlobal(true); ctxSite = ''; } else { setIsGlobal(false); }
 
                 const seq = Math.floor(Math.random()*9999);
-                setData(prev => ({ ...prev, id: `${sess.orgId}-${ctxSite || 'GEN'}-${seq}`, siteId: ctxSite }));
+                
+                // Ensure data compatibility if recovering old drafts (Migration Logic)
+                setData(prev => {
+                    let updatedWhys = prev.investigation.fiveWhys;
+                    // Check if it's the old format (array of strings) and convert to new format (array of objects)
+                    if (Array.isArray(updatedWhys) && typeof updatedWhys[0] === 'string') {
+                        updatedWhys = [{ id: Date.now(), whys: updatedWhys }];
+                    }
+                    
+                    return {
+                        ...prev, 
+                        id: `${sess.orgId}-${ctxSite || 'GEN'}-${seq}`, 
+                        siteId: ctxSite,
+                        investigation: {
+                            ...prev.investigation,
+                            fiveWhys: updatedWhys
+                        }
+                    };
+                });
             }, []);
 
             const saveData = async () => {
@@ -173,10 +197,34 @@
                 window.open(`consultation.html?${params.toString()}`, '_blank');
             };
 
+            // 5-Why Handlers
+            const addFiveWhyPath = () => {
+                const newPath = { id: Date.now(), whys: ['','','','',''] };
+                setData(prev => ({
+                    ...prev,
+                    investigation: { ...prev.investigation, fiveWhys: [...prev.investigation.fiveWhys, newPath] }
+                }));
+            };
+
+            const removeFiveWhyPath = (index) => {
+                const newPaths = data.investigation.fiveWhys.filter((_, i) => i !== index);
+                setData(prev => ({
+                    ...prev,
+                    investigation: { ...prev.investigation, fiveWhys: newPaths }
+                }));
+            };
+
+            const updateFiveWhy = (pathIndex, whyIndex, value) => {
+                const newPaths = [...data.investigation.fiveWhys];
+                newPaths[pathIndex].whys[whyIndex] = value;
+                setData(prev => ({
+                    ...prev,
+                    investigation: { ...prev.investigation, fiveWhys: newPaths }
+                }));
+            };
+
             if(!session) return null;
 
-            // --- DYNAMIC STEPS LOGIC ---
-            // If Severity is 'Level D', we exclude Step 2 (ID: 2)
             const STEPS = [
                 { id: 1, label: 'Initial' },
                 ...(data.severity !== 'Level D' ? [{ id: 2, label: 'Team & Consult' }] : []),
@@ -291,7 +339,37 @@
                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 space-y-10 shadow-xl">
                             <div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} /></div>
                             <div className="border-t border-slate-700 pt-8"><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500">Fault Tree Analysis</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} /></ul></div></div>
-                            <div className="border-t border-slate-700 pt-8"><h3 className="font-bold text-white mb-4 pl-2 border-l-4 border-purple-500">5 Whys Analysis</h3>{data.investigation.fiveWhys.map((w,i) => (<div key={i} className="flex gap-4 mb-3 items-center"><span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span><input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" value={w} onChange={e=>{const arr=[...data.investigation.fiveWhys]; arr[i]=e.target.value; setData({...data, investigation:{...data.investigation, fiveWhys:arr}})}} placeholder="Enter cause..." /></div>))}</div>
+                            
+                            {/* MULTIPLE 5-WHYS */}
+                            <div className="border-t border-slate-700 pt-8">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-white pl-2 border-l-4 border-purple-500">5 Whys Analysis</h3>
+                                    <button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Path</button>
+                                </div>
+                                
+                                {data.investigation.fiveWhys.map((path, pIdx) => (
+                                    <div key={path.id} className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative group">
+                                        <div className="flex justify-between mb-3">
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase">Analysis Path {pIdx + 1}</span>
+                                            {data.investigation.fiveWhys.length > 1 && (
+                                                <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print">Remove Path</button>
+                                            )}
+                                        </div>
+                                        {path.whys.map((w, i) => (
+                                            <div key={i} className="flex gap-4 mb-3 items-center">
+                                                <span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span>
+                                                <input 
+                                                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" 
+                                                    value={w} 
+                                                    onChange={e => updateFiveWhy(pIdx, i, e.target.value)} 
+                                                    placeholder="Enter cause..." 
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                            
                             <div className="border-t border-slate-700 pt-8"><label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Final Root Cause Conclusion</label><textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-4 rounded-xl text-white h-24 focus:ring-1 focus:ring-emerald-500 outline-none" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})} placeholder="Summarize the primary root cause here..."></textarea></div>
                         </div>
                     </div>
