@@ -140,8 +140,8 @@
                 severity: 'Level A', 
                 description: '',
                 investigation: { 
-                    // Changed fiveWhys from simple array to array of objects
-                    fiveWhys: [ { id: 1, whys: ['','','','',''] } ], 
+                    // UPDATED: Added 'name' property to fiveWhys objects
+                    fiveWhys: [ { id: 1, name: 'Analysis Path 1', whys: ['','','','',''] } ], 
                     fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, 
                     faultTree: { id:1, label:'Top Event', type:'AND', children:[] }, 
                     rootCause: '' 
@@ -163,22 +163,21 @@
 
                 const seq = Math.floor(Math.random()*9999);
                 
-                // Ensure data compatibility if recovering old drafts (Migration Logic)
                 setData(prev => {
                     let updatedWhys = prev.investigation.fiveWhys;
-                    // Check if it's the old format (array of strings) and convert to new format (array of objects)
+                    // Migration Logic for old data
                     if (Array.isArray(updatedWhys) && typeof updatedWhys[0] === 'string') {
-                        updatedWhys = [{ id: Date.now(), whys: updatedWhys }];
+                        updatedWhys = [{ id: Date.now(), name: 'Root Cause Analysis', whys: updatedWhys }];
+                    } else if (Array.isArray(updatedWhys) && !updatedWhys[0].name) {
+                        // Migration if name property is missing
+                        updatedWhys = updatedWhys.map((w, i) => ({ ...w, name: `Analysis Path ${i+1}` }));
                     }
                     
                     return {
                         ...prev, 
                         id: `${sess.orgId}-${ctxSite || 'GEN'}-${seq}`, 
                         siteId: ctxSite,
-                        investigation: {
-                            ...prev.investigation,
-                            fiveWhys: updatedWhys
-                        }
+                        investigation: { ...prev.investigation, fiveWhys: updatedWhys }
                     };
                 });
             }, []);
@@ -199,28 +198,26 @@
 
             // 5-Why Handlers
             const addFiveWhyPath = () => {
-                const newPath = { id: Date.now(), whys: ['','','','',''] };
-                setData(prev => ({
-                    ...prev,
-                    investigation: { ...prev.investigation, fiveWhys: [...prev.investigation.fiveWhys, newPath] }
-                }));
+                const newCount = data.investigation.fiveWhys.length + 1;
+                const newPath = { id: Date.now(), name: `Analysis Path ${newCount}`, whys: ['','','','',''] };
+                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: [...prev.investigation.fiveWhys, newPath] } }));
             };
 
             const removeFiveWhyPath = (index) => {
                 const newPaths = data.investigation.fiveWhys.filter((_, i) => i !== index);
-                setData(prev => ({
-                    ...prev,
-                    investigation: { ...prev.investigation, fiveWhys: newPaths }
-                }));
+                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: newPaths } }));
             };
 
             const updateFiveWhy = (pathIndex, whyIndex, value) => {
                 const newPaths = [...data.investigation.fiveWhys];
                 newPaths[pathIndex].whys[whyIndex] = value;
-                setData(prev => ({
-                    ...prev,
-                    investigation: { ...prev.investigation, fiveWhys: newPaths }
-                }));
+                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: newPaths } }));
+            };
+
+            const updatePathName = (pathIndex, newName) => {
+                const newPaths = [...data.investigation.fiveWhys];
+                newPaths[pathIndex].name = newName;
+                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: newPaths } }));
             };
 
             if(!session) return null;
@@ -245,19 +242,11 @@
                         
                         <div className="flex bg-slate-900 p-1 rounded-full border border-slate-700 overflow-x-auto max-w-full">
                             {STEPS.map(s => (
-                                <button 
-                                    key={s.id} 
-                                    onClick={()=>setStep(s.id)} 
-                                    className={`px-4 py-2 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all duration-300 ${step===s.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-slate-800'}`}
-                                >
-                                    {s.label}
-                                </button>
+                                <button key={s.id} onClick={()=>setStep(s.id)} className={`px-4 py-2 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all duration-300 ${step===s.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:bg-slate-800'}`}>{s.label}</button>
                             ))}
                         </div>
 
-                        <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2">
-                            <i className="fas fa-print"></i> PDF
-                        </button>
+                        <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2"><i className="fas fa-print"></i> PDF</button>
                     </div>
 
                     {/* Print Header */}
@@ -272,38 +261,12 @@
 
                     {/* STEP 1: INITIAL */}
                     <div className={`tab-content ${step===1?'active':''} section-card`}>
-                        <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4">
-                            <i className="fas fa-info-circle"></i> 1. Initial Information
-                        </h2>
-                        
+                        <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-info-circle"></i> 1. Initial Information</h2>
                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-8 mb-6">
-                                <div>
-                                    <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Site Location ID</label>
-                                    {isGlobal ? (
-                                        <input className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white focus:border-blue-500 outline-none transition-colors shadow-inner" placeholder="Enter Site Code" value={data.siteId} onChange={e=>setData({...data, siteId:e.target.value})} />
-                                    ) : (
-                                        <div className="w-full bg-slate-900/50 border border-slate-700 p-4 rounded-xl text-emerald-400 font-mono font-bold flex items-center gap-2"><i className="fas fa-lock text-slate-600"></i> {data.siteId}</div>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Incident Type</label>
-                                    <select className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white focus:border-blue-500 outline-none shadow-inner" value={data.type} onChange={e=>setData({...data, type:e.target.value})}><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select>
-                                </div>
-                                <div>
-                                    <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Severity Level</label>
-                                    <select 
-                                        className={`w-full border p-4 rounded-xl text-white font-bold outline-none shadow-inner ${data.severity==='Level D' ? 'bg-slate-900 border-slate-700' : 'bg-red-900/20 border-red-500/50 text-red-400'}`} 
-                                        value={data.severity} 
-                                        onChange={e=>setData({...data, severity:e.target.value})}
-                                    >
-                                        <option value="Level A">Level A (Critical)</option>
-                                        <option value="Level B">Level B (Major)</option>
-                                        <option value="Level C">Level C (Moderate)</option>
-                                        <option value="Level D">Level D (Minor)</option>
-                                    </select>
-                                    <p className="text-[10px] text-slate-500 mt-1">*Level D incidents skip the Consultation step.</p>
-                                </div>
+                                <div><label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Site Location ID</label>{isGlobal ? <input className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white focus:border-blue-500 outline-none transition-colors shadow-inner" placeholder="Enter Site Code" value={data.siteId} onChange={e=>setData({...data, siteId:e.target.value})} /> : <div className="w-full bg-slate-900/50 border border-slate-700 p-4 rounded-xl text-emerald-400 font-mono font-bold flex items-center gap-2"><i className="fas fa-lock text-slate-600"></i> {data.siteId}</div>}</div>
+                                <div><label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Incident Type</label><select className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white focus:border-blue-500 outline-none shadow-inner" value={data.type} onChange={e=>setData({...data, type:e.target.value})}><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
+                                <div><label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Severity Level</label><select className={`w-full border p-4 rounded-xl text-white font-bold outline-none shadow-inner ${data.severity==='Level D' ? 'bg-slate-900 border-slate-700' : 'bg-red-900/20 border-red-500/50 text-red-400'}`} value={data.severity} onChange={e=>setData({...data, severity:e.target.value})}><option value="Level A">Level A (Critical)</option><option value="Level B">Level B (Major)</option><option value="Level C">Level C (Moderate)</option><option value="Level D">Level D (Minor)</option></select><p className="text-[10px] text-slate-500 mt-1">*Level D incidents skip the Consultation step.</p></div>
                                 <div><label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Date</label><input type="date" className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white" value={data.date} onChange={e=>setData({...data, date:e.target.value})} /></div>
                                 <div><label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Time</label><input type="time" className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white" value={data.time} onChange={e=>setData({...data, time:e.target.value})} /></div>
                             </div>
@@ -315,27 +278,18 @@
                     {/* STEP 2: TEAM & CONSULTATION (CONDITIONAL) */}
                     {data.severity !== 'Level D' && (
                         <div className={`tab-content ${step===2?'active':''} section-card`}>
-                            <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4">
-                                <i className="fas fa-users"></i> 2. Investigation Team & Consultation
-                            </h2>
+                            <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4"><i className="fas fa-users"></i> 2. Investigation Team & Consultation</h2>
                             <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center text-center space-y-6">
                                 <div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-3xl text-teal-400"><i className="fas fa-comments"></i></div>
-                                <div>
-                                    <h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3>
-                                    <p className="text-slate-400 text-sm max-w-lg mx-auto">Click below to open the Consultation Module. This will auto-generate a meeting record for "Incident Investigation".</p>
-                                </div>
-                                <button onClick={openInvestigationMeeting} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-teal-500/20 transition-all transform hover:-translate-y-1 flex items-center gap-3">
-                                    Launch Investigation Meeting <i className="fas fa-external-link-alt"></i>
-                                </button>
+                                <div><h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3><p className="text-slate-400 text-sm max-w-lg mx-auto">Click below to open the Consultation Module. This will auto-generate a meeting record for "Incident Investigation".</p></div>
+                                <button onClick={openInvestigationMeeting} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-teal-500/20 transition-all transform hover:-translate-y-1 flex items-center gap-3">Launch Investigation Meeting <i className="fas fa-external-link-alt"></i></button>
                             </div>
                         </div>
                     )}
 
                     {/* STEP 3: INVESTIGATION */}
                     <div className={`tab-content ${step===3?'active':''} section-card`}>
-                        <h2 className="section-heading text-xl font-bold text-purple-400 mb-6 flex items-center gap-3 border-b border-purple-500/20 pb-4">
-                            <i className="fas fa-search"></i> 3. Root Cause Analysis
-                        </h2>
+                        <h2 className="section-heading text-xl font-bold text-purple-400 mb-6 flex items-center gap-3 border-b border-purple-500/20 pb-4"><i className="fas fa-search"></i> 3. Root Cause Analysis</h2>
                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 space-y-10 shadow-xl">
                             <div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} /></div>
                             <div className="border-t border-slate-700 pt-8"><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500">Fault Tree Analysis</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} /></ul></div></div>
@@ -344,22 +298,27 @@
                             <div className="border-t border-slate-700 pt-8">
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-bold text-white pl-2 border-l-4 border-purple-500">5 Whys Analysis</h3>
-                                    <button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Path</button>
+                                    <button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Analysis Path</button>
                                 </div>
                                 
                                 {data.investigation.fiveWhys.map((path, pIdx) => (
                                     <div key={path.id} className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative group">
-                                        <div className="flex justify-between mb-3">
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase">Analysis Path {pIdx + 1}</span>
+                                        <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
+                                            {/* RENAMABLE HEADER */}
+                                            <input 
+                                                value={path.name || `Analysis Path ${pIdx + 1}`} 
+                                                onChange={e => updatePathName(pIdx, e.target.value)}
+                                                className="bg-transparent text-[10px] font-bold text-purple-300 uppercase tracking-wider outline-none border-b border-transparent focus:border-purple-500 w-64"
+                                            />
                                             {data.investigation.fiveWhys.length > 1 && (
-                                                <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print">Remove Path</button>
+                                                <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print hover:bg-red-900/20 px-2 py-1 rounded transition"><i className="fas fa-trash-alt mr-1"></i> Remove Path</button>
                                             )}
                                         </div>
                                         {path.whys.map((w, i) => (
                                             <div key={i} className="flex gap-4 mb-3 items-center">
                                                 <span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span>
                                                 <input 
-                                                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" 
+                                                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm transition-colors" 
                                                     value={w} 
                                                     onChange={e => updateFiveWhy(pIdx, i, e.target.value)} 
                                                     placeholder="Enter cause..." 
