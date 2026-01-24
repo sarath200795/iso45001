@@ -131,18 +131,25 @@
         };
 
         // --- REPOSITORY COMPONENT ---
-        const IncidentRepository = ({ incidents, onEdit, siteContext }) => {
+        const IncidentRepository = ({ incidents, onEdit, onPrint }) => {
             const [filterType, setFilterType] = useState('All');
             const [filterLevel, setFilterLevel] = useState('All');
+            const [filterSite, setFilterSite] = useState('All'); // NEW: Site ID Filter
             const [dateFrom, setDateFrom] = useState('');
             const [dateTo, setDateTo] = useState('');
+
+            // Get Unique Sites for Dropdown
+            const uniqueSites = useMemo(() => {
+                const sites = new Set(incidents.map(i => i.siteId).filter(Boolean));
+                return ['All', ...Array.from(sites)];
+            }, [incidents]);
 
             // Filter Logic
             const filteredData = useMemo(() => {
                 return incidents.filter(item => {
                     const matchType = filterType === 'All' || item.type === filterType;
                     const matchLevel = filterLevel === 'All' || item.severity === filterLevel;
-                    const matchSite = siteContext === 'GLOBAL' || item.siteId === siteContext;
+                    const matchSite = filterSite === 'All' || item.siteId === filterSite; // Check Site ID
                     
                     let matchDate = true;
                     if (dateFrom && dateTo) {
@@ -151,7 +158,7 @@
 
                     return matchType && matchLevel && matchDate && matchSite;
                 });
-            }, [incidents, filterType, filterLevel, dateFrom, dateTo, siteContext]);
+            }, [incidents, filterType, filterLevel, filterSite, dateFrom, dateTo]);
 
             const exportToExcel = () => {
                 const dataToExport = filteredData.map(({ id, date, time, siteId, type, severity, description, investigation, capa }) => ({
@@ -173,7 +180,7 @@
 
             return (
                 <div className="space-y-6 animate-fade-in">
-                    {/* Repository Header - Visually Distinct */}
+                    {/* Repository Header */}
                     <div className="p-6 rounded-xl bg-gradient-to-r from-purple-900/40 to-slate-900 border border-purple-500/30 mb-6">
                         <div className="flex justify-between items-start mb-6">
                             <div>
@@ -188,10 +195,19 @@
 
                         {/* Filters Bar */}
                         <div className="flex gap-4 items-end flex-wrap">
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">From Date</label><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-36 bg-slate-800 border-slate-600 text-xs rounded-lg p-2 focus:border-purple-500" /></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">To Date</label><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-36 bg-slate-800 border-slate-600 text-xs rounded-lg p-2 focus:border-purple-500" /></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Type</label><select value={filterType} onChange={e=>setFilterType(e.target.value)} className="w-36 bg-slate-800 border-slate-600 text-xs rounded-lg p-2 focus:border-purple-500"><option value="All">All Types</option><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Severity</label><select value={filterLevel} onChange={e=>setFilterLevel(e.target.value)} className="w-36 bg-slate-800 border-slate-600 text-xs rounded-lg p-2 focus:border-purple-500"><option value="All">All Levels</option><option value="Level A">Level A</option><option value="Level B">Level B</option><option value="Level C">Level C</option><option value="Level D">Level D</option></select></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">From Date</label><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2 focus:border-purple-500" /></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">To Date</label><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2 focus:border-purple-500" /></div>
+                            
+                            {/* Site Filter */}
+                            <div>
+                                <label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Site ID</label>
+                                <select value={filterSite} onChange={e=>setFilterSite(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2 focus:border-purple-500">
+                                    {uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Type</label><select value={filterType} onChange={e=>setFilterType(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2 focus:border-purple-500"><option value="All">All Types</option><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Severity</label><select value={filterLevel} onChange={e=>setFilterLevel(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2 focus:border-purple-500"><option value="All">All Levels</option><option value="Level A">Level A</option><option value="Level B">Level B</option><option value="Level C">Level C</option><option value="Level D">Level D</option></select></div>
                         </div>
                     </div>
 
@@ -199,7 +215,7 @@
                     <div className="glass-panel rounded-xl overflow-hidden border border-slate-700 shadow-xl">
                         <table className="w-full text-left text-sm text-slate-300">
                             <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
-                                <tr><th className="p-4">Incident ID</th><th className="p-4">Date & Time</th><th className="p-4">Site</th><th className="p-4">Type</th><th className="p-4">Level</th><th className="p-4 text-right">Action</th></tr>
+                                <tr><th className="p-4">Incident ID</th><th className="p-4">Date & Time</th><th className="p-4">Site</th><th className="p-4">Type</th><th className="p-4">Level</th><th className="p-4 text-right">Actions</th></tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800">
                                 {filteredData.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-500 italic">No incidents match the selected filters.</td></tr>}
@@ -210,7 +226,16 @@
                                         <td className="p-4 text-emerald-400 text-xs font-mono">{inc.siteId}</td>
                                         <td className="p-4">{inc.type}</td>
                                         <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold border ${inc.severity === 'Level A' ? 'bg-red-500/10 text-red-400 border-red-500/20' : inc.severity === 'Level B' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : inc.severity === 'Level C' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{inc.severity}</span></td>
-                                        <td className="p-4 text-right"><button onClick={()=>onEdit(inc)} className="text-purple-400 hover:text-white text-xs font-bold border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 rounded transition shadow hover:shadow-purple-500/20">View / Edit</button></td>
+                                        <td className="p-4 text-right flex justify-end gap-2">
+                                            {/* PDF BUTTON */}
+                                            <button onClick={()=>onPrint(inc)} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 px-3 py-1.5 rounded transition shadow" title="Generate PDF">
+                                                <i className="fas fa-file-pdf"></i>
+                                            </button>
+                                            {/* EDIT BUTTON */}
+                                            <button onClick={()=>onEdit(inc)} className="text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500 px-3 py-1.5 rounded transition shadow">
+                                                Edit
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -222,7 +247,7 @@
 
         // --- MAIN APP ---
         const App = () => {
-            const [view, setView] = useState('form'); // 'form' or 'repo'
+            const [view, setView] = useState('form'); 
             const [step, setStep] = useState(1);
             const [session, setSession] = useState(null);
             const [isGlobal, setIsGlobal] = useState(false);
@@ -252,11 +277,10 @@
                 
                 if (!ctxSite || ctxSite === 'GLOBAL') { setIsGlobal(true); ctxSite = ''; } else { setIsGlobal(false); }
 
-                // 1. Initialize New ID
                 const seq = Math.floor(Math.random()*9999);
                 setData(prev => ({ ...prev, id: `${sess.orgId}-${ctxSite || 'GEN'}-${seq}`, siteId: ctxSite }));
 
-                // 2. Fetch Existing Incidents for Repository
+                // Fetch Incidents for Repo
                 window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}/incidents`)).then(snap => {
                     if(snap.exists()) {
                         const all = Object.entries(snap.val()).map(([k,v]) => ({firebaseKey:k, ...v}));
@@ -268,35 +292,34 @@
             // Save Function
             const saveData = async () => {
                 if(!data.siteId) { alert("Please enter a Site ID"); return; }
-                
-                // If editing existing (has firebaseKey), update. Else push new.
                 if(data.firebaseKey) {
                     await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/incidents/${data.firebaseKey}`), data);
                 } else {
                     await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/incidents`), data);
                 }
-                
                 alert("Incident Saved Successfully!");
                 window.location.reload();
             };
 
-            // Switch to Edit Mode
+            // Load for Editing
             const handleEdit = (incident) => {
-                // Ensure backward compatibility for fiveWhys
                 let updatedWhys = incident.investigation?.fiveWhys || [{ id: 1, name: 'Analysis Path 1', whys: ['','','','',''] }];
                 if (Array.isArray(updatedWhys) && typeof updatedWhys[0] === 'string') {
                     updatedWhys = [{ id: Date.now(), name: 'Legacy Analysis', whys: updatedWhys }];
                 }
-
-                setData({
-                    ...incident,
-                    investigation: {
-                        ...incident.investigation,
-                        fiveWhys: updatedWhys
-                    }
-                });
+                setData({ ...incident, investigation: { ...incident.investigation, fiveWhys: updatedWhys } });
                 setView('form');
                 setStep(1);
+            };
+
+            // Direct Print from Repo
+            const handleRepoPrint = (incident) => {
+                // 1. Load data
+                handleEdit(incident);
+                // 2. Wait for rendering then print
+                setTimeout(() => {
+                    window.print();
+                }, 500); 
             };
 
             const openInvestigationMeeting = () => {
@@ -360,10 +383,10 @@
                         
                         {/* VIEW: REPOSITORY */}
                         {view === 'repo' && (
-                            <IncidentRepository incidents={incidentsList} onEdit={handleEdit} siteContext={isGlobal ? 'GLOBAL' : data.siteId} />
+                            <IncidentRepository incidents={incidentsList} onEdit={handleEdit} onPrint={handleRepoPrint} siteContext={isGlobal ? 'GLOBAL' : data.siteId} />
                         )}
 
-                        {/* VIEW: FORM (EXISTING LOGIC) */}
+                        {/* VIEW: FORM */}
                         {view === 'form' && (
                             <div className="animate-fade-in pb-20">
                                 {/* Form Header & Stepper */}
@@ -416,19 +439,12 @@
                                     <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 space-y-10 shadow-xl">
                                         <div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} /></div>
                                         <div className="border-t border-slate-700 pt-8"><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500">Fault Tree Analysis</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} /></ul></div></div>
-                                        
-                                        {/* Multi-Path 5-Why */}
                                         <div className="border-t border-slate-700 pt-8">
                                             <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white pl-2 border-l-4 border-purple-500">5 Whys Analysis</h3><button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Analysis Path</button></div>
                                             {data.investigation.fiveWhys.map((path, pIdx) => (
                                                 <div key={path.id} className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative group">
-                                                    <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
-                                                        <input value={path.name || `Analysis Path ${pIdx+1}`} onChange={e => updatePathName(pIdx, e.target.value)} className="bg-transparent text-[10px] font-bold text-purple-300 uppercase tracking-wider outline-none border-b border-transparent focus:border-purple-500 w-64 transition-all" />
-                                                        {data.investigation.fiveWhys.length > 1 && <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print hover:bg-red-900/20 px-2 py-1 rounded transition"><i className="fas fa-trash-alt mr-1"></i> Remove</button>}
-                                                    </div>
-                                                    {path.whys.map((w, i) => (
-                                                        <div key={i} className="flex gap-4 mb-3 items-center"><span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span><input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" value={w} onChange={e => updateFiveWhy(pIdx, i, e.target.value)} placeholder="Enter cause..." /></div>
-                                                    ))}
+                                                    <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2"><input value={path.name || `Analysis Path ${pIdx+1}`} onChange={e => updatePathName(pIdx, e.target.value)} className="bg-transparent text-[10px] font-bold text-purple-300 uppercase tracking-wider outline-none border-b border-transparent focus:border-purple-500 w-64 transition-all" />{data.investigation.fiveWhys.length > 1 && <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print hover:bg-red-900/20 px-2 py-1 rounded transition"><i className="fas fa-trash-alt mr-1"></i> Remove</button>}</div>
+                                                    {path.whys.map((w, i) => (<div key={i} className="flex gap-4 mb-3 items-center"><span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span><input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" value={w} onChange={e => updateFiveWhy(pIdx, i, e.target.value)} placeholder="Enter cause..." /></div>))}
                                                 </div>
                                             ))}
                                         </div>
