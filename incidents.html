@@ -56,86 +56,47 @@
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
 
-        /* --- PDF GENERATION STYLES --- */
+        /* PRINT STYLES - FIXED FOR FULL REPORT */
         @media print {
             @page { size: A4; margin: 10mm; }
             
-            /* RESET LAYOUT */
             body, html, #root { 
-                width: 100%; 
-                height: auto; 
-                overflow: visible; 
-                background: white !important; 
-                color: black !important; 
-                font-family: 'Times New Roman', serif;
+                width: 100%; height: auto; 
+                background: white !important; color: black !important; 
+                overflow: visible !important;
             }
 
-            /* HIDE UI ELEMENTS */
-            .no-print, header, button, .glass-panel-filters { display: none !important; }
+            /* Hide UI controls */
+            .no-print, header, .glass-panel-filters, button { display: none !important; }
 
-            /* FORCE SHOW ALL SECTIONS */
-            .tab-content { 
-                display: block !important; 
-                margin-bottom: 20px; 
-                page-break-inside: avoid;
-                border: 1px solid #000;
-                padding: 10px;
-                border-radius: 0;
-            }
+            /* FORCE DISPLAY ALL SECTIONS */
+            /* This is the key fix: It overrides the 'hidden' class during print */
+            .print\:block { display: block !important; }
+            .hidden { display: block !important; } 
+            
+            /* Specific fix to hide non-relevant hidden elements if any, but show our tabs */
+            /* We will use a specific class 'report-section' to target our tabs safely */
+            .report-section { display: block !important; page-break-inside: avoid; margin-bottom: 20px; border: 1px solid #000; padding: 15px; }
 
-            /* TEXT & INPUTS */
-            input, textarea, select, .bg-slate-900, .bg-slate-800 { 
-                background: white !important; 
-                border: 1px solid #ccc !important; 
-                color: black !important; 
-                width: 100%;
-                font-size: 11px;
-                resize: none;
-                box-shadow: none !important;
-                height: auto !important; /* Force expand height */
+            /* Styling for Print */
+            input, textarea, select { 
+                background: white !important; border: 1px solid #ccc !important; 
+                color: black !important; font-size: 10pt; resize: none; box-shadow: none !important;
             }
             
-            .text-white, .text-slate-400, .text-emerald-400, .text-blue-400 { 
+            .text-white, .text-slate-400, .text-emerald-400, .text-blue-400, .text-purple-400, .text-teal-400 { 
                 color: black !important; 
             }
+            .bg-slate-900, .bg-slate-800, .bg-slate-850 { background: white !important; border: none !important; }
 
-            /* HEADINGS */
-            .section-heading { 
-                border-bottom: 2px solid black !important; 
-                color: black !important; 
-                font-weight: bold; 
-                margin-bottom: 10px; 
-                display: flex !important;
-            }
+            /* Diagram Fixes */
+            .rib-box, .tree-node { border: 1px solid black !important; background: white !important; color: black !important; }
+            .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-color: black !important; }
+            .head { border-color: black !important; color: black !important; background: white !important; }
 
-            /* DIAGRAMS FOR PRINT */
-            .rib-box, .tree-node { 
-                border: 1px solid black !important; 
-                background: white !important; 
-                color: black !important; 
-            }
-            .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, .tree li::before, .tree li::after, .tree ul ul::before { 
-                background: black !important; 
-                border-color: black !important; 
-            }
-            .head { 
-                border-color: black !important; 
-                color: black !important; 
-                background: white !important; 
-            }
-
-            /* PDF HEADER */
-            .pdf-header { 
-                display: flex !important; 
-                justify-content: space-between; 
-                border-bottom: 3px solid black; 
-                padding-bottom: 10px; 
-                margin-bottom: 20px; 
-            }
+            .pdf-header { display: flex !important; justify-content: space-between; border-bottom: 3px solid black; padding-bottom: 10px; margin-bottom: 20px; }
         }
         
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
         .pdf-header { display: none; }
     </style>
 </head>
@@ -215,7 +176,7 @@
             );
         };
 
-        // --- REPOSITORY COMPONENT ---
+        // --- REPOSITORY ---
         const IncidentRepository = ({ incidents, onEdit, onPrint, onDelete, userRole }) => {
             const [filterType, setFilterType] = useState('All');
             const [filterLevel, setFilterLevel] = useState('All');
@@ -223,10 +184,7 @@
             const [dateFrom, setDateFrom] = useState('');
             const [dateTo, setDateTo] = useState('');
 
-            const uniqueSites = useMemo(() => {
-                const sites = new Set(incidents.map(i => i.siteId).filter(Boolean));
-                return ['All', ...Array.from(sites)];
-            }, [incidents]);
+            const uniqueSites = useMemo(() => ['All', ...Array.from(new Set(incidents.map(i => i.siteId).filter(Boolean)))], [incidents]);
 
             const filteredData = useMemo(() => {
                 return incidents.filter(item => {
@@ -240,9 +198,7 @@
             }, [incidents, filterType, filterLevel, filterSite, dateFrom, dateTo]);
 
             const exportToExcel = () => {
-                const dataToExport = filteredData.map(({ id, date, time, siteId, type, severity, description }) => ({
-                    ID: id, Date: date, Time: time, Site: siteId, Type: type, Severity: severity, Description: description
-                }));
+                const dataToExport = filteredData.map(({ id, date, time, siteId, type, severity, description }) => ({ ID: id, Date: date, Time: time, Site: siteId, Type: type, Severity: severity, Description: description }));
                 const ws = XLSX.utils.json_to_sheet(dataToExport);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Incidents");
@@ -257,11 +213,11 @@
                             <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg"><i className="fas fa-file-excel"></i> Export</button>
                         </div>
                         <div className="flex gap-4 items-end flex-wrap">
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">From Date</label><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">To Date</label><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Site ID</label><select value={filterSite} onChange={e=>setFilterSite(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2">{uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Type</label><select value={filterType} onChange={e=>setFilterType(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2"><option value="All">All Types</option><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Severity</label><select value={filterLevel} onChange={e=>setFilterLevel(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2"><option value="All">All Levels</option><option value="Level A">Level A</option><option value="Level B">Level B</option><option value="Level C">Level C</option><option value="Level D">Level D</option></select></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">From</label><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">To</label><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Site</label><select value={filterSite} onChange={e=>setFilterSite(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2">{uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Type</label><select value={filterType} onChange={e=>setFilterType(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2"><option value="All">All</option><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Level</label><select value={filterLevel} onChange={e=>setFilterLevel(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2"><option value="All">All</option><option value="Level A">Level A</option><option value="Level B">Level B</option><option value="Level C">Level C</option><option value="Level D">Level D</option></select></div>
                         </div>
                     </div>
                     <div className="glass-panel rounded-xl overflow-hidden border border-slate-700 shadow-xl">
@@ -301,7 +257,7 @@
             const [data, setData] = useState({
                 id: '', siteId: '', date: new Date().toISOString().split('T')[0], time: '', 
                 type: 'Near Miss', severity: 'Level A', description: '',
-                consultationSummary: '', // NEW FIELD FOR PDF
+                consultationSummary: '', 
                 investigation: { 
                     fiveWhys: [ { id: 1, name: 'Analysis Path 1', whys: ['','','','',''] } ], 
                     fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, 
@@ -331,8 +287,6 @@
 
                 const newSeq = Math.floor(100000 + Math.random() * 900000); 
                 setSeq(newSeq);
-
-                // Initial Data Setup
                 setData(prev => ({ ...prev, siteId: ctxSite }));
 
                 window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}/incidents`)).then(snap => {
@@ -343,7 +297,7 @@
                 });
             }, []);
 
-            // DYNAMIC ID GENERATION LISTENER
+            // Dynamic ID Updater
             useEffect(() => {
                 if(session && !data.firebaseKey) {
                     const sId = data.siteId ? data.siteId : 'GEN';
@@ -360,12 +314,12 @@
                 } else {
                     await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/incidents`), data);
                 }
-                alert("Incident Saved!");
+                alert("Saved!");
                 window.location.reload();
             };
 
             const handleDelete = async (incident) => {
-                if(confirm("Delete this incident record?")) {
+                if(confirm("Delete this record?")) {
                     await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/incidents/${incident.firebaseKey}`));
                     alert("Deleted.");
                     window.location.reload();
@@ -382,16 +336,11 @@
                 setStep(1);
             };
 
-            // Enhanced Print Handler
             const handleRepoPrint = (incident) => {
                 handleEdit(incident);
                 setTimeout(() => {
-                    // Auto-resize textareas before printing
                     const textareas = document.querySelectorAll('textarea');
-                    textareas.forEach(ta => {
-                        ta.style.height = 'auto';
-                        ta.style.height = ta.scrollHeight + 'px';
-                    });
+                    textareas.forEach(ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
                     window.print();
                 }, 800); 
             };
@@ -404,21 +353,10 @@
             };
 
             // 5-Why Helpers
-            const addFiveWhyPath = () => {
-                const newCount = data.investigation.fiveWhys.length + 1;
-                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: [...prev.investigation.fiveWhys, { id: Date.now(), name: `Analysis Path ${newCount}`, whys: ['','','','',''] }] } }));
-            };
-            const updateFiveWhy = (pIdx, wIdx, val) => {
-                const paths = [...data.investigation.fiveWhys]; paths[pIdx].whys[wIdx] = val;
-                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } }));
-            };
-            const updatePathName = (pIdx, val) => {
-                const paths = [...data.investigation.fiveWhys]; paths[pIdx].name = val;
-                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } }));
-            };
-            const removeFiveWhyPath = (idx) => {
-                setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: prev.investigation.fiveWhys.filter((_, i) => i !== idx) } }));
-            };
+            const addFiveWhyPath = () => { const newCount = data.investigation.fiveWhys.length + 1; setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: [...prev.investigation.fiveWhys, { id: Date.now(), name: `Analysis Path ${newCount}`, whys: ['','','','',''] }] } })); };
+            const updateFiveWhy = (pIdx, wIdx, val) => { const paths = [...data.investigation.fiveWhys]; paths[pIdx].whys[wIdx] = val; setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } })); };
+            const updatePathName = (pIdx, val) => { const paths = [...data.investigation.fiveWhys]; paths[pIdx].name = val; setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } })); };
+            const removeFiveWhyPath = (idx) => { setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: prev.investigation.fiveWhys.filter((_, i) => i !== idx) } })); };
 
             if(!session) return null;
 
@@ -453,7 +391,8 @@
                                     <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2"><i className="fas fa-print"></i> PDF</button>
                                 </div>
 
-                                <div className={`tab-content ${step===1?'active':''} section-card`}>
+                                {/* IMPORTANT: CSS-based visibility instead of React conditional rendering ensures ALL sections exist in DOM for printing */}
+                                <div className={`report-section ${step === 1 ? 'block' : 'hidden print:block'}`}>
                                     <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-info-circle"></i> 1. Initial Information</h2>
                                     <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-8 mb-6">
@@ -469,15 +408,13 @@
                                 </div>
 
                                 {data.severity !== 'Level D' && (
-                                    <div className={`tab-content ${step===2?'active':''} section-card`}>
+                                    <div className={`report-section ${step === 2 ? 'block' : 'hidden print:block'}`}>
                                         <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4"><i className="fas fa-users"></i> 2. Team & Consultation</h2>
                                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center text-center space-y-6 no-print">
                                             <div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-3xl text-teal-400"><i className="fas fa-comments"></i></div>
                                             <div><h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3><p className="text-slate-400 text-sm max-w-lg mx-auto">Open Consultation module to record minutes for "Incident Investigation".</p></div>
                                             <button onClick={openInvestigationMeeting} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition transform hover:-translate-y-1 flex items-center gap-3">Launch Meeting <i className="fas fa-external-link-alt"></i></button>
                                         </div>
-                                        
-                                        {/* CONSULTATION SUMMARY FOR PDF */}
                                         <div className="mt-6">
                                             <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Consultation Key Outcomes & Team Inputs</label>
                                             <textarea className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white h-32 focus:border-teal-500 outline-none resize-none" value={data.consultationSummary} onChange={e=>setData({...data, consultationSummary:e.target.value})} placeholder="Paste key points from the consultation meeting here for the report..."></textarea>
@@ -485,7 +422,7 @@
                                     </div>
                                 )}
 
-                                <div className={`tab-content ${step===3?'active':''} section-card`}>
+                                <div className={`report-section ${step === 3 ? 'block' : 'hidden print:block'}`}>
                                     <h2 className="section-heading text-xl font-bold text-purple-400 mb-6 flex items-center gap-3 border-b border-purple-500/20 pb-4"><i className="fas fa-search"></i> 3. Root Cause Analysis</h2>
                                     <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
                                         <div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} /></div>
@@ -503,7 +440,7 @@
                                     </div>
                                 </div>
 
-                                <div className={`tab-content ${step===4?'active':''} section-card`}>
+                                <div className={`report-section ${step === 4 ? 'block' : 'hidden print:block'}`}>
                                     <h2 className="section-heading text-xl font-bold text-orange-400 mb-6 flex items-center gap-3 border-b border-orange-500/20 pb-4"><i className="fas fa-clipboard-check"></i> 4. CAPA</h2>
                                     <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
                                         <div className="grid grid-cols-4 gap-4 mb-6 no-print">
@@ -516,7 +453,7 @@
                                     </div>
                                 </div>
 
-                                <div className={`tab-content ${step===5?'active':''} section-card`}>
+                                <div className={`report-section ${step === 5 ? 'block' : 'hidden print:block'}`}>
                                     <h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4"><i className="fas fa-check-double"></i> 5. Review</h2>
                                     <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
                                         <div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner">
