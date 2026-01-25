@@ -59,44 +59,32 @@
         @media print {
             @page { size: A4; margin: 10mm; }
             
-            /* RESET EVERYTHING */
             body, html, #root, .app-container, .main-content { 
-                width: 100% !important; 
-                height: auto !important; 
-                overflow: visible !important; 
-                background: white !important; 
-                color: black !important; 
-                display: block !important; 
-                position: static !important;
+                width: 100% !important; height: auto !important; overflow: visible !important; 
+                background: white !important; color: black !important; display: block !important; position: static !important;
+                -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
             }
 
-            /* HIDE UI */
             .no-print, header, .repo-view, .form-view-tabs, .action-buttons { display: none !important; }
 
-            /* REVEAL PRINT OVERLAY */
             .print-overlay { 
-                display: block !important; 
-                position: absolute; 
-                top: 0; 
-                left: 0; 
-                width: 100%; 
-                background: white; 
-                z-index: 9999;
+                display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: white; z-index: 9999;
             }
 
-            /* STYLING FOR PRINT CONTENT */
             .print-overlay * { visibility: visible !important; color: black !important; }
             .print-overlay h1 { font-size: 24pt; font-weight: bold; border-bottom: 2px solid black; margin-bottom: 20px; }
-            .print-overlay h2 { font-size: 16pt; font-weight: bold; margin-top: 20px; border-bottom: 1px solid #ccc; background: #eee; padding: 5px; }
+            .print-overlay h2 { font-size: 16pt; font-weight: bold; margin-top: 20px; border-bottom: 1px solid #ccc; background: #eee !important; padding: 5px; -webkit-print-color-adjust: exact; }
             .print-overlay p, .print-overlay li, .print-overlay td { font-size: 11pt; }
             
-            /* DIAGRAM FIXES FOR PRINT */
+            /* FORCE DIAGRAMS TO PRINT */
             .rib-box, .tree-node { border: 1px solid black !important; background: white !important; color: black !important; }
             .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, 
             .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-color: black !important; }
-            .head { border-color: black !important; color: black !important; background: white !important; }
+            .head { border: 2px solid black !important; background: white !important; color: black !important; }
             
-            /* TABLE */
+            /* ATTACHMENT IMAGE */
+            .incident-image { max-width: 300px; max-height: 200px; border: 1px solid black; margin-top: 10px; }
+
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th, td { border: 1px solid black !important; padding: 5px; }
         }
@@ -117,6 +105,13 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
+
+        const fileToBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
 
         // --- COMPONENTS ---
         const UserSelect = ({ users, value, onChange, disabled, placeholder }) => (
@@ -250,7 +245,7 @@
                                         <td className="p-4">{inc.type}</td>
                                         <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold border ${inc.severity==='Level A'?'bg-red-500/10 text-red-400 border-red-500/20':inc.severity==='Level B'?'bg-orange-500/10 text-orange-400 border-orange-500/20':inc.severity==='Level C'?'bg-yellow-500/10 text-yellow-400 border-yellow-500/20':'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{inc.severity}</span></td>
                                         <td className="p-4 text-right flex justify-end gap-2">
-                                            <button onClick={()=>onPrint(inc)} className="text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 px-3 py-1.5 rounded transition" title="Print PDF"><i className="fas fa-file-pdf"></i></button>
+                                            <button onClick={()=>onPrint(inc)} className="text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 px-3 py-1.5 rounded transition" title="Print Report"><i className="fas fa-print"></i></button>
                                             {!permissions.viewOnly && <button onClick={()=>onEdit(inc)} className="text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500 px-3 py-1.5 rounded transition">Edit</button>}
                                             {permissions.canDelete && <button onClick={()=>onDelete(inc)} className="text-slate-400 hover:text-white bg-slate-700 hover:bg-red-600 px-3 py-1.5 rounded transition"><i className="fas fa-trash-alt"></i></button>}
                                         </td>
@@ -280,6 +275,7 @@
             const [data, setData] = useState({
                 id: '', siteId: '', date: new Date().toISOString().split('T')[0], time: '', 
                 type: 'Near Miss', severity: 'Level A', description: '',
+                imageEvidence: null, // New field for image
                 consultationSummary: '', 
                 investigation: { 
                     fiveWhys: [ { id: 1, name: 'Analysis Path 1', whys: ['','','','',''] } ], 
@@ -392,12 +388,20 @@
                 const formattedIncident = { ...incident, investigation: { ...incident.investigation, fiveWhys: updatedWhys } };
                 
                 setPrintData(formattedIncident);
-                setTimeout(() => window.print(), 500); // Wait for React to render print overlay
+                setTimeout(() => window.print(), 500); 
             };
 
             const handleFormPrint = () => {
                 setPrintData(data);
                 setTimeout(() => window.print(), 500);
+            };
+
+            const handleImageUpload = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const base64 = await fileToBase64(file);
+                    setData({ ...data, imageEvidence: base64 });
+                }
             };
 
             const openInvestigationMeeting = () => {
@@ -456,7 +460,6 @@
                                     {STEPS.map((s, i) => (<button key={s.id} onClick={() => setStep(s.id)} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${step === s.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{i + 1}. {s.label}</button>))}
                                 </div>
 
-                                {/* EDITABLE SECTIONS (Only showing 1 at a time on screen) */}
                                 {step === 1 && (
                                     <div className="report-section-edit">
                                         <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-clipboard-list"></i> 1. Initial Report</h2>
@@ -468,7 +471,11 @@
                                             <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select value={data.type} onChange={e=>setData({...data, type:e.target.value})} disabled={!canEdit}><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
                                             <div><label className="text-[10px] uppercase font-bold text-slate-500">Severity</label><select value={data.severity} onChange={e=>setData({...data, severity:e.target.value})} disabled={!canEdit}><option>Level A</option><option>Level B</option><option>Level C</option><option>Level D</option></select></div>
                                         </div>
-                                        <div><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={e=>setData({...data, description:e.target.value})} className="w-full mt-1" disabled={!canEdit}></textarea></div>
+                                        <div className="mb-4"><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={e=>setData({...data, description:e.target.value})} className="w-full mt-1" disabled={!canEdit}></textarea></div>
+                                        <div><label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Image Evidence</label>
+                                            {data.imageEvidence && <img src={data.imageEvidence} alt="Evidence" className="h-32 object-cover rounded mb-2 border border-slate-700" />}
+                                            <input type="file" onChange={handleImageUpload} disabled={!canEdit} className="text-xs" />
+                                        </div>
                                     </div>
                                 )}
 
@@ -549,7 +556,7 @@
                                         <h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4"><i className="fas fa-check-double"></i> 5. Review</h2>
                                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
                                             <div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner">
-                                                <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required?</p></div>
+                                                <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required for {data.siteId}?</p></div>
                                                 <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2">Open Risk Module <i className="fas fa-external-link-alt"></i></a>
                                             </div>
                                             <div className="flex gap-4 items-start mb-10 p-6 border border-slate-700 rounded-xl bg-slate-900/30">
@@ -583,6 +590,9 @@
                                     <div><strong>Severity:</strong> {printData.severity}</div>
                                 </div>
                                 <div className="mb-4"><strong>Description:</strong><br/>{printData.description}</div>
+                                {printData.imageEvidence && (
+                                    <div><strong>Evidence:</strong><br/><img src={printData.imageEvidence} className="incident-image" alt="Evidence" /></div>
+                                )}
                             </div>
 
                             {printData.severity !== 'Level D' && (
@@ -594,15 +604,25 @@
 
                             <div className="report-section">
                                 <h2 className="section-heading">3. Root Cause Analysis</h2>
-                                <div className="mb-4">
-                                    <strong>Fishbone (Man):</strong> {printData.investigation.fishbone.man.join(', ')}<br/>
-                                    <strong>Fishbone (Machine):</strong> {printData.investigation.fishbone.machine.join(', ')}<br/>
-                                    <strong>Fishbone (Material):</strong> {printData.investigation.fishbone.material.join(', ')}<br/>
-                                    <strong>Fishbone (Method):</strong> {printData.investigation.fishbone.method.join(', ')}<br/>
-                                    <strong>Fishbone (Env):</strong> {printData.investigation.fishbone.environment.join(', ')}
+                                <div className="mb-6">
+                                    <strong>Fishbone Diagram:</strong>
+                                    <div style={{transform:'scale(0.8)', transformOrigin:'top left'}}>
+                                        <Fishbone data={printData.investigation.fishbone} onChange={()=>{}} disabled={true} />
+                                    </div>
+                                </div>
+                                <div className="mb-6">
+                                    <strong>Fault Tree Analysis:</strong>
+                                    <div style={{transform:'scale(0.8)', transformOrigin:'top left'}} className="tree">
+                                        <ul><FaultTreeNode node={printData.investigation.faultTree} onUpdate={()=>{}} disabled={true} /></ul>
+                                    </div>
                                 </div>
                                 <div className="mb-4">
-                                    <strong>5 Whys (Path 1):</strong> {printData.investigation.fiveWhys[0].whys.join(' -> ')}
+                                    <strong>5 Whys:</strong>
+                                    {printData.investigation.fiveWhys.map((p,i) => (
+                                        <div key={i} style={{marginBottom:'10px', fontSize:'10pt'}}>
+                                            <em>{p.name}:</em> {p.whys.filter(w=>w).join(' -> ')}
+                                        </div>
+                                    ))}
                                 </div>
                                 <div><strong>Final Root Cause:</strong> {printData.investigation.rootCause}</div>
                             </div>
