@@ -45,7 +45,18 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
-        const ROLES = ['Owner', 'Safety Manager', 'Site Manager', 'Supervisor', 'Worker', 'Auditor'];
+        
+        // UPDATED ROLES LIST
+        const ROLES = [
+            'Owner', 
+            'Site Leader', 
+            'EHS Manager', 
+            'Manager', 
+            'Lead Auditor', 
+            'Auditor', 
+            'Auditee', 
+            'User'
+        ];
 
         const MultiSelect = ({ options, selected, onChange }) => {
             const [isOpen, setIsOpen] = useState(false);
@@ -61,7 +72,7 @@
         };
 
         const PermissionModal = ({ user, sites, onClose, onSave }) => {
-            const [role, setRole] = useState(user.role || 'Worker');
+            const [role, setRole] = useState(user.role || 'User');
             const [selectedSites, setSelectedSites] = useState(Array.isArray(user.accessibleSites)?user.accessibleSites:(user.assignedSite?[user.assignedSite]:[]));
             const handleSave = () => {
                 if(selectedSites.length===0 && role!=='Owner') { alert("Assign at least one site."); return; }
