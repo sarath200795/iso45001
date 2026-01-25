@@ -23,7 +23,8 @@
         body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: transform 0.2s; }
         .glass-panel:hover { transform: translateY(-2px); border-color: rgba(59, 130, 246, 0.5); }
-        .nav-card { cursor: pointer; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+        .nav-card { cursor: pointer; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s; }
+        .nav-card:hover { background: rgba(30, 41, 59, 0.8); border-color: #3b82f6; }
         
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
@@ -32,16 +33,22 @@
         @media print {
             @page { size: A4 landscape; margin: 10mm; }
             body, html, #root { width: 100%; height: auto; background: white !important; color: black !important; display: block !important; }
-            .no-print, header, .back-btn, button { display: none !important; }
+            .no-print, header, .back-btn, button, .menu-grid { display: none !important; }
+            
+            /* Show only the active print container */
             .print-container { display: block !important; }
-            .audit-menu, .audit-execution-form, .audit-closure-ui { display: none !important; }
+            
+            /* Table Styles */
             table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10pt; }
             th, td { border: 1px solid black !important; padding: 8px; text-align: left; color: black !important; }
             th { background-color: #f0f0f0 !important; font-weight: bold; }
-            .section-title { font-weight: bold; border-bottom: 2px solid black; margin-top: 20px; margin-bottom: 10px; font-size: 12pt; }
+            
+            .section-title { font-weight: bold; border-bottom: 2px solid black; margin-top: 20px; margin-bottom: 10px; font-size: 12pt; text-transform: uppercase; }
             .doc-header { text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
             .doc-id { font-family: monospace; font-weight: bold; float: right; font-size: 9pt; }
-            input { border: none !important; background: transparent !important; color: black !important; padding: 0; }
+            
+            input, textarea, select { border: none !important; background: transparent !important; color: black !important; padding: 0; resize: none; }
+            .text-emerald-400, .text-slate-500 { color: black !important; }
         }
         .print-container { display: none; }
     </style>
@@ -62,21 +69,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- COMPONENTS ---
-        const UserSelect = ({ users, value, onChange, placeholder }) => (
-            <select value={value} onChange={e => onChange(e.target.value)} className="w-full">
-                <option value="">{placeholder || 'Select...'}</option>
-                {users.map(u => <option key={u.id} value={u.name}>{u.name} ({u.role})</option>)}
-            </select>
-        );
-
-        const SiteSelect = ({ sites, value, onChange, disabled }) => (
-            <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} className="w-full">
-                <option value="">Select Site...</option>
-                {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
-            </select>
-        );
-
+        // --- HELPERS ---
         const fileToBase64 = (file) => new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -84,14 +77,22 @@
             reader.onerror = error => reject(error);
         });
 
+        // --- COMPONENTS ---
+        
         // 1. AUDIT SCHEDULER
         const AuditScheduler = ({ siteId, sites, users, onBack, session }) => {
-            const [header, setHeader] = useState({ siteId: siteId === 'GLOBAL' ? '' : siteId, leadAuditor: '', standard: 'ISO 45001:2018', startDate: '', endDate: '', scope: 'Health and Safety management system' });
+            const [header, setHeader] = useState({
+                siteId: siteId === 'GLOBAL' ? '' : siteId,
+                leadAuditor: '',
+                standard: 'ISO 45001:2018',
+                startDate: '',
+                endDate: ''
+            });
             const [rows, setRows] = useState([{ auditor: '', auditee: '', dept: '', date: '', time: '', aspects: '' }]);
             const [docId, setDocId] = useState('');
 
             useEffect(() => {
-                const seq = Math.floor(10000 + Math.random() * 90000);
+                const seq = Math.floor(1000 + Math.random() * 9000);
                 setDocId(`${session.orgId} - ${header.siteId || 'GEN'} - IAC - ${seq}`);
             }, [header.siteId]);
 
@@ -102,182 +103,244 @@
             return (
                 <div className="animate-fade-in">
                     <button onClick={onBack} className="back-btn mb-4 text-slate-400 hover:text-white flex items-center gap-2 text-sm"><i className="fas fa-arrow-left"></i> Back to Menu</button>
-                    <div className="glass-panel p-8 rounded-xl border border-blue-500/30">
+                    
+                    <div className="glass-panel p-8 rounded-xl border-l-4 border-blue-500">
                         <div className="flex justify-between items-center mb-6 no-print">
-                            <h2 className="text-2xl font-bold text-white"><i className="fas fa-calendar-alt mr-2 text-blue-400"></i> Audit Scheduler</h2>
-                            <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-bold text-sm"><i className="fas fa-file-pdf mr-2"></i> Export to PDF</button>
+                            <h2 className="text-2xl font-bold text-white">1. Audit Scheduler</h2>
+                            <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-bold text-sm flex items-center gap-2"><i className="fas fa-file-pdf"></i> Export PDF</button>
                         </div>
+
+                        {/* PRINTABLE AREA */}
                         <div className="print-container">
-                            <div className="doc-header hidden print:block"><span className="doc-id">Doc Ref: {docId}</span><h1 className="text-2xl font-bold uppercase">Internal Audit Plan</h1><p>Plan Period: {header.startDate} to {header.endDate}</p></div>
-                            <div className="mb-8"><h3 className="text-blue-400 font-bold uppercase text-sm border-b border-blue-500/30 pb-2 mb-4 section-title">Section 1: General Details</h3><div className="grid grid-cols-2 md:grid-cols-3 gap-4"><div className="no-print"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label><SiteSelect sites={sites} value={header.siteId} onChange={v=>setHeader({...header, siteId:v})} disabled={siteId!=='GLOBAL'} /></div><div className="hidden print:block"><span className="font-bold">Site: </span>{header.siteId}</div><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Lead Auditor</label><UserSelect users={users} value={header.leadAuditor} onChange={v=>setHeader({...header, leadAuditor:v})} placeholder="Select Lead..." /></div><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Standard</label><input value={header.standard} onChange={e=>setHeader({...header, standard:e.target.value})} /></div><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Start Date</label><input type="date" value={header.startDate} onChange={e=>setHeader({...header, startDate:e.target.value})} /></div><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">End Date</label><input type="date" value={header.endDate} onChange={e=>setHeader({...header, endDate:e.target.value})} /></div></div></div>
-                            <div><div className="flex justify-between items-end mb-2 border-b border-blue-500/30 pb-2"><h3 className="text-blue-400 font-bold uppercase text-sm section-title m-0 border-none">Section 2: Audit Plan Matrix</h3><button onClick={addRow} className="text-xs bg-blue-600 px-3 py-1 rounded text-white no-print">+ Add Row</button></div><div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-300"><thead className="bg-slate-800 text-slate-400 uppercase text-xs"><tr><th className="p-3 rounded-tl-lg">Auditor</th><th className="p-3">Auditee</th><th className="p-3">Department</th><th className="p-3">Date</th><th className="p-3">Time</th><th className="p-3">Aspects to Cover</th><th className="p-3 rounded-tr-lg no-print">Action</th></tr></thead><tbody className="divide-y divide-slate-700">{rows.map((row, i) => (<tr key={i} className="hover:bg-slate-800/50"><td className="p-2"><UserSelect users={users} value={row.auditor} onChange={v=>updateRow(i, 'auditor', v)} placeholder="Auditor" /></td><td className="p-2"><UserSelect users={users} value={row.auditee} onChange={v=>updateRow(i, 'auditee', v)} placeholder="Auditee" /></td><td className="p-2"><input value={row.dept} onChange={e=>updateRow(i, 'dept', e.target.value)} className="bg-transparent border-none focus:ring-0 p-0" placeholder="Dept..." /></td><td className="p-2"><input type="date" value={row.date} onChange={e=>updateRow(i, 'date', e.target.value)} className="bg-transparent border-none p-0" /></td><td className="p-2"><input type="time" value={row.time} onChange={e=>updateRow(i, 'time', e.target.value)} className="bg-transparent border-none p-0" /></td><td className="p-2"><input value={row.aspects} onChange={e=>updateRow(i, 'aspects', e.target.value)} className="bg-transparent border-none p-0 w-full" placeholder="Scope..." /></td><td className="p-2 text-center no-print"><button onClick={()=>removeRow(i)} className="text-red-400 hover:text-white"><i className="fas fa-times"></i></button></td></tr>))}</tbody></table></div></div>
+                            <div className="doc-header hidden print:block">
+                                <span className="doc-id">ID: {docId}</span>
+                                <h1 className="text-2xl font-bold uppercase">Internal Audit Plan</h1>
+                            </div>
+
+                            <div className="mb-8">
+                                <h3 className="section-title text-blue-400">Section 1: Audit Scope</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div><label className="text-[10px] uppercase font-bold text-slate-500">Lead Auditor</label><select className="w-full" value={header.leadAuditor} onChange={e=>setHeader({...header, leadAuditor:e.target.value})}><option value="">Select...</option>{users.map(u=><option key={u.id}>{u.name}</option>)}</select></div>
+                                    <div><label className="text-[10px] uppercase font-bold text-slate-500">Standard</label><input value={header.standard} onChange={e=>setHeader({...header, standard:e.target.value})} /></div>
+                                    <div><label className="text-[10px] uppercase font-bold text-slate-500">Start Date</label><input type="date" value={header.startDate} onChange={e=>setHeader({...header, startDate:e.target.value})} /></div>
+                                    <div><label className="text-[10px] uppercase font-bold text-slate-500">End Date</label><input type="date" value={header.endDate} onChange={e=>setHeader({...header, endDate:e.target.value})} /></div>
+                                    <div className="col-span-2"><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><select className="w-full" value={header.siteId} onChange={e=>setHeader({...header, siteId:e.target.value})} disabled={siteId!=='GLOBAL'}><option value="">Select...</option>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select></div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="flex justify-between items-end mb-2 section-title border-b border-blue-500/30">
+                                    <h3 className="text-blue-400 m-0 border-none">Section 2: Audit Matrix</h3>
+                                    <button onClick={addRow} className="text-xs bg-blue-600 px-2 py-1 rounded text-white no-print">+ Add Row</button>
+                                </div>
+                                <table className="w-full text-sm text-left text-slate-300">
+                                    <thead className="bg-slate-800 text-xs uppercase text-slate-400">
+                                        <tr><th className="p-2">Auditor</th><th className="p-2">Auditee</th><th className="p-2">Department</th><th className="p-2">Date</th><th className="p-2">Time</th><th className="p-2">Aspects</th><th className="p-2 no-print"></th></tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-700">
+                                        {rows.map((r,i)=>(
+                                            <tr key={i}>
+                                                <td className="p-2"><select className="w-full bg-transparent" value={r.auditor} onChange={e=>updateRow(i,'auditor',e.target.value)}><option value="">Select</option>{users.map(u=><option key={u.id}>{u.name}</option>)}</select></td>
+                                                <td className="p-2"><select className="w-full bg-transparent" value={r.auditee} onChange={e=>updateRow(i,'auditee',e.target.value)}><option value="">Select</option>{users.map(u=><option key={u.id}>{u.name}</option>)}</select></td>
+                                                <td className="p-2"><input className="bg-transparent" value={r.dept} onChange={e=>updateRow(i,'dept',e.target.value)} /></td>
+                                                <td className="p-2"><input type="date" className="bg-transparent" value={r.date} onChange={e=>updateRow(i,'date',e.target.value)} /></td>
+                                                <td className="p-2"><input type="time" className="bg-transparent" value={r.time} onChange={e=>updateRow(i,'time',e.target.value)} /></td>
+                                                <td className="p-2"><input className="bg-transparent w-full" value={r.aspects} onChange={e=>updateRow(i,'aspects',e.target.value)} /></td>
+                                                <td className="p-2 no-print"><button onClick={()=>removeRow(i)} className="text-red-400">x</button></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
             );
         };
 
-        // 2. AUDIT EXECUTION
+        // 2. AUDITING (EXECUTION)
         const AuditExecution = ({ siteId, sites, users, onSave, onBack, session }) => {
             const [header, setHeader] = useState({ siteId: siteId === 'GLOBAL' ? '' : siteId, auditDate: new Date().toISOString().split('T')[0], department: '', auditor: '', auditee: '' });
             const [findings, setFindings] = useState([]);
-            const [currentFinding, setCurrentFinding] = useState({ refNo: '', classification: 'Minor', standard: 'ISO 45001', clause: '', ncStatement: '', evidence: '', evidenceFile: null });
+            const [current, setCurrent] = useState({ refNo: '', classification: 'Minor', standard: 'ISO 45001', clause: '', ncStatement: '', evidence: '', evidenceFile: null });
             const [docId, setDocId] = useState('');
 
             useEffect(() => {
-                setCurrentFinding(prev => ({...prev, refNo: `AF-${Math.floor(1000 + Math.random() * 9000)}`}));
-                const seq = Math.floor(10000 + Math.random() * 90000);
-                setDocId(`${session.orgId} - ${header.siteId || 'GEN'} - IAR - ${seq}`);
+                const seq = Math.floor(1000 + Math.random() * 9000);
+                setCurrent(p => ({...p, refNo: `AF-${seq}`}));
+                setDocId(`${session.orgId} - ${header.siteId || 'GEN'} - IAR - ${Math.floor(10000+Math.random()*90000)}`);
             }, [header.siteId, findings.length]);
 
-            const handleFile = async (e) => {
-                const file = e.target.files[0];
-                if (file) { const base64 = await fileToBase64(file); setCurrentFinding({ ...currentFinding, evidenceFile: base64, evidenceFileName: file.name }); }
-            };
-
             const addFinding = () => {
-                if(!currentFinding.ncStatement) { alert("Enter NC Statement"); return; }
-                setFindings([...findings, { ...currentFinding }]);
-                setCurrentFinding({ refNo: `AF-${Math.floor(1000 + Math.random() * 9000)}`, classification: 'Minor', standard: 'ISO 45001', clause: '', ncStatement: '', evidence: '', evidenceFile: null });
+                if(!current.ncStatement) { alert("Statement Required"); return; }
+                setFindings([...findings, current]);
+                const seq = Math.floor(1000 + Math.random() * 9000);
+                setCurrent({ refNo: `AF-${seq}`, classification: 'Minor', standard: 'ISO 45001', clause: '', ncStatement: '', evidence: '', evidenceFile: null });
             };
 
-            const handleSubmitAll = () => {
-                if(findings.length === 0) { alert("No findings recorded."); return; }
-                const timestamp = Date.now();
-                findings.forEach(f => { onSave({ ...header, ...f, timestamp, status: 'Open' }); });
-                alert("All findings saved successfully!"); setFindings([]);
+            const handleSaveAll = () => {
+                if(findings.length===0) return alert("No findings to save");
+                const ts = Date.now();
+                findings.forEach(f => onSave({ ...header, ...f, timestamp: ts, status: 'Open' }));
+                alert("Audit Saved!"); setFindings([]);
             };
 
             return (
-                <div className="space-y-6 animate-fade-in pb-20">
+                <div className="animate-fade-in pb-20">
                     <button onClick={onBack} className="back-btn mb-4 text-slate-400 hover:text-white flex items-center gap-2 text-sm"><i className="fas fa-arrow-left"></i> Back to Menu</button>
-                    <div className="glass-panel p-6 rounded-xl border border-slate-700 audit-execution-form no-print">
-                        <h2 className="text-xl font-bold text-white mb-6"><i className="fas fa-clipboard-check mr-2 text-emerald-400"></i> Record Findings (Part A)</h2>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 pb-4 border-b border-slate-700">
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><SiteSelect sites={sites} value={header.siteId} onChange={v=>setHeader({...header, siteId:v})} disabled={siteId!=='GLOBAL'} /></div>
+                    
+                    <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 no-print">
+                        <h2 className="text-2xl font-bold text-white mb-6">2. Auditing & Findings</h2>
+                        
+                        {/* Header Inputs */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 border-b border-slate-700 pb-6">
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><select className="w-full" value={header.siteId} onChange={e=>setHeader({...header, siteId:e.target.value})} disabled={siteId!=='GLOBAL'}><option value="">Select</option>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select></div>
                             <div><label className="text-[10px] uppercase font-bold text-slate-500">Audit Date</label><input type="date" value={header.auditDate} onChange={e=>setHeader({...header, auditDate:e.target.value})} /></div>
                             <div><label className="text-[10px] uppercase font-bold text-slate-500">Department</label><input value={header.department} onChange={e=>setHeader({...header, department:e.target.value})} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditor</label><UserSelect users={users} value={header.auditor} onChange={v => setHeader({...header, auditor: v})} placeholder="Select..." /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditee</label><UserSelect users={users} value={header.auditee} onChange={v => setHeader({...header, auditee: v})} placeholder="Select..." /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditor</label><select className="w-full" value={header.auditor} onChange={e=>setHeader({...header, auditor:e.target.value})}><option value="">Select</option>{users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
                         </div>
-                        <div className="bg-slate-800/50 p-4 rounded-xl mb-4">
-                            <h3 className="text-sm font-bold text-emerald-400 mb-2">New Finding</h3>
+
+                        {/* Current Finding Form */}
+                        <div className="bg-slate-800/50 p-4 rounded-xl mb-4 border border-slate-700">
+                            <h3 className="text-emerald-400 font-bold text-sm mb-3">Add Observation / NC</h3>
                             <div className="grid grid-cols-2 gap-4 mb-3">
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Audit Finding Ref No.</label><input value={currentFinding.refNo} disabled className="bg-slate-900 text-slate-400" /></div>
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Classification</label><select value={currentFinding.classification} onChange={e=>setCurrentFinding({...currentFinding, classification:e.target.value})}><option>Minor</option><option>Major</option><option>Observation</option><option>OFI</option></select></div>
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Standard</label><select value={currentFinding.standard} onChange={e=>setCurrentFinding({...currentFinding, standard:e.target.value})}><option>ISO 45001</option><option>ISO 14001</option></select></div>
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Clause</label><input value={currentFinding.clause} onChange={e=>setCurrentFinding({...currentFinding, clause:e.target.value})} placeholder="e.g. 9.1" /></div>
+                                <div><label className="text-[10px] text-slate-500 uppercase">Audit Finding Ref No.</label><input value={current.refNo} disabled className="bg-slate-900 text-slate-400"/></div>
+                                <div><label className="text-[10px] text-slate-500 uppercase">Classification</label><select value={current.classification} onChange={e=>setCurrent({...current, classification:e.target.value})}><option>Minor</option><option>Major</option><option>Observation</option><option>OFI</option></select></div>
+                                <div><label className="text-[10px] text-slate-500 uppercase">Standard</label><select value={current.standard} onChange={e=>setCurrent({...current, standard:e.target.value})}><option>ISO 45001</option><option>ISO 14001</option></select></div>
+                                <div><label className="text-[10px] text-slate-500 uppercase">Clause</label><input value={current.clause} onChange={e=>setCurrent({...current, clause:e.target.value})} placeholder="e.g. 9.1" /></div>
                             </div>
-                            <div className="mb-3"><label className="text-[10px] uppercase font-bold text-slate-500">Non-Conformity Statement</label><textarea rows="2" value={currentFinding.ncStatement} onChange={e=>setCurrentFinding({...currentFinding, ncStatement:e.target.value})} className="w-full bg-slate-900"></textarea></div>
-                            <div className="mb-3"><label className="text-[10px] uppercase font-bold text-slate-500">Objective Evidence (Attach File)</label><div className="flex gap-2"><input type="file" onChange={handleFile} className="text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500" />{currentFinding.evidenceFileName && <span className="text-xs text-emerald-400 self-center">{currentFinding.evidenceFileName}</span>}</div></div>
-                            <button onClick={addFinding} className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-lg text-sm">+ Add to List</button>
+                            <div className="mb-3"><label className="text-[10px] text-slate-500 uppercase">Statement</label><textarea rows="2" value={current.ncStatement} onChange={e=>setCurrent({...current, ncStatement:e.target.value})} className="w-full bg-slate-900"></textarea></div>
+                            <div className="mb-3"><label className="text-[10px] text-slate-500 uppercase">Evidence File</label><input type="file" onChange={async(e)=>{ const f=await fileToBase64(e.target.files[0]); setCurrent({...current, evidenceFile:f, evidenceFileName:e.target.files[0].name}) }} className="text-xs" /></div>
+                            <button onClick={addFinding} className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded text-sm">+ Add to Report</button>
                         </div>
-                        {findings.length > 0 && (<div><h3 className="text-sm font-bold text-white mb-2">Findings to Save ({findings.length})</h3><div className="max-h-40 overflow-y-auto mb-4">{findings.map((f, i) => (<div key={i} className="flex justify-between items-center bg-slate-900 p-2 rounded mb-1 text-xs"><span><span className="text-emerald-400 font-mono mr-2">{f.refNo}</span> {f.ncStatement.substring(0, 50)}...</span><span className="text-slate-500">{f.classification}</span></div>))}</div><div className="flex gap-2"><button onClick={handleSubmitAll} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg">Save All</button><button onClick={()=>window.print()} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl shadow-lg"><i className="fas fa-file-pdf mr-2"></i> Print Report</button></div></div>)}
+
+                        {/* Staged Findings */}
+                        {findings.length > 0 && (
+                            <div>
+                                <h3 className="text-white font-bold text-sm mb-2">Findings to Report ({findings.length})</h3>
+                                <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
+                                    {findings.map((f,i)=>(<div key={i} className="p-2 bg-slate-900 rounded border border-slate-700 text-xs flex justify-between"><span><b className="text-emerald-400">{f.refNo}</b>: {f.ncStatement}</span><span className="text-slate-500">{f.classification}</span></div>))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={handleSaveAll} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold">Save All to Database</button>
+                                    <button onClick={()=>window.print()} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-bold"><i className="fas fa-file-pdf mr-2"></i> Print Report</button>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                    
-                    {/* PRINT CONTAINER */}
+
+                    {/* PRINT REPORT */}
                     <div className="print-container">
-                        <div className="doc-header hidden print:block"><span className="doc-id">Doc Ref: {docId}</span><h1 className="text-2xl font-bold uppercase">Internal Audit Report</h1><p>Part A - Audit Findings</p></div>
+                        <div className="doc-header hidden print:block"><span className="doc-id">ID: {docId}</span><h1 className="text-2xl font-bold uppercase">Internal Audit Report</h1><p>Status: Draft Findings</p></div>
                         <div className="mb-6"><table className="w-full text-sm"><tbody><tr><td className="font-bold">Site ID:</td><td>{header.siteId}</td><td className="font-bold">Date:</td><td>{header.auditDate}</td></tr><tr><td className="font-bold">Department:</td><td>{header.department}</td><td className="font-bold">Auditor:</td><td>{header.auditor}</td></tr></tbody></table></div>
                         <h3 className="section-title">Audit Findings</h3>
-                        {findings.map((f, i) => (<div key={i} className="mb-6 border border-black p-2 page-break-inside-avoid"><div className="grid grid-cols-2 gap-2 text-sm mb-2 border-b border-black pb-2"><div><b>Ref No:</b> {f.refNo}</div><div><b>Classification:</b> {f.classification}</div><div><b>Standard:</b> {f.standard}</div><div><b>Clause:</b> {f.clause}</div></div><div className="mb-2"><div className="font-bold text-sm">Non-Conformity Statement:</div><div className="text-sm p-1">{f.ncStatement}</div></div><div><div className="font-bold text-sm">Objective Evidence:</div><div className="text-sm p-1">{f.evidenceFileName ? `Attached: ${f.evidenceFileName}` : 'No attachment'}</div></div></div>))}
-                    </div>
-                </div>
-            );
-        };
-
-        // 3. AUDIT CLOSURE (Revised)
-        const AuditClosure = ({ audits, users, onUpdate, onBack, session }) => {
-            const [selected, setSelected] = useState(null);
-            const [actionData, setActionData] = useState({ closureRemarks: '', evidenceFile: null, evidenceFileName: '' });
-
-            const handleFile = async (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const base64 = await fileToBase64(file);
-                    setActionData({ ...actionData, evidenceFile: base64, evidenceFileName: file.name });
-                }
-            };
-
-            const handleAuditeeSubmit = () => {
-                if (!actionData.closureRemarks) { alert("Please add remarks."); return; }
-                const updated = { ...selected, ...actionData, status: 'Submitted for Review', submissionDate: new Date().toISOString().split('T')[0] };
-                onUpdate(updated); setSelected(null); setActionData({ closureRemarks: '', evidenceFile: null, evidenceFileName: '' });
-            };
-
-            const handleAuditorApprove = () => {
-                const updated = { ...selected, status: 'Closed', closureDate: new Date().toISOString().split('T')[0] };
-                onUpdate(updated); setSelected(null);
-            };
-
-            return (
-                <div className="animate-fade-in h-full flex flex-col audit-closure-ui">
-                    <div className="flex justify-between items-center mb-4"><button onClick={onBack} className="back-btn text-slate-400 hover:text-white flex items-center gap-2 text-sm"><i className="fas fa-arrow-left"></i> Back to Menu</button></div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
-                        {audits.map(a => (
-                            <div key={a.id} onClick={()=>setSelected(a)} className={`p-5 rounded-xl cursor-pointer border hover:scale-105 transition-all glass-panel ${a.status === 'Open' ? 'border-l-4 border-red-500' : a.status === 'Submitted for Review' ? 'border-l-4 border-yellow-500' : 'border-l-4 border-green-500'}`}>
-                                <div className="flex justify-between mb-2">
-                                    <span className="text-xs font-mono text-emerald-400 bg-emerald-900/30 px-2 rounded border border-emerald-900">{a.ncRef}</span>
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${a.status==='Closed' ? 'bg-green-500/20 text-green-300' : 'bg-slate-700 text-slate-300'}`}>{a.status}</span>
-                                </div>
-                                <p className="text-sm font-bold text-white mb-1 line-clamp-2">{a.ncStatement}</p>
-                                <div className="text-xs text-slate-400 flex justify-between mt-2"><span>{a.department}</span><span>{a.auditDate}</span></div>
+                        {findings.map((f, i) => (
+                            <div key={i} className="mb-4 border border-black p-2 page-break-inside-avoid">
+                                <div className="grid grid-cols-2 gap-2 text-sm mb-2 border-b border-black pb-2"><div><b>Ref:</b> {f.refNo}</div><div><b>Class:</b> {f.classification}</div><div><b>Std:</b> {f.standard}</div><div><b>Clause:</b> {f.clause}</div></div>
+                                <div className="text-sm"><b>Finding:</b> {f.ncStatement}</div>
+                                {f.evidenceFileName && <div className="text-sm mt-2"><b>Evidence:</b> {f.evidenceFileName}</div>}
                             </div>
                         ))}
                     </div>
-
-                    {/* MODAL */}
-                    {selected && (
-                        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                            <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl p-6 shadow-2xl relative">
-                                <button onClick={()=>setSelected(null)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><i className="fas fa-times"></i></button>
-                                <h2 className="text-xl font-bold text-white mb-4">Finding: {selected.ncRef}</h2>
-                                <div className="bg-slate-800 p-4 rounded mb-4">
-                                    <p className="text-sm text-slate-300 mb-2"><b>NC Statement:</b> {selected.ncStatement}</p>
-                                    <p className="text-xs text-slate-400"><b>Auditor:</b> {selected.auditor} | <b>Auditee:</b> {selected.auditee}</p>
-                                </div>
-
-                                {/* AUDITEE ACTION */}
-                                {selected.status === 'Open' && (
-                                    <div className="space-y-4">
-                                        <h3 className="text-blue-400 font-bold text-sm uppercase">Auditee Action</h3>
-                                        <textarea className="w-full bg-slate-950 border border-slate-700 p-3 rounded" placeholder="Closure Remarks / Correction Details" value={actionData.closureRemarks} onChange={e=>setActionData({...actionData, closureRemarks:e.target.value})}></textarea>
-                                        <div className="flex gap-2 items-center"><input type="file" onChange={handleFile} className="text-xs text-slate-400" />{actionData.evidenceFileName && <span className="text-xs text-green-400">File Attached</span>}</div>
-                                        <button onClick={handleAuditeeSubmit} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded">Submit for Review</button>
-                                    </div>
-                                )}
-
-                                {/* AUDITOR ACTION */}
-                                {selected.status === 'Submitted for Review' && (
-                                    <div className="space-y-4">
-                                        <h3 className="text-yellow-400 font-bold text-sm uppercase">Auditor Review</h3>
-                                        <div className="bg-slate-950 p-3 rounded border border-slate-700">
-                                            <p className="text-sm text-slate-300 mb-2"><b>Closure Remarks:</b> {selected.closureRemarks}</p>
-                                            {selected.evidenceFile ? <a href={selected.evidenceFile} download={selected.evidenceFileName} className="text-xs text-blue-400 underline">Download Evidence</a> : <span className="text-xs text-red-400">No Evidence Attached</span>}
-                                        </div>
-                                        {/* Verify Current User is Auditor */}
-                                        {session.user === selected.auditor || session.role === 'Owner' ? (
-                                            <button onClick={handleAuditorApprove} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded">Approve Closure</button>
-                                        ) : <p className="text-xs text-center text-red-400">Only the assigned Auditor ({selected.auditor}) can approve.</p>}
-                                    </div>
-                                )}
-
-                                {selected.status === 'Closed' && <div className="text-center text-emerald-400 font-bold p-4 border border-emerald-500/30 rounded bg-emerald-500/10">This finding is Closed.</div>}
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         };
 
-        // --- MAIN APP SHELL ---
+        // 3. AUDIT CLOSURE (Workflow)
+        const AuditClosure = ({ audits, onUpdate, onBack, session, users }) => {
+            const [selected, setSelected] = useState(null);
+            const [remarks, setRemarks] = useState('');
+            const [file, setFile] = useState(null);
+
+            const filteredAudits = audits.filter(a => {
+                if (session.role === 'Owner' || session.role === 'Lead Auditor') return true;
+                return a.siteId === session.assignedSite; // Basic site filter
+            });
+
+            const handleSubmitReview = async () => {
+                if(!remarks) return alert("Enter remarks");
+                let evidence = selected.evidenceFile; // Keep old if no new
+                let fName = selected.evidenceFileName;
+                if(file) { evidence = await fileToBase64(file); fName = file.name; }
+                
+                onUpdate({ ...selected, closureRemarks: remarks, evidenceFile: evidence, evidenceFileName: fName, status: 'Submitted for Review' });
+                setSelected(null);
+            };
+
+            const handleApprove = () => {
+                onUpdate({ ...selected, status: 'Closed', closureDate: new Date().toISOString().split('T')[0] });
+                setSelected(null);
+            };
+
+            return (
+                <div className="animate-fade-in h-full flex flex-col">
+                    <div className="flex justify-between items-center mb-4"><button onClick={onBack} className="back-btn text-slate-400 hover:text-white flex items-center gap-2 text-sm"><i className="fas fa-arrow-left"></i> Back to Menu</button></div>
+                    
+                    <div className="flex-1 flex gap-6 overflow-hidden">
+                        {/* LEFT: LIST */}
+                        <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-xl overflow-y-auto p-4">
+                            <h3 className="text-white font-bold mb-4">Findings ({filteredAudits.length})</h3>
+                            {filteredAudits.map(a => (
+                                <div key={a.id} onClick={()=>setSelected(a)} className={`p-4 rounded-lg border mb-3 cursor-pointer hover:bg-slate-800 transition ${a.status==='Open'?'border-red-500':a.status==='Submitted for Review'?'border-yellow-500':'border-green-500'}`}>
+                                    <div className="flex justify-between mb-1"><span className="text-xs font-mono text-emerald-400">{a.refNo}</span><span className={`text-[10px] font-bold px-2 rounded ${a.status==='Open'?'bg-red-900 text-red-200':a.status==='Closed'?'bg-green-900 text-green-200':'bg-yellow-900 text-yellow-200'}`}>{a.status}</span></div>
+                                    <p className="text-sm text-slate-300 line-clamp-2">{a.ncStatement}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* RIGHT: ACTION PANEL */}
+                        <div className="w-2/3 glass-panel rounded-xl p-6 overflow-y-auto">
+                            {!selected ? <div className="h-full flex items-center justify-center text-slate-500">Select a finding to action</div> : (
+                                <div>
+                                    <div className="border-b border-slate-700 pb-4 mb-4">
+                                        <h2 className="text-xl font-bold text-white mb-2">Finding: {selected.refNo}</h2>
+                                        <p className="text-slate-300 bg-slate-800 p-3 rounded text-sm">{selected.ncStatement}</p>
+                                        <div className="grid grid-cols-2 gap-4 mt-2 text-xs text-slate-400">
+                                            <div>Auditor: {selected.auditor}</div><div>Dept: {selected.department}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Areas based on Status */}
+                                    {selected.status === 'Open' && (
+                                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                                            <h3 className="text-blue-400 font-bold uppercase text-xs mb-3">Auditee Action (Closure)</h3>
+                                            <textarea className="w-full bg-slate-900 border border-slate-700 p-3 rounded mb-3 text-sm" placeholder="Root cause & corrective action details..." value={remarks} onChange={e=>setRemarks(e.target.value)}></textarea>
+                                            <div className="mb-4"><label className="text-xs text-slate-500 block mb-1">Upload Evidence</label><input type="file" onChange={e=>setFile(e.target.files[0])} className="text-xs text-slate-300"/></div>
+                                            <button onClick={handleSubmitReview} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded font-bold text-sm">Submit for Review</button>
+                                        </div>
+                                    )}
+
+                                    {selected.status === 'Submitted for Review' && (
+                                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                                            <h3 className="text-yellow-400 font-bold uppercase text-xs mb-3">Auditor Verification</h3>
+                                            <div className="mb-4 bg-slate-900 p-3 rounded"><p className="text-xs text-slate-500 uppercase mb-1">Auditee Remarks</p><p className="text-sm text-white">{selected.closureRemarks}</p></div>
+                                            {selected.evidenceFile ? <a href={selected.evidenceFile} download={selected.evidenceFileName} className="text-blue-400 underline text-sm block mb-4">Download Evidence</a> : <p className="text-red-400 text-sm mb-4">No evidence attached</p>}
+                                            
+                                            {(session.role === 'Owner' || session.user === selected.auditor) ? (
+                                                <button onClick={handleApprove} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded font-bold text-sm">Approve Closure</button>
+                                            ) : <p className="text-xs text-red-400">Only assigned auditor can approve.</p>}
+                                        </div>
+                                    )}
+
+                                    {selected.status === 'Closed' && (
+                                        <div className="p-4 bg-green-500/10 border border-green-500/30 rounded text-center text-green-400 font-bold">This finding is Closed.</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
         const App = () => {
-            const [view, setView] = useState('menu'); 
+            const [view, setView] = useState('menu');
             const [session, setSession] = useState(null);
             const [audits, setAudits] = useState([]);
+            const [sites, setSites] = useState([]);
             const [users, setUsers] = useState([]);
             const [siteId, setSiteId] = useState('GLOBAL');
-            const [sites, setSites] = useState([]);
 
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
@@ -289,98 +352,59 @@
                 const ctx = params.get('site');
                 if(ctx && ctx !== 'GLOBAL') setSiteId(ctx);
 
-                // Fetch Data
+                // Load Data
                 const orgRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
                 window.fb.get(orgRef).then(snap => {
                     if(snap.exists()) {
                         const val = snap.val();
                         setSites(val.sites ? Object.values(val.sites) : []);
-                        
-                        const allUsers = val.users ? Object.values(val.users) : [];
-                        const contextUsers = (ctx && ctx !== 'GLOBAL') ? allUsers.filter(u => u.role === 'Owner' || u.assignedSite === ctx || (u.accessibleSites && u.accessibleSites.includes(ctx))) : allUsers;
-                        setUsers(contextUsers);
-
-                        const allAudits = val.audits ? Object.values(val.audits) : [];
-                        const contextAudits = (ctx && ctx !== 'GLOBAL') ? allAudits.filter(a => a.siteId === ctx) : allAudits;
-                        setAudits(contextAudits);
+                        setUsers(val.users ? Object.values(val.users) : []);
+                        setAudits(val.audits ? Object.entries(val.audits).map(([k,v])=>({id:k,...v})) : []);
                     }
                 });
             }, []);
 
-            const handleSaveAudit = async (data) => {
+            const handleSave = async (data) => {
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/audits`), data);
-                // In production, append locally to state to avoid reload, for now reload is safe
-                // alert("Saved"); window.location.reload(); 
-                // Better UX: Don't reload, just alert
-                alert("Saved Successfully");
+                // Reload or append local state
             };
 
-            const handleUpdateAudit = async (data) => {
-                // Find key. data needs firebaseKey attached.
-                // In previous fetch logic I lost the key. Fixing fetch logic above:
-                // Actually the fetch logic above uses Object.values which loses keys. 
-                // Let's fix the fetch logic in useEffect first.
-            };
-            
-            // FIX FETCH LOGIC TO KEEP KEYS
-            useEffect(() => {
-                if(!session) return;
-                const orgRef = window.fb.ref(window.db, `organizations/${session.orgId}`);
-                window.fb.get(orgRef).then(snap => {
-                    if(snap.exists()) {
-                        const val = snap.val();
-                        setSites(val.sites ? Object.values(val.sites) : []);
-                        setUsers(val.users ? Object.values(val.users) : []);
-                        setAudits(val.audits ? Object.entries(val.audits).map(([k,v])=>({id:k,...v})) : []); // Keep Key as ID
-                    }
-                });
-            }, [session]); // Re-run when session is set
-
-            const handleUpdateAuditReal = async (data) => {
+            const handleUpdate = async (data) => {
                 await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/audits/${data.id}`), data);
-                setAudits(audits.map(a => a.id === data.id ? data : a)); // Optimistic update
+                // Update local state for immediate UI feedback
+                setAudits(audits.map(a => a.id === data.id ? data : a));
             };
 
             if(!session) return null;
 
-            // Permissions
-            const canSchedule = ['Owner', 'Lead Auditor', 'Site Leader', 'EHS Manager'].includes(session.role);
-            const canAudit = ['Owner', 'Lead Auditor', 'Auditor'].includes(session.role);
-            
             return (
-                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans">
-                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    <header className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
                         <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Internal Audit</h1></div>
-                        <span className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900">{siteId}</span>
-                    </div>
+                        <span className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400">{siteId}</span>
+                    </header>
 
                     <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
-                        
-                        {/* MAIN MENU */}
                         {view === 'menu' && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full content-center audit-menu">
-                                <div onClick={() => canSchedule ? setView('scheduler') : alert('Access Denied')} className={`glass-panel p-8 rounded-2xl nav-card border-t-4 border-blue-500 ${!canSchedule && 'opacity-50 cursor-not-allowed'}`}>
-                                    <div className="text-5xl text-blue-400 mb-4"><i className="fas fa-calendar-alt"></i></div>
-                                    <div><h3 className="text-2xl font-bold mb-2">Audit Scheduler</h3><p className="text-slate-400 text-sm">Create and print annual audit plans.</p></div>
+                                <div onClick={()=>setView('schedule')} className="glass-panel p-8 rounded-2xl nav-card border-t-4 border-blue-500">
+                                    <i className="fas fa-calendar-alt text-4xl text-blue-400 mb-4"></i>
+                                    <div><h3 className="text-xl font-bold">1. Audit Scheduler</h3><p className="text-xs text-slate-400 mt-1">Plan annual audits.</p></div>
                                 </div>
-
-                                <div onClick={() => canAudit ? setView('auditing') : alert('Access Denied')} className={`glass-panel p-8 rounded-2xl nav-card border-t-4 border-emerald-500 ${!canAudit && 'opacity-50 cursor-not-allowed'}`}>
-                                    <div className="text-5xl text-emerald-400 mb-4"><i className="fas fa-clipboard-list"></i></div>
-                                    <div><h3 className="text-2xl font-bold mb-2">Auditing</h3><p className="text-slate-400 text-sm">Execute audits and record multiple findings.</p></div>
+                                <div onClick={()=>setView('execute')} className="glass-panel p-8 rounded-2xl nav-card border-t-4 border-emerald-500">
+                                    <i className="fas fa-clipboard-list text-4xl text-emerald-400 mb-4"></i>
+                                    <div><h3 className="text-xl font-bold">2. Auditing</h3><p className="text-xs text-slate-400 mt-1">Record findings & report.</p></div>
                                 </div>
-
-                                <div onClick={() => setView('reporting')} className="glass-panel p-8 rounded-2xl nav-card border-t-4 border-purple-500">
-                                    <div className="text-5xl text-purple-400 mb-4"><i className="fas fa-check-circle"></i></div>
-                                    <div><h3 className="text-2xl font-bold mb-2">Audit Closure</h3><p className="text-slate-400 text-sm">Submit evidence and approve closure of findings.</p></div>
+                                <div onClick={()=>setView('closure')} className="glass-panel p-8 rounded-2xl nav-card border-t-4 border-purple-500">
+                                    <i className="fas fa-check-circle text-4xl text-purple-400 mb-4"></i>
+                                    <div><h3 className="text-xl font-bold">3. Audit Closure</h3><p className="text-xs text-slate-400 mt-1">NC closure & approval.</p></div>
                                 </div>
                             </div>
                         )}
 
-                        {/* SUB VIEWS */}
-                        {view === 'scheduler' && <AuditScheduler siteId={siteId} sites={sites} users={users} onBack={()=>setView('menu')} session={session} />}
-                        {view === 'auditing' && <AuditExecution siteId={siteId} sites={sites} users={users} onSave={handleSaveAudit} onBack={()=>setView('menu')} session={session} />}
-                        {view === 'reporting' && <AuditClosure audits={audits} users={users} onUpdate={handleUpdateAuditReal} onBack={()=>setView('menu')} session={session} />}
-
+                        {view === 'schedule' && <AuditScheduler siteId={siteId} sites={sites} users={users} onBack={()=>setView('menu')} session={session} />}
+                        {view === 'execute' && <AuditExecution siteId={siteId} sites={sites} users={users} onSave={handleSave} onBack={()=>setView('menu')} session={session} />}
+                        {view === 'closure' && <AuditClosure audits={audits} users={users} onUpdate={handleUpdate} onBack={()=>setView('menu')} session={session} />}
                     </div>
                 </div>
             );
