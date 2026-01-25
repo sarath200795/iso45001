@@ -64,7 +64,7 @@
             { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
             { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
             { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' },
-            { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' }, // CONNECTED
+            { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' }, 
             { id: 'improvement', label: 'Improvement', desc: 'CAPA Tracking', icon: 'fa-chart-line', color: 'text-blue-400' },
             { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true },
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
@@ -98,7 +98,7 @@
                 if (!s) { window.location.href = "index.html"; return; }
                 const sess = JSON.parse(s);
                 setSession(sess);
-                if(sess.role !== 'Owner' && sess.assignedSite) setSelectedSite(sess.assignedSite);
+                if(sess.role !== 'Owner' && sess.role !== 'Lead Auditor' && sess.assignedSite) setSelectedSite(sess.assignedSite);
                 
                 const dbRef = window.fb.ref(window.db);
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}`)).then((snap) => {
@@ -118,41 +118,33 @@
             // --- NAVIGATION LOGIC ---
             const handleNav = (moduleId) => {
                 const module = MODULES.find(m => m.id === moduleId);
+                const role = session.role;
 
-                // 1. Direct Page Redirections
-                if (moduleId === 'incidents') {
-                    window.location.href = `incidents.html?site=${selectedSite}`;
-                    return;
-                }
-                if (moduleId === 'consultation') {
-                    window.location.href = `consultation.html?site=${selectedSite}`;
-                    return;
-                }
+                // Restrict Specific Modules based on Role
                 if (moduleId === 'audit') {
-                    // NEW: Connect Audit Module
-                    window.location.href = `audit.html?site=${selectedSite}`;
-                    return;
-                }
-                if (moduleId === 'risk') {
-                    window.location.href = `risk.html?site=${selectedSite}`;
-                    return;
-                }
-                if (moduleId === 'sites') {
-                    window.location.href = 'sites.html';
-                    return;
-                }
-                if (moduleId === 'users') {
-                    window.location.href = 'users.html';
-                    return;
+                    if (['Owner', 'Lead Auditor', 'Auditor', 'Auditee', 'Site Leader', 'EHS Manager', 'Manager', 'User'].includes(role)) {
+                         // Lead Auditor can go anywhere, others stuck to assigned site via selectedSite state
+                         window.location.href = `audit.html?site=${selectedSite}`;
+                         return;
+                    } else {
+                        alert("Access Denied: You do not have permission to access the Audit module.");
+                        return;
+                    }
                 }
 
-                // 2. Permission Check
-                if (module.admin && session.role !== 'Owner') {
+                if (module.admin && role !== 'Owner') {
                     alert("Access Denied: Owner permissions required.");
                     return;
                 }
 
-                // 3. Fallback
+                // General Module Access
+                const basicModules = ['incidents', 'consultation', 'risk', 'improvement', 'dashboard'];
+                if (basicModules.includes(moduleId)) {
+                     window.location.href = `${moduleId}.html?site=${selectedSite}`;
+                     return;
+                }
+                
+                // Fallback
                 if (moduleId === 'dashboard') {
                     alert("Dashboard view coming soon.");
                     return;
@@ -162,7 +154,11 @@
             };
 
             if (!session) return null;
-            const visibleSites = session.role === 'Owner' ? data.sites : data.sites.filter(s => s.code === session.assignedSite);
+            
+            // Site Filtering Logic
+            const visibleSites = (session.role === 'Owner' || session.role === 'Lead Auditor') 
+                ? data.sites 
+                : data.sites.filter(s => s.code === session.assignedSite || (session.accessibleSites && session.accessibleSites.includes(s.code)));
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 relative overflow-hidden">
@@ -188,7 +184,7 @@
                                 
                                 {isDropdownOpen && (
                                     <div className="absolute top-full left-0 mt-2 w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
-                                        {session.role === 'Owner' && (
+                                        {(session.role === 'Owner' || session.role === 'Lead Auditor') && (
                                             <button onClick={()=>{setSelectedSite('GLOBAL'); setIsDropdownOpen(false)}} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-800 text-blue-400 border-b border-slate-800">
                                                 Global (All Sites)
                                             </button>
