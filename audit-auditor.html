@@ -24,20 +24,7 @@
     </script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; }
-        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.2s; }
-        
-        /* Card Interactions */
-        .task-card { border-left-width: 4px; transition: transform 0.2s; }
-        .task-card.enabled { cursor: pointer; }
-        .task-card.enabled:hover { transform: translateY(-4px); background: rgba(30, 41, 59, 0.8); }
-        .task-card.disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(0.4); }
-
-        /* Status Colors */
-        .status-red { border-left-color: #ef4444; background: linear-gradient(90deg, rgba(239, 68, 68, 0.1) 0%, transparent 100%); }
-        .status-yellow { border-left-color: #eab308; background: linear-gradient(90deg, rgba(234, 179, 8, 0.1) 0%, transparent 100%); }
-        .status-orange { border-left-color: #f97316; background: linear-gradient(90deg, rgba(249, 115, 22, 0.1) 0%, transparent 100%); }
-        .status-green { border-left-color: #22c55e; background: linear-gradient(90deg, rgba(34, 197, 94, 0.1) 0%, transparent 100%); }
-
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
         input:disabled { opacity: 0.7; cursor: not-allowed; }
@@ -48,21 +35,44 @@
         .badge-OFI { background: #713f12; color: #fde047; border: 1px solid #facc15; }
         .badge-Observation { background: #1e3a8a; color: #93c5fd; border: 1px solid #60a5fa; }
 
-        /* PRINT STYLES */
+        /* --- CRITICAL PRINT FIX --- */
         @media print {
             @page { size: A4 landscape; margin: 10mm; }
-            body, html, #root { width: 100%; height: auto; background: white !important; color: black !important; display: block !important; overflow: visible !important; }
-            .no-print, header, .back-btn, button, .screen-ui { display: none !important; }
-            .print-container { display: block !important; }
+            
+            /* Hide EVERYTHING by default */
+            body * {
+                visibility: hidden;
+            }
+
+            /* Un-hide the print container and its children */
+            .print-container, .print-container * {
+                visibility: visible !important;
+                color: black !important; /* Force black text */
+            }
+
+            /* Position the print container at the very top-left of the page */
+            .print-container {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white;
+                z-index: 9999;
+                display: block !important;
+            }
+
+            /* Table Styling for Print */
             table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 10pt; }
-            th, td { border: 1px solid black !important; padding: 6px; text-align: left; color: black !important; page-break-inside: avoid; }
+            th, td { border: 1px solid black !important; padding: 6px; text-align: left; page-break-inside: avoid; }
             th { background-color: #f0f0f0 !important; font-weight: bold; }
+            
             .doc-header { text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
             .doc-id { font-family: monospace; font-weight: bold; float: right; font-size: 9pt; }
             .section-box { border: 1px solid black; padding: 10px; margin-bottom: 15px; }
             .field-label { font-weight: bold; font-size: 9pt; text-transform: uppercase; color: #555; }
             .field-value { font-weight: bold; font-size: 10pt; }
         }
+        /* Hide print container on screen */
         .print-container { display: none; }
     </style>
 </head>
@@ -88,7 +98,7 @@
             if (t.includes('Major')) return 'bg-red-900/50 text-red-200 border-red-500';
             if (t.includes('Minor')) return 'bg-orange-900/50 text-orange-200 border-orange-500';
             if (t.includes('OFI')) return 'bg-yellow-900/50 text-yellow-200 border-yellow-500';
-            return 'bg-blue-900/50 text-blue-200 border-blue-500';
+            return 'bg-blue-900/50 text-blue-200 border-blue-500'; // Observation
         };
 
         const AuditorWorkplace = () => {
@@ -102,7 +112,6 @@
             const [docId, setDocId] = useState('');
             const [criteria, setCriteria] = useState('');
 
-            // --- 1. LOAD DATA ---
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
@@ -127,11 +136,13 @@
                                             date: row.date || '',
                                             time: row.time || '',
                                             aspect: row.aspect || row.aspects || '', 
+                                            
                                             planId: plan.docId || '',
                                             siteId: plan.siteId || '',
                                             leadAuditor: plan.leadAuditor || '',
                                             standard: plan.standard || '',
                                             scope: plan.scope || 'OH&S Management System',
+                                            
                                             status: 'Planned', 
                                             findingRecord: null
                                         });
@@ -151,11 +162,13 @@
                             setMyTasks(mergedTasks);
                             setLoading(false);
                         });
-                    } else { setLoading(false); }
+                    } else {
+                        setLoading(false);
+                    }
                 });
             }, []);
 
-            // --- 2. GENERATE IDs ---
+            // Generate Doc ID
             useEffect(() => {
                 if(currentTask && !currentTask.findingRecord) {
                     const seq = Math.floor(10000 + Math.random() * 90000);
@@ -167,21 +180,29 @@
 
             const generateID = () => `AF-${Math.floor(10000 + Math.random() * 90000)}`;
 
-            // --- 3. ACTIONS ---
             const handleCardClick = (task) => {
-                if(task.status === 'Reported' || task.status === 'Closed') return; // Disabled states logic
+                // If reported or closed, we can still VIEW it, but maybe not edit if it's awaiting auditee
+                // Logic requested: Enable only if Red (Planned) or Orange (Submitted)
+                if(task.status === 'Reported' || task.status === 'Closed') {
+                    // Let's allow viewing for printing purposes
+                    setCurrentTask(task);
+                    setFindings(task.findingRecord.findings || []);
+                    setCriteria(task.findingRecord.taskDetails.criteria || '');
+                    setView('readOnly');
+                    return;
+                }
 
                 setCurrentTask(task);
                 setCriteria(task.standard || ''); 
                 
                 if (task.status === 'Planned') {
-                    // New Audit - Red State
+                    // New Audit
                     setFindings([{ id: generateID(), type: 'Observation', desc: '', clause: '', evidence: '', fileName: '' }]); 
                     setView('perform');
                 } else if (task.status === 'Submitted for Verification') {
-                    // Verification - Orange State
+                    // Verify
                     setFindings(task.findingRecord.findings || []);
-                    setCriteria(task.findingRecord.taskDetails.criteria || task.standard || '');
+                    setCriteria(task.findingRecord.taskDetails.criteria || '');
                     setView('verify');
                 }
             };
@@ -200,14 +221,34 @@
             const handleSave = async () => {
                 if(findings.some(f => !f.desc)) return alert("Please fill description for all findings.");
                 
-                const cleanTask = { ...currentTask, criteria: criteria || '' };
-                const cleanFindings = findings.map(f => ({ ...f, id: f.id || generateID() })); // Ensure ID exists
+                const cleanTask = {
+                    siteId: currentTask.siteId || '',
+                    leadAuditor: currentTask.leadAuditor || '',
+                    auditor: currentTask.auditor || '',
+                    auditee: currentTask.auditee || '',
+                    dept: currentTask.dept || '',
+                    area: currentTask.area || '',
+                    date: currentTask.date || '',
+                    standard: currentTask.standard || '',
+                    scope: currentTask.scope || '',
+                    criteria: criteria || '',
+                    planId: currentTask.planId || ''
+                };
+
+                const cleanFindings = findings.map(f => ({
+                    id: f.id || generateID(),
+                    type: f.type || 'Observation',
+                    clause: f.clause || '',
+                    desc: f.desc || '',
+                    evidence: f.evidence || '',
+                    fileName: f.fileName || ''
+                }));
 
                 const payload = {
                     docId: docId || '',
                     taskDetails: cleanTask,
                     findings: cleanFindings,
-                    status: 'Reported', // Turns Yellow
+                    status: 'Reported',
                     auditDate: new Date().toISOString(),
                     auditor: session.user || '',
                     siteId: cleanTask.siteId
@@ -224,7 +265,7 @@
                 if(!currentTask.findingRecord) return;
                 try {
                     await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/auditFindings/${currentTask.findingRecord.firebaseKey}`), {
-                        status: 'Closed', // Turns Green
+                        status: 'Closed',
                         closureDate: new Date().toISOString()
                     });
                     alert("Audit Verified & Closed!");
@@ -234,56 +275,89 @@
 
             if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading...</div>;
 
-            // --- 4. PRINT VIEW ---
-            const renderPrintView = (data) => (
-                <div className="print-container">
-                    <div className="doc-header">
-                        <span className="doc-id">Doc Ref: {data.docId || docId}</span>
-                        <h1>Internal Audit Report</h1>
-                        <p>{data.taskDetails?.scope || currentTask.scope}</p>
+            // --- UNIFIED PRINT GENERATOR ---
+            const renderPrintView = (data, findingsList) => {
+                const details = data.taskDetails || data; // Handle direct task or wrapper
+                
+                return (
+                    <div className="print-container">
+                        <div className="doc-header">
+                            <span className="doc-id">Doc Ref: {data.docId || docId}</span>
+                            <h1>Internal Audit Report</h1>
+                            <p>{details.scope || 'OH&S Management System'}</p>
+                        </div>
+
+                        <div className="section-box">
+                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
+                                <div><span className="field-label">Site:</span> <span className="field-value">{details.siteId}</span></div>
+                                <div><span className="field-label">Audit Date:</span> <span className="field-value">{details.date || new Date().toISOString().split('T')[0]}</span></div>
+                            </div>
+                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
+                                <div><span className="field-label">Department:</span> <span className="field-value">{details.dept}</span></div>
+                                <div><span className="field-label">Area:</span> <span className="field-value">{details.area}</span></div>
+                            </div>
+                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
+                                <div><span className="field-label">Auditor:</span> <span className="field-value">{details.auditor}</span></div>
+                                <div><span className="field-label">Auditee:</span> <span className="field-value">{details.auditee}</span></div>
+                            </div>
+                            <div style={{display:'flex', justifyContent:'space-between', marginTop:'10px', paddingTop:'5px', borderTop:'1px dashed #ccc'}}>
+                                <div><span className="field-label">Standard:</span> <span className="field-value">{details.standard}</span></div>
+                                <div><span className="field-label">Criteria:</span> <span className="field-value">{details.criteria || criteria}</span></div>
+                            </div>
+                        </div>
+
+                        <h3>Audit Findings Matrix</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style={{width:'15%'}}>ID</th>
+                                    <th style={{width:'15%'}}>Type</th>
+                                    <th style={{width:'40%'}}>Description of Finding</th>
+                                    <th style={{width:'10%'}}>Clause</th>
+                                    <th style={{width:'20%'}}>Evidence</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {findingsList.map((f, i) => (
+                                    <tr key={i}>
+                                        <td>{f.id}</td>
+                                        <td>{f.type}</td>
+                                        <td>{f.desc}</td>
+                                        <td>{f.clause}</td>
+                                        <td>{f.fileName || 'N/A'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+
+                        {/* Closure Section only if data exists */}
+                        {data.rootCause && (
+                            <div className="section-box" style={{marginTop:'20px'}}>
+                                <h3>Auditee Closure Response</h3>
+                                <div style={{marginBottom:'5px'}}><strong>Root Cause:</strong> {data.rootCause}</div>
+                                <div style={{marginBottom:'5px'}}><strong>Correction:</strong> {data.correction}</div>
+                                <div><strong>Actions:</strong>
+                                    <ul style={{margin:'0', paddingLeft:'20px'}}>
+                                        {(data.actions||[]).map((a,k)=><li key={k}>{a.action} (Resp: {a.resp})</li>)}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="section-box" style={{marginTop:'30px', border:'none'}}>
+                            <div style={{display:'flex', justifyContent:'space-between'}}>
+                                <div style={{borderTop:'1px solid black', width:'40%', paddingTop:'5px', textAlign:'center'}}>Auditor Signature</div>
+                                <div style={{borderTop:'1px solid black', width:'40%', paddingTop:'5px', textAlign:'center'}}>Auditee Signature</div>
+                            </div>
+                        </div>
                     </div>
-                    <div className="section-box">
-                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
-                            <div><span className="field-label">Site:</span> <span className="field-value">{data.taskDetails?.siteId || currentTask.siteId}</span></div>
-                            <div><span className="field-label">Date:</span> <span className="field-value">{data.auditDate?.split('T')[0] || new Date().toISOString().split('T')[0]}</span></div>
-                        </div>
-                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'5px'}}>
-                            <div><span className="field-label">Auditor:</span> <span className="field-value">{data.taskDetails?.auditor || currentTask.auditor}</span></div>
-                            <div><span className="field-label">Auditee:</span> <span className="field-value">{data.taskDetails?.auditee || currentTask.auditee}</span></div>
-                        </div>
-                    </div>
-                    <h3>Audit Findings</h3>
-                    <table>
-                        <thead><tr><th style={{width:'15%'}}>ID</th><th style={{width:'15%'}}>Type</th><th>Description</th><th style={{width:'10%'}}>Clause</th></tr></thead>
-                        <tbody>
-                            {(data.findings || findings).map((f, i) => (
-                                <tr key={i}><td>{f.id}</td><td>{f.type}</td><td>{f.desc}</td><td>{f.clause}</td></tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {data.rootCause && (
-                        <div className="section-box" style={{marginTop:'20px'}}>
-                            <h3>Closure</h3>
-                            <div><strong>Root Cause:</strong> {data.rootCause}</div>
-                            <div><strong>Correction:</strong> {data.correction}</div>
-                        </div>
-                    )}
-                    <div className="section-box" style={{marginTop:'30px', border:'none'}}>
-                        <div style={{display:'flex', justifyContent:'space-between'}}>
-                            <div style={{borderTop:'1px solid black', width:'40%', paddingTop:'5px', textAlign:'center'}}>Auditor Signature</div>
-                            <div style={{borderTop:'1px solid black', width:'40%', paddingTop:'5px', textAlign:'center'}}>Auditee Signature</div>
-                        </div>
-                    </div>
-                </div>
-            );
+                );
+            };
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
-                        <div className="flex items-center gap-4">
-                            <a href="audit.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition"><i className="fas fa-arrow-left"></i> Back</a>
-                            <h1 className="font-bold text-lg tracking-wide">Auditor Workplace</h1>
-                        </div>
+                        <div className="flex items-center gap-4"><a href="audit.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg tracking-wide">Auditor Workplace</h1></div>
                         <div className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900">{session.user}</div>
                     </div>
 
@@ -296,19 +370,19 @@
                                     <h2 className="text-xl font-bold mb-6 text-white flex items-center gap-2"><i className="fas fa-tasks text-blue-400"></i> Assigned Audits</h2>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {myTasks.map((task, i) => {
-                                            const isEnabled = task.status === 'Planned' || task.status === 'Submitted for Verification';
+                                            const isEnabled = task.status === 'Planned' || task.status === 'Submitted for Verification' || task.status === 'Reported' || task.status === 'Closed';
                                             const statusClass = 
                                                 task.status === 'Planned' ? 'status-red' : 
                                                 task.status === 'Reported' ? 'status-yellow' : 
                                                 task.status === 'Submitted for Verification' ? 'status-orange' : 'status-green';
                                             
                                             const statusLabel = 
-                                                task.status === 'Planned' ? 'Needs Audit' :
-                                                task.status === 'Reported' ? 'Sent for Correction' :
-                                                task.status === 'Submitted for Verification' ? 'Correction Received' : 'Closed';
+                                                task.status === 'Planned' ? 'Perform Audit' :
+                                                task.status === 'Reported' ? 'View / Print Report' :
+                                                task.status === 'Submitted for Verification' ? 'Verify Closure' : 'View Final Report';
 
                                             return (
-                                                <div key={i} onClick={() => isEnabled && handleCardClick(task)} className={`glass-panel p-6 rounded-xl relative task-card ${statusClass} ${isEnabled ? 'enabled' : 'disabled'}`}>
+                                                <div key={i} onClick={() => isEnabled && handleCardClick(task)} className={`glass-panel p-6 rounded-xl relative task-card ${statusClass} enabled`}>
                                                     <div className="flex justify-between mb-4">
                                                         <span className="text-[10px] font-bold uppercase bg-slate-900/50 px-2 py-1 rounded text-white border border-slate-700">{task.status}</span>
                                                         <span className="text-xs text-slate-300 font-bold">{task.date}</span>
@@ -320,9 +394,7 @@
                                                         <div><span className="text-slate-500 text-xs uppercase mr-2">Auditee:</span><i className="text-emerald-400">{task.auditee}</i></div>
                                                     </div>
                                                     <div className="mt-4 pt-4 border-t border-slate-700/50 text-center">
-                                                        <span className={`text-xs font-bold uppercase ${isEnabled ? 'text-white' : 'text-slate-500'}`}>
-                                                            {isEnabled ? (task.status === 'Planned' ? 'Click to Perform Audit' : 'Click to Verify') : statusLabel}
-                                                        </span>
+                                                        <span className="text-xs font-bold uppercase text-white">{statusLabel}</span>
                                                     </div>
                                                 </div>
                                             );
@@ -333,42 +405,56 @@
 
                             {/* VIEW 2: EXECUTION FORM */}
                             {view === 'perform' && currentTask && (
-                                <div className="animate-fade-in screen-ui">
-                                    <div className="glass-panel p-6 rounded-2xl border-l-4 border-emerald-500 mb-6">
+                                <div className="animate-fade-in">
+                                    <div className="glass-panel p-6 rounded-2xl border-l-4 border-emerald-500 mb-6 screen-ui">
                                         <h3 className="text-emerald-400 font-bold uppercase text-sm mb-4">Section 1: Audit Context</h3>
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
                                             <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Site</label><div className="font-bold">{currentTask.siteId}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Lead Auditor</label><div className="font-bold">{currentTask.leadAuditor}</div></div>
                                             <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Auditor</label><div className="font-bold">{currentTask.auditor}</div></div>
                                             <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Auditee</label><div className="font-bold text-amber-400">{currentTask.auditee}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Department</label><div className="font-bold">{currentTask.dept}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Area</label><div className="font-bold">{currentTask.area}</div></div>
                                             <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Date</label><div className="font-bold">{currentTask.date}</div></div>
-                                            <div className="col-span-2"><label className="text-[10px] text-slate-500 uppercase block mb-1">Criteria</label><input value={criteria} onChange={e=>setCriteria(e.target.value)} className="bg-slate-900 border-slate-700 w-full text-xs"/></div>
+                                            <div className="col-span-2"><label className="text-[10px] text-slate-500 uppercase block mb-1">Audit Criteria</label><input value={criteria} onChange={e=>setCriteria(e.target.value)} className="bg-slate-900 border-slate-700 w-full text-xs" /></div>
                                         </div>
                                     </div>
 
-                                    <div className="glass-panel p-6 rounded-2xl border-t-4 border-blue-500">
+                                    <div className="glass-panel p-6 rounded-2xl border-t-4 border-blue-500 screen-ui">
                                         <div className="flex justify-between items-center mb-4"><h3 className="text-blue-400 font-bold uppercase text-sm">Section 2: Audit Findings</h3><button onClick={addRow} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs">+ Add Finding</button></div>
                                         <div className="space-y-4">{findings.map((f, i) => (<div key={i} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative"><div className="absolute top-2 right-2 text-xs font-bold text-emerald-400 font-mono bg-emerald-900/30 px-2 rounded">{f.id}</div><div className="grid grid-cols-12 gap-4 items-start"><div className="col-span-2"><label className="text-[10px] text-slate-500 uppercase block mb-1">Type</label><select value={f.type} onChange={e=>updateRow(i, 'type', e.target.value)} className={`w-full text-xs font-bold border rounded p-2 outline-none ${getTypeStyle(f.type)}`}><option value="Observation" className="text-black">Observation</option><option value="OFI" className="text-black">Opp. for Improv.</option><option value="Minor NC" className="text-black">Minor NC</option><option value="Major NC" className="text-black">Major NC</option></select></div><div className="col-span-2"><label className="text-[10px] text-slate-500 uppercase block mb-1">Clause</label><input value={f.clause} onChange={e=>updateRow(i, 'clause', e.target.value)} className="bg-slate-900 text-xs w-full border border-slate-700 rounded p-2" placeholder="e.g. 9.1" /></div><div className="col-span-4"><label className="text-[10px] text-slate-500 uppercase block mb-1">Description of Finding</label><textarea value={f.desc} onChange={e=>updateRow(i, 'desc', e.target.value)} className="bg-slate-900 text-xs w-full border border-slate-700 rounded p-2" rows="2"></textarea></div><div className="col-span-3"><label className="text-[10px] text-slate-500 uppercase block mb-1">Objective Evidence</label><input type="file" onChange={(e)=>handleFile(i, e.target.files[0])} className="text-[10px] text-slate-400 file:bg-slate-700 file:text-white file:border-none file:rounded file:px-2 file:py-1" />{f.fileName && <div className="text-[9px] text-emerald-400 mt-1 truncate"><i className="fas fa-paperclip mr-1"></i>{f.fileName}</div>}</div><div className="col-span-1 flex justify-center pt-6"><button onClick={()=>removeRow(i)} className="text-red-400 hover:text-white transition"><i className="fas fa-trash"></i></button></div></div></div>))}</div>
                                         <div className="mt-8 flex justify-end gap-3 pt-4 border-t border-slate-700"><button onClick={()=>setView('list')} className="px-6 py-2 rounded-lg border border-slate-600 text-slate-400 hover:text-white text-sm">Cancel</button><button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded-lg text-white font-bold text-sm shadow-lg flex items-center gap-2"><i className="fas fa-save"></i> Save Findings</button><button onClick={()=>window.print()} className="bg-purple-600 hover:bg-purple-500 px-6 py-2 rounded-lg text-white font-bold text-sm shadow-lg flex items-center gap-2"><i className="fas fa-print"></i> Print Report</button></div>
                                     </div>
-                                    {renderPrintView({ docId, taskDetails: {...currentTask, criteria}, findings, auditDate: new Date().toISOString() })}
+                                    {renderPrintView(currentTask, findings)}
                                 </div>
                             )}
 
-                            {/* VIEW 3: VERIFICATION */}
-                            {view === 'verify' && currentTask.findingRecord && (
+                            {/* VIEW 3: READ ONLY / VERIFY */}
+                            {(view === 'readOnly' || view === 'verify') && currentTask.findingRecord && (
                                 <div className="animate-fade-in">
                                     <div className="flex justify-between mb-4 screen-ui">
                                         <button onClick={()=>setView('list')} className="text-slate-400"><i className="fas fa-arrow-left"></i> Back</button>
-                                        <div className="flex gap-2"><button onClick={()=>window.print()} className="bg-slate-700 px-4 py-2 rounded text-xs font-bold"><i className="fas fa-print mr-2"></i>Print</button><button onClick={handleVerifyClose} className="bg-blue-600 px-4 py-2 rounded text-xs font-bold animate-pulse">Verify & Close Audit</button></div>
-                                    </div>
-                                    <div className="glass-panel p-6 rounded-xl border-l-4 border-orange-500 mb-6 screen-ui">
-                                        <h3 className="text-orange-400 font-bold uppercase text-sm mb-4">Verification Actions</h3>
-                                        <div className="grid grid-cols-2 gap-4 text-sm text-slate-300">
-                                            <div className="bg-slate-900 p-3 rounded"><div className="text-xs text-slate-500 uppercase">Root Cause</div><div>{currentTask.findingRecord.rootCause || 'Pending...'}</div></div>
-                                            <div className="bg-slate-900 p-3 rounded"><div className="text-xs text-slate-500 uppercase">Correction</div><div>{currentTask.findingRecord.correction || 'Pending...'}</div></div>
+                                        <div className="flex gap-2">
+                                            <button onClick={()=>window.print()} className="bg-slate-700 px-4 py-2 rounded text-xs font-bold"><i className="fas fa-print mr-2"></i>Print</button>
+                                            {view === 'verify' && <button onClick={handleVerifyClose} className="bg-blue-600 px-4 py-2 rounded text-xs font-bold animate-pulse">Verify & Close Audit</button>}
                                         </div>
                                     </div>
-                                    {renderPrintView(currentTask.findingRecord)}
+                                    
+                                    <div className="glass-panel p-6 rounded-xl border border-slate-700 mb-6 screen-ui">
+                                        <h3 className="text-white font-bold mb-4">Closure Information</h3>
+                                        <div className="grid grid-cols-2 gap-4 text-sm text-slate-300">
+                                            <div className="bg-slate-900 p-3 rounded">
+                                                <div className="text-xs text-slate-500 uppercase">Root Cause</div>
+                                                <div>{currentTask.findingRecord.rootCause || 'Pending...'}</div>
+                                            </div>
+                                            <div className="bg-slate-900 p-3 rounded">
+                                                <div className="text-xs text-slate-500 uppercase">Correction</div>
+                                                <div>{currentTask.findingRecord.correction || 'Pending...'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {renderPrintView(currentTask.findingRecord, currentTask.findingRecord.findings)}
                                 </div>
                             )}
 
