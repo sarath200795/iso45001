@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Scheduler</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
+                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px 12px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+        
+        /* Custom Scrollbar for table */
+        .custom-scroll::-webkit-scrollbar { height: 8px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+
+        /* PRINT STYLES */
+        @media print {
+            @page { size: A4 landscape; margin: 10mm; }
+            body, html, #root { width: 100%; height: auto; background: white !important; color: black !important; display: block !important; overflow: visible !important; }
+            .no-print, header, .back-btn, button { display: none !important; }
+            .print-container { display: block !important; }
+            .screen-container { display: none !important; }
+            
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10pt; }
+            th, td { border: 1px solid black !important; padding: 6px; text-align: left; color: black !important; page-break-inside: avoid; }
+            th { background-color: #f0f0f0 !important; font-weight: bold; }
+            
+            .doc-header { text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            .doc-meta { display: flex; justify-content: space-between; margin-bottom: 20px; border: 1px solid black; padding: 10px; }
+            
+            input, select { border: none !important; background: transparent !important; color: black !important; padding: 0; appearance: none; }
+            .text-emerald-400, .text-slate-400 { color: black !important; }
+        }
+        .print-container { display: none; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, get, push, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { ref, get, push, update };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const AuditScheduler = () => {
+            const [session, setSession] = useState(null);
+            const [sites, setSites] = useState([]);
+            const [allUsers, setAllUsers] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            // Form State
+            const [plan, setPlan] = useState({
+                siteId: '',
+                leadAuditor: '',
+                team: [], // Array of user names/IDs
+                standard: 'ISO 45001:2018',
+                startDate: '',
+                endDate: '',
+                docId: ''
+            });
+
+            // Matrix State
+            const [rows, setRows] = useState([
+                { auditor: '', auditee: '', dept: '', area: '', aspect: '', date: '', time: '' }
+            ]);
+
+            // Load Data
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if(!s) { window.location.href='index.html'; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+
+                const orgRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
+                window.fb.get(orgRef).then(snap => {
+                    if(snap.exists()) {
+                        const val = snap.val();
+                        setSites(val.sites ? Object.values(val.sites) : []);
+                        setAllUsers(val.users ? Object.values(val.users) : []);
+                        
+                        // Set Initial Site from URL or Session
+                        // const params = new URLSearchParams(window.location.search); // Not using URL param for audit sub-modules usually, but good practice
+                        // let initialSite = params.get('site') || (sess.assignedSite === 'GLOBAL' ? '' : sess.assignedSite);
+                        // setPlan(p => ({...p, siteId: initialSite}));
+                        setLoading(false);
+                    }
+                });
+            }, []);
+
+            // Generate Doc ID when Site changes
+            useEffect(() => {
+                if(session && plan.siteId) {
+                    const seq = Math.floor(1000 + Math.random() * 9000);
+                    setPlan(p => ({...p, docId: `${session.orgId}-${plan.siteId}-IAC-${seq}`}));
+                }
+            }, [plan.siteId]);
+
+            // Handlers
+            const addRow = () => setRows([...rows, { auditor: '', auditee: '', dept: '', area: '', aspect: '', date: '', time: '' }]);
+            const removeRow = (index) => setRows(rows.filter((_, i) => i !== index));
+            const updateRow = (index, field, value) => {
+                const newRows = [...rows];
+                newRows[index][field] = value;
+                setRows(newRows);
+            };
+
+            const toggleTeamMember = (userName) => {
+                if (plan.team.includes(userName)) {
+                    setPlan({...plan, team: plan.team.filter(t => t !== userName)});
+                } else {
+                    setPlan({...plan, team: [...plan.team, userName]});
+                }
+            };
+
+            const handleSave = async () => {
+                if (!plan.siteId || !plan.startDate || !plan.leadAuditor) return alert("Please fill in Site, Lead Auditor and Dates.");
+                
+                const payload = {
+                    ...plan,
+                    matrix: rows,
+                    createdAt: new Date().toISOString(),
+                    createdBy: session.user,
+                    status: 'Planned'
+                };
+
+                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/auditPlans`), payload);
+                alert("Audit Plan Saved Successfully!");
+                window.location.href = 'audit.html';
+            };
+
+            // Filter Users Logic
+            const siteUsers = useMemo(() => {
+                if (!plan.siteId) return [];
+                return allUsers.filter(u => u.assignedSite === plan.siteId || (u.accessibleSites && u.accessibleSites.includes(plan.siteId)) || u.role === 'Owner');
+            }, [allUsers, plan.siteId]);
+
+            // All Auditors (Global list or specific role filter if needed, currently showing all for Team selection)
+            const availableAuditors = allUsers.filter(u => ['Owner', 'Lead Auditor', 'Auditor', 'Site Leader', 'EHS Manager'].includes(u.role));
+
+            if (loading) return <div className="flex h-screen items-center justify-center text-white">Loading...</div>;
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    {/* Header */}
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
+                        <div className="flex items-center gap-4">
+                            <a href="audit.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition">
+                                <i className="fas fa-arrow-left"></i> Back
+                            </a>
+                            <h1 className="font-bold text-lg tracking-wide">Audit Scheduler</h1>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={()=>window.print()} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i className="fas fa-print mr-2"></i> Print Plan</button>
+                            <button onClick={handleSave} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm"><i className="fas fa-save mr-2"></i> Save Plan</button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-8">
+                        <div className="max-w-7xl mx-auto space-y-6 screen-container">
+                            
+                            {/* SECTION 1: GENERAL INFO */}
+                            <div className="glass-panel p-6 rounded-2xl border-l-4 border-blue-500">
+                                <h2 className="text-xl font-bold mb-4 text-blue-400">Section 1: General Information</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    
+                                    {/* Column 1 */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="text-[10px] uppercase font-bold text-slate-500">Target Site</label>
+                                            <select value={plan.siteId} onChange={e=>setPlan({...plan, siteId:e.target.value})} className="w-full bg-slate-900 border-slate-700" disabled={session.role !== 'Owner' && session.role !== 'Lead Auditor'}>
+                                                <option value="">Select Site...</option>
+                                                {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] uppercase font-bold text-slate-500">Standard</label>
+                                            <input value={plan.standard} onChange={e=>setPlan({...plan, standard:e.target.value})} className="bg-slate-900 border-slate-700" />
+                                        </div>
+                                    </div>
+
+                                    {/* Column 2 */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="text-[10px] uppercase font-bold text-slate-500">Lead Auditor</label>
+                                            <select value={plan.leadAuditor} onChange={e=>setPlan({...plan, leadAuditor:e.target.value})} className="w-full bg-slate-900 border-slate-700">
+                                                <option value="">Select...</option>
+                                                {availableAuditors.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="text-[10px] uppercase font-bold text-slate-500">Start Date</label>
+                                                <input type="date" value={plan.startDate} onChange={e=>setPlan({...plan, startDate:e.target.value})} className="bg-slate-900 border-slate-700" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] uppercase font-bold text-slate-500">End Date</label>
+                                                <input type="date" value={plan.endDate} onChange={e=>setPlan({...plan, endDate:e.target.value})} className="bg-slate-900 border-slate-700" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Column 3: Audit Team Selection */}
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 block">Audit Team Members</label>
+                                        <div className="h-32 overflow-y-auto custom-scroll space-y-1">
+                                            {availableAuditors.map(u => (
+                                                <div key={u.id} onClick={()=>toggleTeamMember(u.name)} className={`flex items-center gap-2 p-2 rounded cursor-pointer text-xs ${plan.team.includes(u.name) ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
+                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${plan.team.includes(u.name) ? 'border-white bg-blue-500' : 'border-slate-500'}`}>
+                                                        {plan.team.includes(u.name) && <i className="fas fa-check text-[8px]"></i>}
+                                                    </div>
+                                                    {u.name} <span className="opacity-50">({u.role})</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="mt-2 text-[10px] text-slate-500 text-right">{plan.team.length} selected</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* SECTION 2: AUDIT MATRIX */}
+                            <div className="glass-panel p-6 rounded-2xl border-t-4 border-emerald-500">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-xl font-bold text-emerald-400">Section 2: Audit Execution Matrix</h2>
+                                    <button onClick={addRow} className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-2">
+                                        <i className="fas fa-plus"></i> Add Row
+                                    </button>
+                                </div>
+                                
+                                <div className="overflow-x-auto rounded-lg border border-slate-700">
+                                    <table className="w-full text-left text-sm text-slate-300">
+                                        <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-400">
+                                            <tr>
+                                                <th className="p-3">Auditor (Team)</th>
+                                                <th className="p-3">Auditee (Site)</th>
+                                                <th className="p-3">Department</th>
+                                                <th className="p-3">Area</th>
+                                                <th className="p-3">Aspect / Process</th>
+                                                <th className="p-3 w-32">Date</th>
+                                                <th className="p-3 w-24">Time</th>
+                                                <th className="p-3 w-10"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800">
+                                            {rows.map((row, i) => (
+                                                <tr key={i} className="hover:bg-slate-800/50">
+                                                    <td className="p-2">
+                                                        <select className="bg-transparent text-white w-full text-xs" value={row.auditor} onChange={e=>updateRow(i, 'auditor', e.target.value)}>
+                                                            <option value="">Select Auditor...</option>
+                                                            {plan.leadAuditor && <option value={plan.leadAuditor}>{plan.leadAuditor} (Lead)</option>}
+                                                            {plan.team.map(m => <option key={m} value={m}>{m}</option>)}
+                                                        </select>
+                                                    </td>
+                                                    <td className="p-2">
+                                                        <select className="bg-transparent text-white w-full text-xs" value={row.auditee} onChange={e=>updateRow(i, 'auditee', e.target.value)}>
+                                                            <option value="">Select Auditee...</option>
+                                                            {siteUsers.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                                                        </select>
+                                                    </td>
+                                                    <td className="p-2"><input className="bg-transparent border-none p-1 text-xs" placeholder="Dept" value={row.dept} onChange={e=>updateRow(i, 'dept', e.target.value)} /></td>
+                                                    <td className="p-2"><input className="bg-transparent border-none p-1 text-xs" placeholder="Area" value={row.area} onChange={e=>updateRow(i, 'area', e.target.value)} /></td>
+                                                    <td className="p-2"><input className="bg-transparent border-none p-1 text-xs w-full" placeholder="Scope..." value={row.aspect} onChange={e=>updateRow(i, 'aspect', e.target.value)} /></td>
+                                                    <td className="p-2"><input type="date" className="bg-transparent border-none p-1 text-xs" value={row.date} onChange={e=>updateRow(i, 'date', e.target.value)} /></td>
+                                                    <td className="p-2"><input type="time" className="bg-transparent border-none p-1 text-xs" value={row.time} onChange={e=>updateRow(i, 'time', e.target.value)} /></td>
+                                                    <td className="p-2 text-center"><button onClick={()=>removeRow(i)} className="text-red-400 hover:text-red-300"><i className="fas fa-times"></i></button></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* PRINTABLE VIEW (A4 Landscape) */}
+                        <div className="print-container">
+                            <div className="doc-header">
+                                <h1 className="text-2xl font-bold uppercase">Internal Audit Plan</h1>
+                                <p className="text-sm mt-1">Document ID: <span className="font-mono font-bold">{plan.docId}</span></p>
+                            </div>
+
+                            <div className="border border-black mb-6">
+                                <div className="grid grid-cols-4 text-sm">
+                                    <div className="p-2 border-r border-b border-black font-bold bg-gray-100">Site Location:</div>
+                                    <div className="p-2 border-r border-b border-black">{plan.siteId}</div>
+                                    <div className="p-2 border-r border-b border-black font-bold bg-gray-100">Lead Auditor:</div>
+                                    <div className="p-2 border-b border-black">{plan.leadAuditor}</div>
+                                    
+                                    <div className="p-2 border-r border-b border-black font-bold bg-gray-100">Audit Standard:</div>
+                                    <div className="p-2 border-r border-b border-black">{plan.standard}</div>
+                                    <div className="p-2 border-r border-b border-black font-bold bg-gray-100">Dates:</div>
+                                    <div className="p-2 border-b border-black">{plan.startDate} to {plan.endDate}</div>
+
+                                    <div className="p-2 border-r border-black font-bold bg-gray-100">Audit Team:</div>
+                                    <div className="p-2 border-black col-span-3">{plan.team.join(', ')}</div>
+                                </div>
+                            </div>
+
+                            <h3 className="font-bold text-lg mb-2 uppercase border-b border-black">Audit Schedule Matrix</h3>
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr>
+                                        <th>Date / Time</th>
+                                        <th>Department / Area</th>
+                                        <th>Aspects to be Audited</th>
+                                        <th>Auditor</th>
+                                        <th>Auditee</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map((row, i) => (
+                                        <tr key={i}>
+                                            <td className="border border-black p-1">{row.date} <br/> {row.time}</td>
+                                            <td className="border border-black p-1"><b>{row.dept}</b><br/>{row.area}</td>
+                                            <td className="border border-black p-1">{row.aspect}</td>
+                                            <td className="border border-black p-1">{row.auditor}</td>
+                                            <td className="border border-black p-1">{row.auditee}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            <div className="mt-8 flex justify-between text-sm">
+                                <div>
+                                    <p className="border-t border-black w-40 pt-1 text-center">Lead Auditor Signature</p>
+                                </div>
+                                <div>
+                                    <p className="border-t border-black w-40 pt-1 text-center">Management Rep Signature</p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AuditScheduler />);
+    </script>
+</body>
+</html>
