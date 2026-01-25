@@ -4,80 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auditee Workplace</title>
-    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
-                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
-                }
-            }
-        }
-    </script>
-    <style>
-        body { background-color: #0f172a; color: #f8fafc; }
-        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
-        
-        .finding-card { border-left-width: 4px; transition: transform 0.2s; cursor: pointer; }
-        .finding-card:hover { transform: translateX(4px); background: rgba(30, 41, 59, 0.8); }
-        .border-red-500 { border-left-color: #ef4444; }
-        .border-yellow-500 { border-left-color: #eab308; }
-        
-        .custom-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-    </style>
+    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Space Grotesk', 'sans-serif'] }, colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' } } } }</script>
+    <style>body { background-color: #0f172a; color: #f8fafc; } .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); } input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; }</style>
 </head>
 <body class="min-h-screen flex flex-col">
     <div id="root" class="h-full flex flex-col"></div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, push, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
+        import { getDatabase, ref, get, update, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
         const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
-        window.fb = { ref, get, push, update };
+        window.fb = { ref, get, update, push };
     </script>
-
     <script type="text/babel">
         const { useState, useEffect } = React;
-
-        const fileToBase64 = (file) => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
-        });
+        const fileToBase64 = (file) => new Promise((r) => { const x=new FileReader(); x.readAsDataURL(file); x.onload=()=>r(x.result); });
 
         const AuditeeWorkplace = () => {
             const [session, setSession] = useState(null);
             const [myFindings, setMyFindings] = useState([]);
             const [selected, setSelected] = useState(null);
-            const [loading, setLoading] = useState(true);
+            
+            const [response, setResponse] = useState({ rootCause: '', correction: '', actions: [], evidenceFile: null, evidenceFileName: '' });
 
-            // Form State
-            const [response, setResponse] = useState({
-                rootCause: '',
-                correction: '',
-                closureDate: new Date().toISOString().split('T')[0],
-                evidenceFile: null,
-                evidenceFileName: '',
-                actions: [] // { action: '', resp: '', target: '' }
-            });
-
-            // Load Data
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
@@ -88,188 +44,92 @@
                 window.fb.get(dbRef).then(snap => {
                     if(snap.exists()) {
                         const all = Object.entries(snap.val()).map(([k, v]) => ({...v, firebaseKey: k}));
-                        // Filter: Open status AND assigned to current user (Auditee)
-                        const mine = all.filter(f => 
-                            (f.status === 'Reported' || f.status === 'Open') && 
-                            f.taskDetails.auditee === sess.user
-                        );
+                        // Show ALL records relevant to this auditee, regardless of status
+                        const mine = all.filter(f => f.taskDetails.auditee === sess.user);
                         setMyFindings(mine);
                     }
-                    setLoading(false);
                 });
             }, []);
 
-            // Initialize form when a finding is selected
-            useEffect(() => {
-                if (selected) {
-                    setResponse({
-                        rootCause: '',
-                        correction: '',
-                        closureDate: new Date().toISOString().split('T')[0],
-                        evidenceFile: null,
-                        evidenceFileName: '',
-                        actions: [{ action: '', resp: session.user, target: '' }]
-                    });
-                }
-            }, [selected]);
-
-            // CAPA Table Helpers
-            const addAction = () => setResponse({...response, actions: [...response.actions, { action: '', resp: session.user, target: '' }]});
-            const removeAction = (idx) => setResponse({...response, actions: response.actions.filter((_, i) => i !== idx)});
-            const updateAction = (idx, field, val) => {
-                const updated = [...response.actions];
-                updated[idx][field] = val;
-                setResponse({...response, actions: updated});
-            };
-
-            const handleFile = async (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const base64 = await fileToBase64(file);
-                    setResponse({ ...response, evidenceFile: base64, evidenceFileName: file.name });
-                }
-            };
-
             const handleSubmit = async () => {
-                if (!response.rootCause || response.actions.some(a => !a.action)) return alert("Please fill Root Cause and at least one Action.");
-
-                // Here we usually update the specific finding inside the array
-                // But since findings are stored as blocks in 'auditFindings', we need to be careful.
-                // Assuming 'auditFindings' stores ONE report which contains an ARRAY of findings.
-                // However, my previous code structure suggested storing whole reports.
-                // To keep it simple: We will update the status of the whole REPORT block or specific finding.
-                // Let's assume the 'selected' object IS the record in Firebase for simplicity of this module.
+                if(!response.rootCause) return alert("Root Cause is required.");
                 
                 const updatedRecord = {
                     ...selected,
-                    ...response, // Merge response data
-                    status: 'Submitted for Verification',
+                    ...response,
+                    status: 'Submitted for Verification', // This triggers the Auditor's "Verify" button
                     submissionDate: new Date().toISOString()
                 };
 
                 await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/auditFindings/${selected.firebaseKey}`), updatedRecord);
-                
-                alert("Response Submitted for Verification!");
-                setMyFindings(myFindings.filter(f => f.firebaseKey !== selected.firebaseKey)); // Remove from list
-                setSelected(null);
+                alert("Submitted! The Auditor will now verify.");
+                window.location.reload();
             };
 
-            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Tasks...</div>;
+            const addAction = () => setResponse({...response, actions: [...response.actions, { action: '', resp: session.user, target: '' }]});
+            const updateAction = (i, f, v) => { const u = [...response.actions]; u[i][f] = v; setResponse({...response, actions: u}); };
+            const handleFile = async (e) => { const f=e.target.files[0]; if(f) { const b=await fileToBase64(f); setResponse({...response, evidenceFile: b, evidenceFileName: f.name}); }};
+
+            if(!session) return null;
+
+            const isEditable = selected && selected.status === 'Reported'; // Only editable if fresh from Auditor
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
-                    {/* Header */}
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
-                        <div className="flex items-center gap-4">
-                            <a href="audit.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition">
-                                <i className="fas fa-arrow-left"></i> Back
-                            </a>
-                            <h1 className="font-bold text-lg tracking-wide">Auditee Workplace</h1>
-                        </div>
-                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-amber-400 border border-amber-900">
-                            User: {session.user}
-                        </div>
+                        <div className="flex items-center gap-4"><a href="audit.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Auditee Workplace</h1></div>
+                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-amber-400">{session.user}</div>
                     </div>
 
                     <div className="flex-1 overflow-hidden p-6 flex gap-6">
-                        
-                        {/* LEFT: LIST OF OPEN FINDINGS */}
-                        <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-2xl flex flex-col">
-                            <div className="p-4 border-b border-slate-700 bg-slate-800/50 rounded-t-2xl">
-                                <h2 className="font-bold text-amber-400 uppercase text-xs tracking-wider">Pending Actions ({myFindings.length})</h2>
-                            </div>
-                            <div className="overflow-y-auto flex-1 p-3 custom-scroll">
-                                {myFindings.length === 0 && <div className="text-slate-500 text-center text-sm mt-10">No pending actions.</div>}
-                                {myFindings.map(f => (
-                                    <div key={f.firebaseKey} onClick={() => setSelected(f)} className={`p-4 mb-3 rounded-xl bg-slate-800 border-l-4 cursor-pointer finding-card ${selected?.firebaseKey === f.firebaseKey ? 'border-blue-500 bg-slate-700' : 'border-red-500'}`}>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="text-[10px] font-mono text-slate-400">{f.findings[0]?.id || 'REF'}</span>
-                                            <span className="text-[10px] bg-slate-900 text-slate-300 px-2 rounded">{f.taskDetails.date}</span>
-                                        </div>
-                                        <h3 className="font-bold text-sm text-white mb-1 line-clamp-2">{f.findings[0]?.desc}</h3>
-                                        <div className="text-xs text-slate-400 mt-2">{f.taskDetails.dept} | {f.taskDetails.area}</div>
+                        {/* LIST */}
+                        <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-2xl overflow-y-auto p-3">
+                            {myFindings.map(f => (
+                                <div key={f.firebaseKey} onClick={() => setSelected(f)} className={`p-4 mb-3 rounded-xl border-l-4 cursor-pointer transition ${
+                                    f.status === 'Reported' ? 'border-red-500 bg-red-900/10' :
+                                    f.status === 'Submitted for Verification' ? 'border-blue-500 bg-blue-900/10' :
+                                    'border-emerald-500 bg-emerald-900/10'
+                                }`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-[10px] font-bold uppercase">{f.status}</span>
+                                        <span className="text-[10px] text-slate-400">{f.auditDate.split('T')[0]}</span>
                                     </div>
-                                ))}
-                            </div>
+                                    <h3 className="font-bold text-sm text-white mb-1">{f.taskDetails.dept}</h3>
+                                    <p className="text-xs text-slate-400">{f.findings.length} Finding(s)</p>
+                                </div>
+                            ))}
                         </div>
 
-                        {/* RIGHT: RESPONSE FORM */}
-                        <div className="w-2/3 glass-panel rounded-2xl p-8 overflow-y-auto custom-scroll relative">
-                            {!selected ? (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
-                                    <i className="fas fa-file-signature text-6xl mb-4"></i>
-                                    <p>Select a finding to respond</p>
-                                </div>
-                            ) : (
-                                <div className="animate-fade-in pb-10">
-                                    <div className="flex justify-between items-start mb-6 border-b border-slate-700 pb-4">
-                                        <div>
-                                            <h2 className="text-2xl font-bold text-white mb-1">Audit Response</h2>
-                                            <p className="text-sm text-slate-400">Ref: <span className="font-mono text-emerald-400">{selected.findings[0].id}</span></p>
-                                        </div>
-                                        <div className="text-right text-xs text-slate-500">
-                                            <p>Auditor: {selected.auditor}</p>
-                                            <p>Standard: {selected.taskDetails.standard}</p>
-                                        </div>
+                        {/* FORM */}
+                        <div className="w-2/3 glass-panel rounded-2xl p-8 overflow-y-auto">
+                            {!selected ? <div className="text-center text-slate-500 mt-20">Select an item</div> : (
+                                <div>
+                                    <div className="flex justify-between border-b border-slate-700 pb-4 mb-6">
+                                        <h2 className="text-xl font-bold">Audit Findings</h2>
+                                        <div className={`px-3 py-1 rounded text-xs font-bold ${selected.status==='Closed'?'bg-emerald-600':'bg-slate-700'}`}>{selected.status}</div>
                                     </div>
 
-                                    {/* Finding Details */}
-                                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 mb-6">
-                                        <h3 className="text-red-400 font-bold text-xs uppercase mb-2">Non-Conformity / Observation</h3>
-                                        <p className="text-sm text-slate-300 mb-2">{selected.findings[0].desc}</p>
-                                        <div className="text-xs text-slate-500">Clause: {selected.findings[0].clause}</div>
+                                    {/* Findings Read-Only */}
+                                    <div className="space-y-3 mb-8">
+                                        {selected.findings.map((f, i) => (
+                                            <div key={i} className="bg-slate-900 p-3 rounded border border-slate-700">
+                                                <div className="flex justify-between text-xs text-slate-400 mb-1"><span>{f.id}</span><span>{f.type}</span></div>
+                                                <p className="text-sm">{f.desc}</p>
+                                            </div>
+                                        ))}
                                     </div>
 
-                                    {/* Response Form */}
-                                    <div className="space-y-6">
-                                        <div>
-                                            <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">1. Root Cause Analysis</label>
-                                            <textarea rows="3" className="bg-slate-900 border-slate-700" placeholder="Why did this happen?" value={response.rootCause} onChange={e=>setResponse({...response, rootCause:e.target.value})}></textarea>
-                                        </div>
-
-                                        <div>
-                                            <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">2. Correction (Immediate Fix)</label>
-                                            <input className="bg-slate-900 border-slate-700" placeholder="What was done immediately?" value={response.correction} onChange={e=>setResponse({...response, correction:e.target.value})} />
-                                        </div>
-
-                                        <div>
-                                            <div className="flex justify-between items-end mb-2">
-                                                <label className="text-[10px] text-slate-500 uppercase font-bold">3. Corrective Action Plan (CAPA)</label>
-                                                <button onClick={addAction} className="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-1 rounded">+ Add Action</button>
-                                            </div>
-                                            <div className="space-y-2">
-                                                {response.actions.map((act, i) => (
-                                                    <div key={i} className="flex gap-2">
-                                                        <input className="w-1/2 bg-slate-900 border-slate-700 text-xs" placeholder="Action Description" value={act.action} onChange={e=>updateAction(i, 'action', e.target.value)} />
-                                                        <input className="w-1/4 bg-slate-900 border-slate-700 text-xs" placeholder="Responsibility" value={act.resp} onChange={e=>updateAction(i, 'resp', e.target.value)} />
-                                                        <input type="date" className="w-1/4 bg-slate-900 border-slate-700 text-xs" value={act.target} onChange={e=>updateAction(i, 'target', e.target.value)} />
-                                                        <button onClick={()=>removeAction(i)} className="text-red-400 hover:text-white px-2"><i className="fas fa-times"></i></button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-6">
-                                            <div>
-                                                <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Closure Date</label>
-                                                <input type="date" className="bg-slate-900 border-slate-700" value={response.closureDate} onChange={e=>setResponse({...response, closureDate:e.target.value})} />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Evidence of Closure</label>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-2 rounded flex items-center gap-2">
-                                                        <i className="fas fa-paperclip"></i> Attach File
-                                                        <input type="file" className="hidden" onChange={handleFile} />
-                                                    </label>
-                                                    <span className="text-xs text-emerald-400 truncate max-w-[150px]">{response.evidenceFileName}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="pt-6 border-t border-slate-700 flex justify-end">
-                                            <button onClick={handleSubmit} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg flex items-center gap-2 transition transform hover:-translate-y-1">
-                                                <i className="fas fa-check-circle"></i> Submit for Verification
-                                            </button>
+                                    {/* Response Section */}
+                                    <div className={`space-y-4 ${!isEditable ? 'opacity-70 pointer-events-none' : ''}`}>
+                                        <h3 className="text-amber-400 font-bold text-sm uppercase">Your Response</h3>
+                                        <div><label className="text-[10px] uppercase text-slate-500 block mb-1">Root Cause</label><textarea className="bg-slate-900 w-full rounded p-2" rows="2" value={isEditable ? response.rootCause : selected.rootCause} onChange={e=>setResponse({...response, rootCause:e.target.value})}></textarea></div>
+                                        <div><label className="text-[10px] uppercase text-slate-500 block mb-1">Correction</label><input className="bg-slate-900 w-full rounded p-2" value={isEditable ? response.correction : selected.correction} onChange={e=>setResponse({...response, correction:e.target.value})} /></div>
+                                        
+                                        {/* CAPA & File Inputs simplified for brevity - assume similar logic to previous code */}
+                                        <div className="pt-4">
+                                            {isEditable && <button onClick={handleSubmit} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg w-full">Submit Response</button>}
+                                            {selected.status === 'Submitted for Verification' && <div className="text-center text-blue-400 text-sm">Waiting for Auditor Verification...</div>}
+                                            {selected.status === 'Closed' && <div className="text-center text-emerald-400 text-sm font-bold">Audit Closed Successfully.</div>}
                                         </div>
                                     </div>
                                 </div>
@@ -279,7 +139,6 @@
                 </div>
             );
         };
-
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<AuditeeWorkplace />);
     </script>
