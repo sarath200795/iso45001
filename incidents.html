@@ -55,94 +55,41 @@
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
         input:disabled, select:disabled, textarea:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        /* --- PDF GENERATION & PRINT STYLES (UPDATED) --- */
+        /* --- PRINT ENGINE --- */
         @media print {
             @page { size: A4; margin: 10mm; }
             
-            /* 1. RESET APP LAYOUT SCROLLBARS */
-            /* This is the key fix: Unset height/overflow so browser can paginate the whole content */
-            body, html, #root, .flex, .flex-col, .h-screen, .overflow-hidden, .overflow-y-auto, .flex-1 { 
-                height: auto !important; 
-                width: 100% !important;
-                overflow: visible !important; 
+            /* Hide EVERYTHING by default */
+            body > * { display: none !important; }
+
+            /* Reveal ONLY the print container */
+            .print-overlay { 
                 display: block !important; 
-                position: static !important;
-                background: white !important; 
+                position: absolute; 
+                top: 0; 
+                left: 0; 
+                width: 100%; 
+                background: white; 
+                z-index: 9999;
                 color: black !important;
             }
 
-            /* 2. HIDE UI ELEMENTS */
-            .no-print, header, .glass-panel-filters, button, .tab-buttons { display: none !important; }
+            /* Styling resets for print */
+            .print-overlay * { visibility: visible !important; color: black !important; }
+            .print-overlay .bg-slate-900, .print-overlay .bg-slate-800 { background: transparent !important; border: 1px solid #ccc !important; }
+            .print-overlay input, .print-overlay textarea, .print-overlay select { border: none !important; background: transparent !important; padding: 0 !important; }
+            
+            /* Force Diagrams Black/White */
+            .rib-box, .tree-node { border: 1px solid black !important; background: white !important; }
+            .spine, .spine::after, .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-color: black !important; }
+            .head { border: 2px solid black !important; background: white !important; color: black !important; }
 
-            /* 3. SHOW ALL REPORT SECTIONS */
-            /* Force all sections to be block, overriding 'hidden' */
-            div[class*="report-section"] { 
-                display: block !important; 
-                opacity: 1 !important; 
-                visibility: visible !important; 
-                margin-bottom: 25px; 
-                page-break-inside: avoid; 
-                border: 1px solid #ccc; 
-                padding: 15px; 
-                border-radius: 4px;
-                background: white !important;
-                color: black !important;
-            }
-
-            /* 4. TEXT & COLORS RESET */
-            .text-white, .text-slate-400, .text-emerald-400, .text-blue-400, .text-purple-400, .text-orange-400, .text-teal-400 { 
-                color: black !important; 
-            }
-            .bg-slate-900, .bg-slate-800, .bg-slate-850, .glass-panel, .bg-emerald-900\/10 { 
-                background: transparent !important; 
-                border: none !important; 
-                box-shadow: none !important;
-            }
-
-            /* 5. FORM ELEMENTS - EXPAND & STYLE */
-            input, textarea, select { 
-                background: white !important; 
-                border: 1px solid #999 !important; 
-                color: black !important; 
-                font-size: 10pt; 
-                resize: none; 
-                box-shadow: none !important;
-                height: auto !important; /* Allow textareas to grow */
-            }
-
-            /* 6. DIAGRAMS FIX FOR PRINT */
-            .rib-box, .tree-node { 
-                border: 1px solid black !important; 
-                background: white !important; 
-                color: black !important; 
-            }
-            .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, 
-            .tree li::before, .tree li::after, .tree ul ul::before { 
-                background: black !important; 
-                border-color: black !important; 
-            }
-            .head { 
-                border-color: black !important; 
-                color: black !important; 
-                background: white !important; 
-            }
-
-            /* 7. HEADER & HEADINGS */
-            .pdf-header { 
-                display: flex !important; 
-                justify-content: space-between; 
-                border-bottom: 2px solid black; 
-                padding-bottom: 10px; 
-                margin-bottom: 20px; 
-            }
-            .section-heading {
-                border-bottom: 1px solid black !important;
-                margin-bottom: 10px;
-                font-size: 14pt;
-                color: black !important;
-            }
+            /* Layout adjustments */
+            .grid { display: grid !important; }
+            .hidden { display: block !important; } /* Force show hidden sections */
+            h2 { border-bottom: 2px solid black !important; margin-top: 20px !important; }
         }
-        .pdf-header { display: none; }
+        .print-overlay { display: none; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -292,7 +239,7 @@
                                         <td className="p-4">{inc.type}</td>
                                         <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold border ${inc.severity==='Level A'?'bg-red-500/10 text-red-400 border-red-500/20':inc.severity==='Level B'?'bg-orange-500/10 text-orange-400 border-orange-500/20':inc.severity==='Level C'?'bg-yellow-500/10 text-yellow-400 border-yellow-500/20':'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{inc.severity}</span></td>
                                         <td className="p-4 text-right flex justify-end gap-2">
-                                            <button onClick={()=>onPrint(inc)} className="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 px-3 py-1.5 rounded transition" title="Print PDF"><i className="fas fa-file-pdf"></i></button>
+                                            <button onClick={()=>onPrint(inc)} className="text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 px-3 py-1.5 rounded transition" title="Print Report"><i className="fas fa-print"></i></button>
                                             {!permissions.viewOnly && <button onClick={()=>onEdit(inc)} className="text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500 px-3 py-1.5 rounded transition">Edit</button>}
                                             {permissions.canDelete && <button onClick={()=>onDelete(inc)} className="text-slate-400 hover:text-white bg-slate-700 hover:bg-red-600 px-3 py-1.5 rounded transition"><i className="fas fa-trash-alt"></i></button>}
                                         </td>
@@ -328,6 +275,9 @@
                 },
                 capa: [], riskUpdated: false
             });
+
+            // --- PRINT STATE ---
+            const [printData, setPrintData] = useState(null);
 
             const siteUsers = useMemo(() => {
                 if (!data.siteId) return users;
@@ -424,12 +374,17 @@
             };
 
             const handleRepoPrint = (incident) => {
-                handleEdit(incident);
-                setTimeout(() => {
-                    const textareas = document.querySelectorAll('textarea');
-                    textareas.forEach(ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
-                    window.print();
-                }, 500); 
+                let updatedWhys = incident.investigation?.fiveWhys || [{ id: 1, name: 'Analysis Path 1', whys: ['','','','',''] }];
+                if (Array.isArray(updatedWhys) && typeof updatedWhys[0] === 'string') {
+                    updatedWhys = [{ id: Date.now(), name: 'Legacy Analysis', whys: updatedWhys }];
+                }
+                setPrintData({ ...incident, investigation: { ...incident.investigation, fiveWhys: updatedWhys } });
+                setTimeout(() => window.print(), 100);
+            };
+
+            const handleFormPrint = () => {
+                setPrintData(data);
+                setTimeout(() => window.print(), 100);
             };
 
             const openInvestigationMeeting = () => {
@@ -484,36 +439,28 @@
                     <div className="flex-1 overflow-y-auto p-6">
                         {view === 'repo' ? <IncidentRepository incidents={incidentsList} onEdit={handleEdit} onPrint={handleRepoPrint} onDelete={handleDelete} permissions={permissions} /> : (
                             <div className="max-w-5xl mx-auto">
-                                <div className="pdf-header">
-                                    <div><h1 className="text-2xl font-bold">Incident Investigation Report</h1><p>Site: {data.siteId} | Type: {data.type}</p></div>
-                                    <div className="text-right"><p className="font-mono text-xl font-bold">{data.id}</p><p>Date: {data.date}</p></div>
-                                </div>
-
-                                {permissions.viewOnly && (
-                                    <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg mb-4 text-yellow-400 text-xs no-print">
-                                        <i className="fas fa-eye mr-2"></i> View Only Mode - {permissions.canEditOwnedActions ? 'You can only edit CAPA items assigned to you' : 'You cannot create or modify records'}
-                                    </div>
-                                )}
-
                                 <div className="flex gap-2 mb-8 no-print tab-buttons">
                                     {STEPS.map((s, i) => (<button key={s.id} onClick={() => setStep(s.id)} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${step === s.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{i + 1}. {s.label}</button>))}
                                 </div>
 
-                                <div className={`report-section ${step === 1 ? 'block' : 'hidden print:block'}`}>
-                                    <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-clipboard-list"></i> 1. Initial Report</h2>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                        <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><SiteSelect sites={sites} value={data.siteId} onChange={v => setData({...data, siteId: v})} disabled={!canEdit || !isGlobal} /></div>
-                                        <div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" value={data.date} onChange={e=>setData({...data, date:e.target.value})} disabled={!canEdit} /></div>
-                                        <div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" value={data.time} onChange={e=>setData({...data, time:e.target.value})} disabled={!canEdit} /></div>
-                                        <div><label className="text-[10px] uppercase font-bold text-slate-500">ID</label><input value={data.id} className="font-mono bg-slate-800" disabled /></div>
-                                        <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select value={data.type} onChange={e=>setData({...data, type:e.target.value})} disabled={!canEdit}><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
-                                        <div><label className="text-[10px] uppercase font-bold text-slate-500">Severity</label><select value={data.severity} onChange={e=>setData({...data, severity:e.target.value})} disabled={!canEdit}><option>Level A</option><option>Level B</option><option>Level C</option><option>Level D</option></select></div>
+                                {/* ONLY SHOW STEP 1-5 IN UI IF NOT PRINTING (Handled by React state for screen view) */}
+                                {step === 1 && (
+                                    <div className="report-section">
+                                        <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-clipboard-list"></i> 1. Initial Report</h2>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><SiteSelect sites={sites} value={data.siteId} onChange={v => setData({...data, siteId: v})} disabled={!canEdit || !isGlobal} /></div>
+                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" value={data.date} onChange={e=>setData({...data, date:e.target.value})} disabled={!canEdit} /></div>
+                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" value={data.time} onChange={e=>setData({...data, time:e.target.value})} disabled={!canEdit} /></div>
+                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">ID</label><input value={data.id} className="font-mono bg-slate-800" disabled /></div>
+                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select value={data.type} onChange={e=>setData({...data, type:e.target.value})} disabled={!canEdit}><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
+                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Severity</label><select value={data.severity} onChange={e=>setData({...data, severity:e.target.value})} disabled={!canEdit}><option>Level A</option><option>Level B</option><option>Level C</option><option>Level D</option></select></div>
+                                        </div>
+                                        <div><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={e=>setData({...data, description:e.target.value})} className="w-full mt-1" disabled={!canEdit}></textarea></div>
                                     </div>
-                                    <div><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={e=>setData({...data, description:e.target.value})} className="w-full mt-1" disabled={!canEdit}></textarea></div>
-                                </div>
+                                )}
 
-                                {data.severity !== 'Level D' && (
-                                    <div className={`report-section ${step === 2 ? 'block' : 'hidden print:block'}`}>
+                                {step === 2 && data.severity !== 'Level D' && (
+                                    <div className="report-section">
                                         <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4"><i className="fas fa-users"></i> 2. Team & Consultation</h2>
                                         <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center text-center space-y-6 no-print">
                                             <div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-3xl text-teal-400"><i className="fas fa-comments"></i></div>
@@ -527,81 +474,155 @@
                                     </div>
                                 )}
 
-                                <div className={`report-section ${step === 3 ? 'block' : 'hidden print:block'}`}>
-                                    <h2 className="section-heading text-xl font-bold text-purple-400 mb-6 flex items-center gap-3 border-b border-purple-500/20 pb-4"><i className="fas fa-search"></i> 3. Root Cause Analysis</h2>
-                                    <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
-                                        <div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500 text-black print:text-black">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} disabled={!canEdit} /></div>
-                                        <div className="border-t border-slate-700 pt-8 mt-8"><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500 text-black print:text-black">Fault Tree Analysis</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} disabled={!canEdit} /></ul></div></div>
-                                        <div className="border-t border-slate-700 pt-8 mt-8">
-                                            <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white pl-2 border-l-4 border-purple-500 text-black print:text-black">5 Whys Analysis</h3>{canEdit && <button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Analysis Path</button>}</div>
-                                            {data.investigation.fiveWhys.map((path, pIdx) => (
-                                                <div key={path.id} className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative group">
-                                                    <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2"><input value={path.name || `Analysis Path ${pIdx+1}`} onChange={e => updatePathName(pIdx, e.target.value)} disabled={!canEdit} className="bg-transparent text-[10px] font-bold text-purple-300 uppercase tracking-wider outline-none border-b border-transparent focus:border-purple-500 w-64 transition-all" />{canEdit && data.investigation.fiveWhys.length > 1 && <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print hover:bg-red-900/20 px-2 py-1 rounded transition"><i className="fas fa-trash-alt mr-1"></i> Remove</button>}</div>
-                                                    {path.whys.map((w, i) => (<div key={i} className="flex gap-4 mb-3 items-center"><span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span><input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" value={w} onChange={e => updateFiveWhy(pIdx, i, e.target.value)} placeholder="Enter cause..." disabled={!canEdit} /></div>))}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="border-t border-slate-700 pt-8"><label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Final Root Cause</label><textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-4 rounded-xl text-white h-24 focus:ring-1 focus:ring-emerald-500 outline-none" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})} disabled={!canEdit}></textarea></div>
-                                    </div>
-                                </div>
-
-                                <div className={`report-section ${step === 4 ? 'block' : 'hidden print:block'}`}>
-                                    <h2 className="section-heading text-xl font-bold text-orange-400 mb-6 flex items-center gap-3 border-b border-orange-500/20 pb-4"><i className="fas fa-clipboard-check"></i> 4. CAPA</h2>
-                                    <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
-                                        {canEdit && (
-                                            <div className="grid grid-cols-4 gap-4 mb-6 no-print">
-                                                <input id="act" placeholder="Action Description" className="col-span-2 bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
-                                                <div><UserSelect users={siteUsers} value="" onChange={() => {}} disabled={false} placeholder="Action Owner..." /></div>
-                                                <input id="due" type="date" className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
+                                {step === 3 && (
+                                    <div className="report-section">
+                                        <h2 className="section-heading text-xl font-bold text-purple-400 mb-6 flex items-center gap-3 border-b border-purple-500/20 pb-4"><i className="fas fa-search"></i> 3. Root Cause Analysis</h2>
+                                        <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
+                                            <div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} disabled={!canEdit} /></div>
+                                            <div className="border-t border-slate-700 pt-8"><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500">Fault Tree Analysis</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} disabled={!canEdit} /></ul></div></div>
+                                            <div className="border-t border-slate-700 pt-8">
+                                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white pl-2 border-l-4 border-purple-500">5 Whys Analysis</h3>{canEdit && <button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Analysis Path</button>}</div>
+                                                {data.investigation.fiveWhys.map((path, pIdx) => (
+                                                    <div key={path.id} className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative group">
+                                                        <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2"><input value={path.name || `Analysis Path ${pIdx+1}`} onChange={e => updatePathName(pIdx, e.target.value)} disabled={!canEdit} className="bg-transparent text-[10px] font-bold text-purple-300 uppercase tracking-wider outline-none border-b border-transparent focus:border-purple-500 w-64 transition-all" />{canEdit && data.investigation.fiveWhys.length > 1 && <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print hover:bg-red-900/20 px-2 py-1 rounded transition"><i className="fas fa-trash-alt mr-1"></i> Remove</button>}</div>
+                                                        {path.whys.map((w, i) => (<div key={i} className="flex gap-4 mb-3 items-center"><span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span><input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" value={w} onChange={e => updateFiveWhy(pIdx, i, e.target.value)} placeholder="Enter cause..." disabled={!canEdit} /></div>))}
+                                                    </div>
+                                                ))}
                                             </div>
-                                        )}
-                                        {canEdit && <button onClick={addCapa} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-bold w-full mb-8 no-print shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2"><i className="fas fa-plus"></i> Add Action Item</button>}
-                                        <div className="overflow-hidden rounded-xl border border-slate-700">
-                                            <table className="w-full text-left text-sm text-slate-300">
-                                                <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Action</th><th className="p-4">Owner</th><th className="p-4">Due Date</th><th className="p-4">Status</th></tr></thead>
-                                                <tbody className="divide-y divide-slate-700">
-                                                    {data.capa.map((c,i)=>(
-                                                        <tr key={i}>
-                                                            <td className="p-4">{c.act}</td>
-                                                            <td className="p-4 text-blue-400">{c.own}</td>
-                                                            <td className="p-4">{c.due}</td>
-                                                            <td className="p-4">
-                                                                {canEditCapa(c) ? (
-                                                                    <select value={c.status} onChange={e => { const newCapa = [...data.capa]; newCapa[i].status = e.target.value; setData({...data, capa: newCapa}); }} className="bg-slate-800 text-xs px-2 py-1 rounded">
-                                                                        <option>Open</option><option>In Progress</option><option>Closed</option>
-                                                                    </select>
-                                                                ) : (
-                                                                    <span className="bg-orange-500/10 text-orange-400 px-2 py-1 rounded text-[10px]">{c.status}</span>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                            <div className="border-t border-slate-700 pt-8"><label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Final Root Cause</label><textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-4 rounded-xl text-white h-24 focus:ring-1 focus:ring-emerald-500 outline-none" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})} disabled={!canEdit}></textarea></div>
                                         </div>
                                     </div>
-                                </div>
+                                )}
 
-                                <div className={`report-section ${step === 5 ? 'block' : 'hidden print:block'}`}>
-                                    <h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4"><i className="fas fa-check-double"></i> 5. Review</h2>
-                                    <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
-                                        <div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner">
-                                            <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required for {data.siteId}?</p></div>
-                                            <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2">Open Risk Module <i className="fas fa-external-link-alt"></i></a>
-                                        </div>
-                                        <div className="flex gap-4 items-start mb-10 p-6 border border-slate-700 rounded-xl bg-slate-900/30">
-                                            <input type="checkbox" className="w-6 h-6 mt-0.5 accent-emerald-500 cursor-pointer" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} disabled={!canEdit} />
-                                            <div><label className="text-base font-bold text-white block cursor-pointer" onClick={()=>canEdit && setData({...data, riskUpdated:!data.riskUpdated})}>I confirm that the Risk Assessment has been reviewed.</label></div>
-                                        </div>
-                                        <div className="flex justify-end no-print pt-6 border-t border-slate-700">
-                                            <button onClick={()=>window.print()} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-6 py-4 rounded-xl mr-4"><i className="fas fa-print mr-2"></i>Print PDF</button>
-                                            {canEdit && <button onClick={saveData} className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold px-10 py-4 rounded-xl shadow-lg transition-all transform hover:-translate-y-1 flex items-center gap-3"><i className="fas fa-save"></i> Submit Final Report</button>}
+                                {step === 4 && (
+                                    <div className="report-section">
+                                        <h2 className="section-heading text-xl font-bold text-orange-400 mb-6 flex items-center gap-3 border-b border-orange-500/20 pb-4"><i className="fas fa-clipboard-check"></i> 4. CAPA</h2>
+                                        <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
+                                            {canEdit && (
+                                                <div className="grid grid-cols-4 gap-4 mb-6 no-print">
+                                                    <input id="act" placeholder="Action Description" className="col-span-2 bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
+                                                    <div><UserSelect users={siteUsers} value="" onChange={() => {}} disabled={false} placeholder="Action Owner..." /></div>
+                                                    <input id="due" type="date" className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
+                                                </div>
+                                            )}
+                                            {canEdit && <button onClick={addCapa} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-bold w-full mb-8 no-print shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2"><i className="fas fa-plus"></i> Add Action Item</button>}
+                                            <div className="overflow-hidden rounded-xl border border-slate-700">
+                                                <table className="w-full text-left text-sm text-slate-300">
+                                                    <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Action</th><th className="p-4">Owner</th><th className="p-4">Due Date</th><th className="p-4">Status</th></tr></thead>
+                                                    <tbody className="divide-y divide-slate-700">
+                                                        {data.capa.map((c,i)=>(
+                                                            <tr key={i}>
+                                                                <td className="p-4">{c.act}</td>
+                                                                <td className="p-4 text-blue-400">{c.own}</td>
+                                                                <td className="p-4">{c.due}</td>
+                                                                <td className="p-4">
+                                                                    {canEditCapa(c) ? (
+                                                                        <select value={c.status} onChange={e => { const newCapa = [...data.capa]; newCapa[i].status = e.target.value; setData({...data, capa: newCapa}); }} className="bg-slate-800 text-xs px-2 py-1 rounded">
+                                                                            <option>Open</option><option>In Progress</option><option>Closed</option>
+                                                                        </select>
+                                                                    ) : <span className="bg-orange-500/10 text-orange-400 px-2 py-1 rounded text-[10px]">{c.status}</span>}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                )}
+
+                                {step === 5 && (
+                                    <div className="report-section">
+                                        <h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4"><i className="fas fa-check-double"></i> 5. Review</h2>
+                                        <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
+                                            <div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner">
+                                                <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required for {data.siteId}?</p></div>
+                                                <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2">Open Risk Module <i className="fas fa-external-link-alt"></i></a>
+                                            </div>
+                                            <div className="flex gap-4 items-start mb-10 p-6 border border-slate-700 rounded-xl bg-slate-900/30">
+                                                <input type="checkbox" className="w-6 h-6 mt-0.5 accent-emerald-500 cursor-pointer" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} disabled={!canEdit} />
+                                                <div><label className="text-base font-bold text-white block cursor-pointer" onClick={()=>canEdit && setData({...data, riskUpdated:!data.riskUpdated})}>I confirm that the Risk Assessment has been reviewed.</label></div>
+                                            </div>
+                                            <div className="flex justify-end no-print pt-6 border-t border-slate-700">
+                                                <button onClick={handleFormPrint} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-6 py-4 rounded-xl mr-4"><i className="fas fa-print mr-2"></i>Print PDF</button>
+                                                {canEdit && <button onClick={saveData} className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold px-10 py-4 rounded-xl shadow-lg transition-all transform hover:-translate-y-1 flex items-center gap-3"><i className="fas fa-save"></i> Submit Final Report</button>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
+
+                    {/* --- DEDICATED PRINT OVERLAY CONTAINER --- */}
+                    {printData && (
+                        <div className="print-overlay">
+                            <div className="pdf-header">
+                                <div><h1 className="text-2xl font-bold uppercase">Incident Report</h1><p>Site: {printData.siteId} | Type: {printData.type}</p></div>
+                                <div className="text-right"><p className="font-mono text-xl font-bold">{printData.id}</p><p>Date: {printData.date}</p></div>
+                            </div>
+
+                            <div className="report-section">
+                                <h2 className="section-heading">1. Initial Report</h2>
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div><strong>Date:</strong> {printData.date}</div>
+                                    <div><strong>Time:</strong> {printData.time}</div>
+                                    <div><strong>Severity:</strong> {printData.severity}</div>
+                                </div>
+                                <div className="mb-4"><strong>Description:</strong><br/>{printData.description}</div>
+                            </div>
+
+                            {printData.severity !== 'Level D' && (
+                                <div className="report-section">
+                                    <h2 className="section-heading">2. Consultation</h2>
+                                    <div>{printData.consultationSummary || 'No consultation recorded.'}</div>
+                                </div>
+                            )}
+
+                            <div className="report-section">
+                                <h2 className="section-heading">3. Root Cause Analysis</h2>
+                                <div className="mb-4">
+                                    <strong>Fishbone (Man):</strong> {printData.investigation.fishbone.man.join(', ')}<br/>
+                                    <strong>Fishbone (Machine):</strong> {printData.investigation.fishbone.machine.join(', ')}
+                                </div>
+                                <div className="mb-4">
+                                    <strong>5 Whys (Path 1):</strong> {printData.investigation.fiveWhys[0].whys.join(' -> ')}
+                                </div>
+                                <div><strong>Final Root Cause:</strong> {printData.investigation.rootCause}</div>
+                            </div>
+
+                            <div className="report-section">
+                                <h2 className="section-heading">4. CAPA Plan</h2>
+                                <table className="w-full border border-black">
+                                    <thead><tr className="bg-gray-200">
+                                        <th className="border border-black p-1">Action</th>
+                                        <th className="border border-black p-1">Owner</th>
+                                        <th className="border border-black p-1">Due Date</th>
+                                        <th className="border border-black p-1">Status</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {printData.capa.map((c, i) => (
+                                            <tr key={i}>
+                                                <td className="border border-black p-1">{c.act}</td>
+                                                <td className="border border-black p-1">{c.own}</td>
+                                                <td className="border border-black p-1">{c.due}</td>
+                                                <td className="border border-black p-1">{c.status}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="report-section">
+                                <h2 className="section-heading">5. Review & Signoff</h2>
+                                <div className="flex justify-between mt-10">
+                                    <div className="border-t border-black w-1/3 pt-2 text-center">Safety Officer Signature</div>
+                                    <div className="border-t border-black w-1/3 pt-2 text-center">Site Manager Signature</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             );
         };
