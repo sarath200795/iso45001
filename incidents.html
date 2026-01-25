@@ -55,54 +55,62 @@
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
         input:disabled, select:disabled, textarea:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        /* --- PDF GENERATION & PRINT STYLES --- */
+        /* --- PDF GENERATION & PRINT STYLES (UPDATED) --- */
         @media print {
             @page { size: A4; margin: 10mm; }
             
-            /* RESET LAYOUT */
-            body, html, #root { 
-                width: 100%; height: auto; overflow: visible !important; 
-                background: white !important; color: black !important; 
-                display: block !important; position: relative !important;
+            /* 1. RESET APP LAYOUT SCROLLBARS */
+            /* This is the key fix: Unset height/overflow so browser can paginate the whole content */
+            body, html, #root, .flex, .flex-col, .h-screen, .overflow-hidden, .overflow-y-auto, .flex-1 { 
+                height: auto !important; 
+                width: 100% !important;
+                overflow: visible !important; 
+                display: block !important; 
+                position: static !important;
+                background: white !important; 
+                color: black !important;
             }
 
-            /* HIDE UI ELEMENTS */
+            /* 2. HIDE UI ELEMENTS */
             .no-print, header, .glass-panel-filters, button, .tab-buttons { display: none !important; }
 
-            /* FORCE SHOW REPORT SECTIONS */
+            /* 3. SHOW ALL REPORT SECTIONS */
+            /* Force all sections to be block, overriding 'hidden' */
             div[class*="report-section"] { 
                 display: block !important; 
                 opacity: 1 !important; 
                 visibility: visible !important; 
                 margin-bottom: 25px; 
                 page-break-inside: avoid; 
-                border: 1px solid #000; 
+                border: 1px solid #ccc; 
                 padding: 15px; 
                 border-radius: 4px;
                 background: white !important;
+                color: black !important;
             }
 
-            /* TEXT & COLORS RESET */
+            /* 4. TEXT & COLORS RESET */
             .text-white, .text-slate-400, .text-emerald-400, .text-blue-400, .text-purple-400, .text-orange-400, .text-teal-400 { 
                 color: black !important; 
             }
-            .bg-slate-900, .bg-slate-800, .bg-slate-850, .glass-panel { 
+            .bg-slate-900, .bg-slate-800, .bg-slate-850, .glass-panel, .bg-emerald-900\/10 { 
                 background: transparent !important; 
                 border: none !important; 
                 box-shadow: none !important;
             }
 
-            /* FORM ELEMENTS */
+            /* 5. FORM ELEMENTS - EXPAND & STYLE */
             input, textarea, select { 
                 background: white !important; 
-                border: 1px solid #ccc !important; 
+                border: 1px solid #999 !important; 
                 color: black !important; 
                 font-size: 10pt; 
                 resize: none; 
-                box-shadow: none !important; 
+                box-shadow: none !important;
+                height: auto !important; /* Allow textareas to grow */
             }
 
-            /* DIAGRAMS FIX FOR PRINT */
+            /* 6. DIAGRAMS FIX FOR PRINT */
             .rib-box, .tree-node { 
                 border: 1px solid black !important; 
                 background: white !important; 
@@ -119,7 +127,7 @@
                 background: white !important; 
             }
 
-            /* HEADER */
+            /* 7. HEADER & HEADINGS */
             .pdf-header { 
                 display: flex !important; 
                 justify-content: space-between; 
@@ -415,12 +423,8 @@
                 setStep(1);
             };
 
-            // --- FIXED PRINT LOGIC ---
             const handleRepoPrint = (incident) => {
-                // 1. Switch View to Form
                 handleEdit(incident);
-                
-                // 2. Wait for React to Render, Expand textareas, then Print
                 setTimeout(() => {
                     const textareas = document.querySelectorAll('textarea');
                     textareas.forEach(ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
@@ -487,7 +491,7 @@
 
                                 {permissions.viewOnly && (
                                     <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg mb-4 text-yellow-400 text-xs no-print">
-                                        <i className="fas fa-eye mr-2"></i> View Only Mode
+                                        <i className="fas fa-eye mr-2"></i> View Only Mode - {permissions.canEditOwnedActions ? 'You can only edit CAPA items assigned to you' : 'You cannot create or modify records'}
                                     </div>
                                 )}
 
@@ -495,7 +499,6 @@
                                     {STEPS.map((s, i) => (<button key={s.id} onClick={() => setStep(s.id)} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${step === s.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{i + 1}. {s.label}</button>))}
                                 </div>
 
-                                {/* SECTION 1 */}
                                 <div className={`report-section ${step === 1 ? 'block' : 'hidden print:block'}`}>
                                     <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-clipboard-list"></i> 1. Initial Report</h2>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -509,7 +512,6 @@
                                     <div><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={e=>setData({...data, description:e.target.value})} className="w-full mt-1" disabled={!canEdit}></textarea></div>
                                 </div>
 
-                                {/* SECTION 2 */}
                                 {data.severity !== 'Level D' && (
                                     <div className={`report-section ${step === 2 ? 'block' : 'hidden print:block'}`}>
                                         <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4"><i className="fas fa-users"></i> 2. Team & Consultation</h2>
@@ -519,13 +521,12 @@
                                             {canEdit && <button onClick={openInvestigationMeeting} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition transform hover:-translate-y-1 flex items-center gap-3">Launch Meeting <i className="fas fa-external-link-alt"></i></button>}
                                         </div>
                                         <div className="mt-6">
-                                            <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Consultation Key Outcomes</label>
-                                            <textarea className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white h-32 focus:border-teal-500 outline-none resize-none" value={data.consultationSummary} onChange={e=>setData({...data, consultationSummary:e.target.value})} placeholder="Key points from consultation..." disabled={!canEdit}></textarea>
+                                            <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Consultation Key Outcomes & Team Inputs</label>
+                                            <textarea className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white h-32 focus:border-teal-500 outline-none resize-none" value={data.consultationSummary} onChange={e=>setData({...data, consultationSummary:e.target.value})} placeholder="Paste key points from the consultation meeting here for the report..." disabled={!canEdit}></textarea>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* SECTION 3 */}
                                 <div className={`report-section ${step === 3 ? 'block' : 'hidden print:block'}`}>
                                     <h2 className="section-heading text-xl font-bold text-purple-400 mb-6 flex items-center gap-3 border-b border-purple-500/20 pb-4"><i className="fas fa-search"></i> 3. Root Cause Analysis</h2>
                                     <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
@@ -544,7 +545,6 @@
                                     </div>
                                 </div>
 
-                                {/* SECTION 4 */}
                                 <div className={`report-section ${step === 4 ? 'block' : 'hidden print:block'}`}>
                                     <h2 className="section-heading text-xl font-bold text-orange-400 mb-6 flex items-center gap-3 border-b border-orange-500/20 pb-4"><i className="fas fa-clipboard-check"></i> 4. CAPA</h2>
                                     <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
@@ -567,8 +567,12 @@
                                                             <td className="p-4">{c.due}</td>
                                                             <td className="p-4">
                                                                 {canEditCapa(c) ? (
-                                                                    <select value={c.status} onChange={e => { const newCapa = [...data.capa]; newCapa[i].status = e.target.value; setData({...data, capa: newCapa}); }} className="bg-slate-800 text-xs px-2 py-1 rounded"><option>Open</option><option>In Progress</option><option>Closed</option></select>
-                                                                ) : <span className="bg-orange-500/10 text-orange-400 px-2 py-1 rounded text-[10px]">{c.status}</span>}
+                                                                    <select value={c.status} onChange={e => { const newCapa = [...data.capa]; newCapa[i].status = e.target.value; setData({...data, capa: newCapa}); }} className="bg-slate-800 text-xs px-2 py-1 rounded">
+                                                                        <option>Open</option><option>In Progress</option><option>Closed</option>
+                                                                    </select>
+                                                                ) : (
+                                                                    <span className="bg-orange-500/10 text-orange-400 px-2 py-1 rounded text-[10px]">{c.status}</span>
+                                                                )}
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -578,12 +582,11 @@
                                     </div>
                                 </div>
 
-                                {/* SECTION 5 */}
                                 <div className={`report-section ${step === 5 ? 'block' : 'hidden print:block'}`}>
                                     <h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4"><i className="fas fa-check-double"></i> 5. Review</h2>
                                     <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
                                         <div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner">
-                                            <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required?</p></div>
+                                            <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required for {data.siteId}?</p></div>
                                             <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2">Open Risk Module <i className="fas fa-external-link-alt"></i></a>
                                         </div>
                                         <div className="flex gap-4 items-start mb-10 p-6 border border-slate-700 rounded-xl bg-slate-900/30">
