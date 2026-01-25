@@ -25,23 +25,18 @@
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
 
-        /* PRINT STYLES */
         @media print {
             @page { size: A4; margin: 10mm; }
             body, html, #root { width: 100%; height: auto; background: white !important; color: black !important; overflow: visible !important; }
             .no-print, header, .tabs-nav { display: none !important; }
             .print-section { display: block !important; border: 1px solid black; padding: 15px; margin-bottom: 20px; }
-            
-            /* Form Simulation for Print */
             .form-box { border: 1px solid black; padding: 5px; margin-bottom: 5px; }
             .form-label { font-weight: bold; font-size: 10pt; text-transform: uppercase; }
             .form-value { font-size: 11pt; }
-            
             input, textarea, select { border: none !important; background: transparent !important; color: black !important; padding: 0; resize: none; }
             .bg-slate-900, .bg-slate-800 { background: white !important; }
             .text-white, .text-slate-400 { color: black !important; }
         }
-        
         .print-section { display: none; }
     </style>
 </head>
@@ -61,261 +56,82 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- COMPONENTS ---
-
-        // 1. AUDIT SCHEDULING TAB
-        const AuditScheduler = ({ siteId, onGenerate }) => {
+        // --- 1. SCHEDULING TAB ---
+        const AuditScheduler = ({ siteId, users, onGenerate, sitesList }) => {
             const [plan, setPlan] = useState({
                 siteId: siteId === 'GLOBAL' ? '' : siteId,
-                area: 'Plant',
-                auditor: '',
-                auditee: '',
-                dateFrom: '',
-                dateTo: '',
+                dateFrom: '', dateTo: '',
                 standard: 'ISO 45001:2018',
-                scope: 'Health and Safety management system'
+                scope: 'Health and Safety management system',
+                assignments: [] // Array of { area: '', auditor: '' }
             });
+
+            const addAssignment = () => setPlan({...plan, assignments: [...plan.assignments, { area: '', auditor: '' }]});
+            const updateAssignment = (idx, field, val) => {
+                const newAssign = [...plan.assignments]; newAssign[idx][field] = val; setPlan({...plan, assignments: newAssign});
+            };
+            const removeAssignment = (idx) => setPlan({...plan, assignments: plan.assignments.filter((_, i) => i !== idx)});
 
             return (
                 <div className="space-y-6 animate-fade-in">
                     <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 no-print">
-                        <h2 className="text-xl font-bold text-white mb-4">1. Audit Scheduling & Plan</h2>
+                        <h2 className="text-xl font-bold text-white mb-4">1. Audit Scheduling</h2>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><input value={plan.siteId} onChange={e=>setPlan({...plan, siteId:e.target.value})} disabled={siteId!=='GLOBAL'} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Area / Department</label><input value={plan.area} onChange={e=>setPlan({...plan, area:e.target.value})} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditor Name</label><input value={plan.auditor} onChange={e=>setPlan({...plan, auditor:e.target.value})} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditee Name</label><input value={plan.auditee} onChange={e=>setPlan({...plan, auditee:e.target.value})} /></div>
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Site</label>
+                                <select value={plan.siteId} onChange={e=>setPlan({...plan, siteId:e.target.value})} disabled={siteId!=='GLOBAL'} className="w-full">
+                                    <option value="">Select Site</option>
+                                    {sitesList.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
+                                </select>
+                            </div>
                             <div><label className="text-[10px] uppercase font-bold text-slate-500">Date From</label><input type="date" value={plan.dateFrom} onChange={e=>setPlan({...plan, dateFrom:e.target.value})} /></div>
                             <div><label className="text-[10px] uppercase font-bold text-slate-500">Date To</label><input type="date" value={plan.dateTo} onChange={e=>setPlan({...plan, dateTo:e.target.value})} /></div>
-                            <div className="col-span-2"><label className="text-[10px] uppercase font-bold text-slate-500">Audit Scope / Standard</label><input value={plan.standard} onChange={e=>setPlan({...plan, standard:e.target.value})} /></div>
+                            <div className="col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500">Standard</label><input value={plan.standard} onChange={e=>setPlan({...plan, standard:e.target.value})} /></div>
                         </div>
+                        
+                        {/* Multiple Assignments */}
+                        <div className="bg-slate-800/50 p-4 rounded-lg mb-4">
+                            <div className="flex justify-between mb-2">
+                                <h3 className="text-xs font-bold uppercase text-slate-400">Area Assignments</h3>
+                                <button onClick={addAssignment} className="text-xs bg-blue-600 px-2 py-1 rounded text-white">+ Add Area</button>
+                            </div>
+                            {plan.assignments.map((row, i) => (
+                                <div key={i} className="flex gap-2 mb-2">
+                                    <input placeholder="Area / Dept" value={row.area} onChange={e=>updateAssignment(i,'area',e.target.value)} className="w-1/2" />
+                                    <select value={row.auditor} onChange={e=>updateAssignment(i,'auditor',e.target.value)} className="w-1/2">
+                                        <option value="">Select Auditor</option>
+                                        {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                                    </select>
+                                    <button onClick={()=>removeAssignment(i)} className="text-red-400"><i className="fas fa-times"></i></button>
+                                </div>
+                            ))}
+                        </div>
+
                         <div className="flex justify-end gap-2">
                             <button onClick={()=>window.print()} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded font-bold text-sm"><i className="fas fa-print"></i> Print Plan</button>
                             <button onClick={()=>onGenerate(plan)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold text-sm">Save & Generate Plan</button>
                         </div>
                     </div>
 
-                    {/* PRINT VIEW FOR SCHEDULE */}
+                    {/* PRINT VIEW */}
                     <div className="print-section">
                         <div className="text-center border-b-2 border-black mb-4 pb-2">
                             <h1 className="text-2xl font-bold uppercase">Internal Audit Plan</h1>
-                            <p>ISO 45001 & ISO 14001 Management System</p>
+                            <p>{plan.standard}</p>
                         </div>
                         <table className="w-full border-collapse border border-black text-sm">
                             <tbody>
-                                <tr><td className="border border-black p-2 font-bold">Site:</td><td className="border border-black p-2">{plan.siteId}</td><td className="border border-black p-2 font-bold">Date:</td><td className="border border-black p-2">{plan.dateFrom} to {plan.dateTo}</td></tr>
-                                <tr><td className="border border-black p-2 font-bold">Auditor:</td><td className="border border-black p-2">{plan.auditor}</td><td className="border border-black p-2 font-bold">Auditee:</td><td className="border border-black p-2">{plan.auditee}</td></tr>
+                                <tr><td className="border border-black p-2 font-bold">Site:</td><td className="border border-black p-2">{plan.siteId}</td><td className="border border-black p-2 font-bold">Dates:</td><td className="border border-black p-2">{plan.dateFrom} to {plan.dateTo}</td></tr>
                                 <tr><td className="border border-black p-2 font-bold">Scope:</td><td colSpan="3" className="border border-black p-2">{plan.scope}</td></tr>
-                                <tr><td className="border border-black p-2 font-bold">Area:</td><td colSpan="3" className="border border-black p-2">{plan.area}</td></tr>
                             </tbody>
                         </table>
-                    </div>
-                </div>
-            );
-        };
-
-        // 2. INTERNAL AUDITING TAB (The Form)
-        const AuditForm = ({ siteId, onSave }) => {
-            const [data, setData] = useState({
-                // Part A [cite: 1]
-                scheduleRef: '', auditDate: new Date().toISOString().split('T')[0],
-                department: '', area: '', 
-                auditee: '', auditor: '',
-                ncRef: '', classification: 'Minor', // [cite: 1]
-                standard: 'ISO 45001', clause: '', 
-                criteria: '', // [cite: 1]
-                ncStatement: '', // [cite: 1]
-                evidence: '', // [cite: 2]
-                
-                // Part B 
-                correction: '', rootCause: '', capa: '', responsibility: '', targetDate: '',
-                
-                // Part C 
-                followUp: 'No', verificationStatus: 'Open', verifiedBy: '', verificationDate: '', comments: '',
-                status: 'Open'
-            });
-
-            const handleSubmit = () => {
-                if(!data.department || !data.ncStatement) { alert("Fill required fields"); return; }
-                const payload = { ...data, siteId: siteId==='GLOBAL' ? 'GEN' : siteId, timestamp: Date.now() };
-                onSave(payload);
-            };
-
-            return (
-                <div className="space-y-6 animate-fade-in pb-20">
-                    <div className="glass-panel p-6 rounded-xl border border-slate-700">
-                        <div className="bg-slate-800 p-2 rounded mb-4 text-xs font-bold text-slate-400 uppercase">Part A - To be filled by Auditor [cite: 1]</div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Schedule Ref</label><input value={data.scheduleRef} onChange={e=>setData({...data, scheduleRef:e.target.value})} placeholder="e.g., IA-02" /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Audit Date</label><input type="date" value={data.auditDate} onChange={e=>setData({...data, auditDate:e.target.value})} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Department</label><input value={data.department} onChange={e=>setData({...data, department:e.target.value})} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Area / Phase</label><input value={data.area} onChange={e=>setData({...data, area:e.target.value})} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditor Name</label><input value={data.auditor} onChange={e=>setData({...data, auditor:e.target.value})} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditee Name</label><input value={data.auditee} onChange={e=>setData({...data, auditee:e.target.value})} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">NC Ref No</label><input value={data.ncRef} onChange={e=>setData({...data, ncRef:e.target.value})} /></div>
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Classification</label>
-                                <select value={data.classification} onChange={e=>setData({...data, classification:e.target.value})}>
-                                    <option>Minor</option><option>Major</option><option>Observation</option><option>OFI</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Standard</label><select value={data.standard} onChange={e=>setData({...data, standard:e.target.value})}><option>ISO 45001</option><option>ISO 14001</option></select></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Clause / Title</label><input value={data.clause} onChange={e=>setData({...data, clause:e.target.value})} placeholder="e.g. 9.1.2 Evaluation" /></div>
-                        </div>
-                        <div className="mb-4">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Audit Criteria (Policies/Procedures) [cite: 1]</label>
-                            <input value={data.criteria} onChange={e=>setData({...data, criteria:e.target.value})} className="w-full" />
-                        </div>
-                        <div className="mb-4">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Non-Conformity Statement [cite: 1]</label>
-                            <textarea rows="3" value={data.ncStatement} onChange={e=>setData({...data, ncStatement:e.target.value})} className="w-full bg-slate-900 border border-red-500/30"></textarea>
-                        </div>
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Objective Evidence [cite: 2]</label>
-                            <textarea rows="2" value={data.evidence} onChange={e=>setData({...data, evidence:e.target.value})} className="w-full"></textarea>
-                        </div>
-                    </div>
-                    <button onClick={handleSubmit} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg">Save Audit Finding</button>
-                </div>
-            );
-        };
-
-        // 3. AUDIT CLOSURE TAB
-        const AuditClosure = ({ audits, onUpdate }) => {
-            const [selected, setSelected] = useState(null);
-
-            const handleClose = () => {
-                if(!selected) return;
-                const updated = { ...selected, status: selected.verificationStatus === 'Completely closed-out' ? 'Closed' : 'Open' };
-                onUpdate(updated);
-                setSelected(null);
-            };
-
-            return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in h-full">
-                    {/* List of Open Audits */}
-                    <div className="col-span-1 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden flex flex-col h-[70vh]">
-                        <div className="p-4 bg-slate-800 font-bold border-b border-slate-700">Open Findings</div>
-                        <div className="overflow-y-auto flex-1 p-2">
-                            {audits.filter(a => a.status !== 'Closed').map(a => (
-                                <div key={a.id} onClick={()=>setSelected(a)} className={`p-3 mb-2 rounded cursor-pointer border hover:bg-slate-800 ${selected?.id===a.id ? 'border-blue-500 bg-slate-800' : 'border-slate-700 bg-slate-900'}`}>
-                                    <div className="flex justify-between mb-1"><span className="text-xs font-mono text-emerald-400">{a.ncRef || 'No Ref'}</span><span className="text-[10px] bg-red-900 text-red-300 px-1 rounded">{a.classification}</span></div>
-                                    <div className="text-sm font-bold truncate">{a.department}</div>
-                                    <div className="text-[10px] text-slate-400 truncate">{a.ncStatement}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Closure Form */}
-                    <div className="col-span-2 glass-panel p-6 rounded-xl h-[70vh] overflow-y-auto">
-                        {!selected ? <div className="h-full flex items-center justify-center text-slate-500">Select a finding to close</div> : (
-                            <div className="space-y-6">
-                                <div className="border-b border-slate-700 pb-4">
-                                    <h3 className="text-lg font-bold text-white mb-2">Finding: {selected.ncRef}</h3>
-                                    <p className="text-sm text-slate-300 bg-slate-800 p-3 rounded">{selected.ncStatement}</p>
-                                </div>
-
-                                {/* Part B  */}
-                                <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
-                                    <div className="text-xs font-bold text-blue-400 uppercase mb-3">Part B - Auditee Action </div>
-                                    <div className="space-y-3">
-                                        <div><label className="text-[10px] uppercase">Correction</label><input value={selected.correction || ''} onChange={e=>setSelected({...selected, correction:e.target.value})} className="bg-slate-900 w-full" /></div>
-                                        <div><label className="text-[10px] uppercase">Root Cause Analysis</label><textarea value={selected.rootCause || ''} onChange={e=>setSelected({...selected, rootCause:e.target.value})} className="bg-slate-900 w-full" rows="2" /></div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div><label className="text-[10px] uppercase">Corrective Action Plan (CAPA)</label><input value={selected.capa || ''} onChange={e=>setSelected({...selected, capa:e.target.value})} className="bg-slate-900 w-full" /></div>
-                                            <div><label className="text-[10px] uppercase">Target Date</label><input type="date" value={selected.targetDate || ''} onChange={e=>setSelected({...selected, targetDate:e.target.value})} className="bg-slate-900 w-full" /></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Part C  */}
-                                <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
-                                    <div className="text-xs font-bold text-emerald-400 uppercase mb-3">Part C - Verification </div>
-                                    <div className="space-y-3">
-                                        <div><label className="text-[10px] uppercase">Follow-up Required?</label><select value={selected.followUp || 'No'} onChange={e=>setSelected({...selected, followUp:e.target.value})} className="bg-slate-900 w-full"><option>Yes</option><option>No</option></select></div>
-                                        <div>
-                                            <label className="text-[10px] uppercase">Verification Status </label>
-                                            <select value={selected.verificationStatus || 'No action initiated'} onChange={e=>setSelected({...selected, verificationStatus:e.target.value})} className="bg-slate-900 w-full">
-                                                <option>No action initiated</option>
-                                                <option>Initiated & In-progress</option>
-                                                <option>Completely closed-out</option>
-                                            </select>
-                                        </div>
-                                        <div><label className="text-[10px] uppercase">Comments / Evidence</label><textarea value={selected.comments || ''} onChange={e=>setSelected({...selected, comments:e.target.value})} className="bg-slate-900 w-full" rows="2" /></div>
-                                    </div>
-                                </div>
-
-                                <button onClick={handleClose} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg shadow-lg">Update & Close</button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        // 4. DASHBOARD TAB
-        const Dashboard = ({ audits, siteId }) => {
-            const [filterSite, setFilterSite] = useState(siteId === 'GLOBAL' ? 'All' : siteId);
-            const [filterArea, setFilterArea] = useState('All');
-
-            // Derived Data
-            const stats = useMemo(() => {
-                let filtered = audits;
-                if(filterSite !== 'All') filtered = filtered.filter(a => a.siteId === filterSite);
-                if(filterArea !== 'All') filtered = filtered.filter(a => a.department === filterArea);
-
-                const total = filtered.length;
-                const open = filtered.filter(a => a.status !== 'Closed').length;
-                const closed = filtered.filter(a => a.status === 'Closed').length;
-                const major = filtered.filter(a => a.classification === 'Major').length;
-                const minor = filtered.filter(a => a.classification === 'Minor').length;
-                const ofi = filtered.filter(a => a.classification === 'OFI').length;
-
-                return { total, open, closed, major, minor, ofi, filtered };
-            }, [audits, filterSite, filterArea]);
-
-            // Unique Areas for Filter
-            const areas = [...new Set(audits.map(a => a.department))];
-
-            return (
-                <div className="space-y-6 animate-fade-in">
-                    {/* Filters */}
-                    <div className="flex gap-4 mb-6">
-                        <select className="bg-slate-800 p-2 rounded" value={filterSite} onChange={e=>setFilterSite(e.target.value)} disabled={siteId!=='GLOBAL'}>
-                            <option value="All">All Sites</option>
-                            {[...new Set(audits.map(a=>a.siteId))].map(s=><option key={s}>{s}</option>)}
-                        </select>
-                        <select className="bg-slate-800 p-2 rounded" value={filterArea} onChange={e=>setFilterArea(e.target.value)}>
-                            <option value="All">All Areas</option>
-                            {areas.map(a=><option key={a}>{a}</option>)}
-                        </select>
-                    </div>
-
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-slate-800 p-4 rounded border-l-4 border-blue-500"><h3 className="text-slate-400 text-xs uppercase">Total Findings</h3><p className="text-2xl font-bold">{stats.total}</p></div>
-                        <div className="bg-slate-800 p-4 rounded border-l-4 border-red-500"><h3 className="text-slate-400 text-xs uppercase">Open NCs</h3><p className="text-2xl font-bold">{stats.open}</p></div>
-                        <div className="bg-slate-800 p-4 rounded border-l-4 border-green-500"><h3 className="text-slate-400 text-xs uppercase">Closed</h3><p className="text-2xl font-bold">{stats.closed}</p></div>
-                        <div className="bg-slate-800 p-4 rounded border-l-4 border-yellow-500"><h3 className="text-slate-400 text-xs uppercase">Major NCs</h3><p className="text-2xl font-bold">{stats.major}</p></div>
-                    </div>
-
-                    {/* Table */}
-                    <div className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-                        <table className="w-full text-left text-sm text-slate-300">
-                            <thead className="bg-slate-800 text-xs uppercase font-bold text-slate-500"><tr><th className="p-3">Ref</th><th className="p-3">Site</th><th className="p-3">Area</th><th className="p-3">Type</th><th className="p-3">Statement</th><th className="p-3">Status</th></tr></thead>
-                            <tbody className="divide-y divide-slate-800">
-                                {stats.filtered.map(a => (
-                                    <tr key={a.id} className="hover:bg-slate-800">
-                                        <td className="p-3 font-mono">{a.ncRef}</td>
-                                        <td className="p-3">{a.siteId}</td>
-                                        <td className="p-3">{a.department}</td>
-                                        <td className="p-3">{a.classification}</td>
-                                        <td className="p-3 truncate max-w-xs">{a.ncStatement}</td>
-                                        <td className="p-3"><span className={`px-2 py-1 rounded text-[10px] ${a.status==='Closed'?'bg-green-900 text-green-300':'bg-red-900 text-red-300'}`}>{a.status}</span></td>
-                                    </tr>
+                        <br/>
+                        <h3 className="font-bold border-b border-black mb-2">Audit Assignments</h3>
+                        <table className="w-full border-collapse border border-black text-sm">
+                            <thead><tr><th className="border border-black p-2 text-left">Area / Department</th><th className="border border-black p-2 text-left">Assigned Auditor</th></tr></thead>
+                            <tbody>
+                                {plan.assignments.map((a, i) => (
+                                    <tr key={i}><td className="border border-black p-2">{a.area}</td><td className="border border-black p-2">{a.auditor}</td></tr>
                                 ))}
                             </tbody>
                         </table>
@@ -324,11 +140,171 @@
             );
         };
 
-        // --- MAIN APP ---
+        // 2. AUDIT FORM
+        const AuditForm = ({ siteId, users, sitesList, onSave, isReadOnly }) => {
+            const [data, setData] = useState({
+                scheduleRef: '', auditDate: new Date().toISOString().split('T')[0],
+                department: '', area: '', 
+                auditee: '', auditor: '', siteId: siteId === 'GLOBAL' ? '' : siteId,
+                ncRef: '', classification: 'Minor', standard: 'ISO 45001', clause: '', 
+                criteria: '', ncStatement: '', evidence: '', status: 'Open'
+            });
+
+            const handleSubmit = () => {
+                if(isReadOnly) return;
+                if(!data.department || !data.ncStatement) { alert("Fill required fields"); return; }
+                onSave({ ...data, timestamp: Date.now() });
+            };
+
+            return (
+                <div className="space-y-6 animate-fade-in pb-20">
+                    <div className="glass-panel p-6 rounded-xl border border-slate-700">
+                        <div className="bg-slate-800 p-2 rounded mb-4 text-xs font-bold text-slate-400 uppercase">Part A - Auditor Findings</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Site</label>
+                                <select value={data.siteId} onChange={e=>setData({...data, siteId:e.target.value})} disabled={siteId!=='GLOBAL' || isReadOnly} className="w-full">
+                                    <option value="">Select Site</option>
+                                    {sitesList.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Audit Date</label><input type="date" value={data.auditDate} onChange={e=>setData({...data, auditDate:e.target.value})} disabled={isReadOnly}/></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Department</label><input value={data.department} onChange={e=>setData({...data, department:e.target.value})} disabled={isReadOnly}/></div>
+                            
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Auditor</label>
+                                <select value={data.auditor} onChange={e=>setData({...data, auditor:e.target.value})} disabled={isReadOnly}>
+                                    <option value="">Select</option>
+                                    {users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Auditee</label>
+                                <select value={data.auditee} onChange={e=>setData({...data, auditee:e.target.value})} disabled={isReadOnly}>
+                                    <option value="">Select</option>
+                                    {users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}
+                                </select>
+                            </div>
+                            
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">NC Ref No</label><input value={data.ncRef} onChange={e=>setData({...data, ncRef:e.target.value})} disabled={isReadOnly}/></div>
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Classification</label>
+                                <select value={data.classification} onChange={e=>setData({...data, classification:e.target.value})} disabled={isReadOnly}>
+                                    <option>Minor</option><option>Major</option><option>Observation</option><option>OFI</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="mb-4"><label className="text-[10px] uppercase font-bold text-slate-500">NC Statement</label><textarea rows="3" value={data.ncStatement} onChange={e=>setData({...data, ncStatement:e.target.value})} className="w-full bg-slate-900" disabled={isReadOnly}></textarea></div>
+                    </div>
+                    {!isReadOnly && <button onClick={handleSubmit} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg">Save Audit Finding</button>}
+                </div>
+            );
+        };
+
+        // 3. CLOSURE TAB
+        const AuditClosure = ({ audits, onUpdate, users, isReadOnly }) => {
+            const [selected, setSelected] = useState(null);
+
+            const handleClose = () => {
+                if(isReadOnly) return;
+                const updated = { ...selected, status: selected.verificationStatus === 'Completely closed-out' ? 'Closed' : 'Open' };
+                onUpdate(updated);
+                setSelected(null);
+            };
+
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in h-full">
+                    <div className="col-span-1 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden flex flex-col h-[70vh]">
+                        <div className="p-4 bg-slate-800 font-bold border-b border-slate-700">Open Findings</div>
+                        <div className="overflow-y-auto flex-1 p-2">
+                            {audits.filter(a => a.status !== 'Closed').map(a => (
+                                <div key={a.id} onClick={()=>setSelected(a)} className={`p-3 mb-2 rounded cursor-pointer border hover:bg-slate-800 ${selected?.id===a.id ? 'border-blue-500 bg-slate-800' : 'border-slate-700 bg-slate-900'}`}>
+                                    <div className="flex justify-between mb-1"><span className="text-xs font-mono text-emerald-400">{a.ncRef}</span><span className="text-[10px] bg-red-900 text-red-300 px-1 rounded">{a.classification}</span></div>
+                                    <div className="text-sm font-bold truncate">{a.department}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="col-span-2 glass-panel p-6 rounded-xl h-[70vh] overflow-y-auto">
+                        {!selected ? <div className="h-full flex items-center justify-center text-slate-500">Select a finding</div> : (
+                            <div className="space-y-6">
+                                <div className="border-b border-slate-700 pb-4"><h3 className="text-lg font-bold text-white mb-2">Finding: {selected.ncRef}</h3><p className="text-sm text-slate-300 bg-slate-800 p-3 rounded">{selected.ncStatement}</p></div>
+                                <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                                    <div className="text-xs font-bold text-blue-400 uppercase mb-3">Part B - Auditee Action</div>
+                                    <div className="space-y-3">
+                                        <div><label className="text-[10px] uppercase">Correction</label><input value={selected.correction || ''} onChange={e=>setSelected({...selected, correction:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly && selected.role !== 'Auditee'} /></div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-[10px] uppercase">Responsibility</label>
+                                                <select value={selected.responsibility || ''} onChange={e=>setSelected({...selected, responsibility:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly && selected.role !== 'Auditee'}>
+                                                    <option value="">Select</option>
+                                                    {users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div><label className="text-[10px] uppercase">Target Date</label><input type="date" value={selected.targetDate || ''} onChange={e=>setSelected({...selected, targetDate:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly && selected.role !== 'Auditee'} /></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                                    <div className="text-xs font-bold text-emerald-400 uppercase mb-3">Part C - Verification</div>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="text-[10px] uppercase">Verification Status</label>
+                                            <select value={selected.verificationStatus || 'No action initiated'} onChange={e=>setSelected({...selected, verificationStatus:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly}>
+                                                <option>No action initiated</option>
+                                                <option>Initiated & In-progress</option>
+                                                <option>Completely closed-out</option>
+                                            </select>
+                                        </div>
+                                        <div><label className="text-[10px] uppercase">Verified By</label><select value={selected.verifiedBy || ''} onChange={e=>setSelected({...selected, verifiedBy:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly}><option value="">Select</option>{users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+                                    </div>
+                                </div>
+                                {!isReadOnly && <button onClick={handleClose} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg shadow-lg">Update & Close</button>}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const Dashboard = ({ audits, siteId, sitesList }) => {
+            const [filterSite, setFilterSite] = useState(siteId === 'GLOBAL' ? 'All' : siteId);
+            const stats = useMemo(() => {
+                let filtered = filterSite === 'All' ? audits : audits.filter(a => a.siteId === filterSite);
+                return {
+                    total: filtered.length,
+                    open: filtered.filter(a => a.status !== 'Closed').length,
+                    closed: filtered.filter(a => a.status === 'Closed').length,
+                    major: filtered.filter(a => a.classification === 'Major').length,
+                    filtered
+                };
+            }, [audits, filterSite]);
+
+            return (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="flex gap-4 mb-6">
+                        <select className="bg-slate-800 p-2 rounded" value={filterSite} onChange={e=>setFilterSite(e.target.value)} disabled={siteId!=='GLOBAL'}>
+                            <option value="All">All Sites</option>
+                            {sitesList.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-slate-800 p-4 rounded border-l-4 border-blue-500"><h3 className="text-slate-400 text-xs uppercase">Total</h3><p className="text-2xl font-bold">{stats.total}</p></div>
+                        <div className="bg-slate-800 p-4 rounded border-l-4 border-red-500"><h3 className="text-slate-400 text-xs uppercase">Open</h3><p className="text-2xl font-bold">{stats.open}</p></div>
+                        <div className="bg-slate-800 p-4 rounded border-l-4 border-green-500"><h3 className="text-slate-400 text-xs uppercase">Closed</h3><p className="text-2xl font-bold">{stats.closed}</p></div>
+                        <div className="bg-slate-800 p-4 rounded border-l-4 border-yellow-500"><h3 className="text-slate-400 text-xs uppercase">Major NCs</h3><p className="text-2xl font-bold">{stats.major}</p></div>
+                    </div>
+                </div>
+            );
+        };
+
         const App = () => {
-            const [tab, setTab] = useState('schedule');
+            const [tab, setTab] = useState('dashboard');
             const [session, setSession] = useState(null);
             const [audits, setAudits] = useState([]);
+            const [users, setUsers] = useState([]);
+            const [sitesList, setSitesList] = useState([]);
             const [siteId, setSiteId] = useState('GLOBAL');
 
             useEffect(() => {
@@ -341,45 +317,61 @@
                 const ctx = params.get('site');
                 if(ctx && ctx !== 'GLOBAL') setSiteId(ctx);
 
-                // Load Data
-                const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}/audits`);
-                window.fb.get(dbRef).then(snap => {
-                    if(snap.exists()) setAudits(Object.entries(snap.val()).map(([k,v])=>({id:k,...v})));
+                // ROLE BASED TAB REDIRECTION
+                if (sess.role === 'Auditee') { setTab('closure'); }
+
+                // LOAD DATA
+                const orgRef = window.fb.child(window.fb.ref(window.db), `organizations/${sess.orgId}`);
+                window.fb.get(orgRef).then(snap => {
+                    if(snap.exists()) {
+                        const val = snap.val();
+                        // Filter users based on site access if not global
+                        const allUsers = val.users ? Object.values(val.users) : [];
+                        const filteredUsers = (ctx && ctx !== 'GLOBAL') 
+                            ? allUsers.filter(u => u.assignedSite === ctx || (u.accessibleSites && u.accessibleSites.includes(ctx))) 
+                            : allUsers;
+                        setUsers(filteredUsers);
+                        setSitesList(val.sites ? Object.values(val.sites) : []);
+                        setAudits(val.audits ? Object.entries(val.audits).map(([k,v])=>({id:k,...v})) : []);
+                    }
                 });
             }, []);
 
             const handleSaveAudit = async (data) => {
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/audits`), data);
-                alert("Audit Saved");
-                window.location.reload();
+                alert("Saved"); window.location.reload();
             };
 
             const handleUpdateAudit = async (data) => {
                 await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/audits/${data.id}`), data);
-                alert("Audit Updated");
-                window.location.reload();
+                alert("Updated"); window.location.reload();
             };
 
             if(!session) return null;
 
+            // Permission Checks
+            const canSchedule = ['Owner', 'Lead Auditor', 'Site Leader', 'EHS Manager'].includes(session.role);
+            const canAudit = ['Owner', 'Lead Auditor', 'Auditor'].includes(session.role);
+            const isReadOnly = session.role === 'User' || session.role === 'Auditee'; // Auditee handled in component specific logic
+
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans">
-                    {/* Header */}
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
                         <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Internal Audit</h1></div>
-                        <div className="flex bg-slate-800 p-1 rounded-lg tabs-nav">
-                            {['schedule','audit','closure','dashboard'].map(t => (
-                                <button key={t} onClick={()=>setTab(t)} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${tab===t?'bg-blue-600 text-white':'text-slate-400'}`}>{t}</button>
-                            ))}
+                        
+                        <div className="grid grid-cols-4 gap-2 tabs-nav">
+                            {canSchedule && <div onClick={()=>setTab('schedule')} className={`cursor-pointer p-2 rounded-lg text-center border ${tab==='schedule'?'border-blue-500 bg-blue-500/10 text-blue-400':'border-slate-700 hover:bg-slate-800'}`}><i className="fas fa-calendar block text-sm mb-1"></i><span className="text-[10px] font-bold uppercase">Schedule</span></div>}
+                            {canAudit && <div onClick={()=>setTab('audit')} className={`cursor-pointer p-2 rounded-lg text-center border ${tab==='audit'?'border-blue-500 bg-blue-500/10 text-blue-400':'border-slate-700 hover:bg-slate-800'}`}><i className="fas fa-clipboard-check block text-sm mb-1"></i><span className="text-[10px] font-bold uppercase">Audit</span></div>}
+                            <div onClick={()=>setTab('closure')} className={`cursor-pointer p-2 rounded-lg text-center border ${tab==='closure'?'border-blue-500 bg-blue-500/10 text-blue-400':'border-slate-700 hover:bg-slate-800'}`}><i className="fas fa-tasks block text-sm mb-1"></i><span className="text-[10px] font-bold uppercase">Closure</span></div>
+                            <div onClick={()=>setTab('dashboard')} className={`cursor-pointer p-2 rounded-lg text-center border ${tab==='dashboard'?'border-blue-500 bg-blue-500/10 text-blue-400':'border-slate-700 hover:bg-slate-800'}`}><i className="fas fa-chart-pie block text-sm mb-1"></i><span className="text-[10px] font-bold uppercase">Stats</span></div>
                         </div>
                     </div>
 
-                    {/* Content */}
                     <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
-                        {tab === 'schedule' && <AuditScheduler siteId={siteId} onGenerate={handleSaveAudit} />}
-                        {tab === 'audit' && <AuditForm siteId={siteId} onSave={handleSaveAudit} />}
-                        {tab === 'closure' && <AuditClosure audits={audits} onUpdate={handleUpdateAudit} />}
-                        {tab === 'dashboard' && <Dashboard audits={audits} siteId={siteId} />}
+                        {tab === 'schedule' && <AuditScheduler siteId={siteId} users={users} sitesList={sitesList} onGenerate={handleSaveAudit} />}
+                        {tab === 'audit' && <AuditForm siteId={siteId} users={users} sitesList={sitesList} onSave={handleSaveAudit} isReadOnly={isReadOnly} />}
+                        {tab === 'closure' && <AuditClosure audits={audits} users={users} onUpdate={handleUpdateAudit} isReadOnly={session.role === 'User'} />}
+                        {tab === 'dashboard' && <Dashboard audits={audits} siteId={siteId} sitesList={sitesList} />}
                     </div>
                 </div>
             );
