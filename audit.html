@@ -24,15 +24,13 @@
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+        input:disabled, select:disabled, textarea:disabled { opacity: 0.6; cursor: not-allowed; }
 
         @media print {
             @page { size: A4; margin: 10mm; }
             body, html, #root { width: 100%; height: auto; background: white !important; color: black !important; overflow: visible !important; }
             .no-print, header, .tabs-nav { display: none !important; }
             .print-section { display: block !important; border: 1px solid black; padding: 15px; margin-bottom: 20px; }
-            .form-box { border: 1px solid black; padding: 5px; margin-bottom: 5px; }
-            .form-label { font-weight: bold; font-size: 10pt; text-transform: uppercase; }
-            .form-value { font-size: 11pt; }
             input, textarea, select { border: none !important; background: transparent !important; color: black !important; padding: 0; resize: none; }
             .bg-slate-900, .bg-slate-800 { background: white !important; }
             .text-white, .text-slate-400 { color: black !important; }
@@ -56,83 +54,95 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- 1. SCHEDULING TAB ---
-        const AuditScheduler = ({ siteId, users, onGenerate, sitesList }) => {
+        // USER SELECT COMPONENT - Select from users assigned to site
+        const UserSelect = ({ users, value, onChange, label, disabled, filterRoles }) => {
+            const filteredUsers = filterRoles ? users.filter(u => filterRoles.includes(u.role)) : users;
+            return (
+                <div>
+                    <label className="text-[10px] uppercase font-bold text-slate-500">{label}</label>
+                    <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} className="w-full">
+                        <option value="">Select User...</option>
+                        {filteredUsers.map(u => (
+                            <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
+                        ))}
+                    </select>
+                </div>
+            );
+        };
+
+        // SITE SELECT COMPONENT - Select from existing sites
+        const SiteSelect = ({ sites, value, onChange, label, disabled }) => (
+            <div>
+                <label className="text-[10px] uppercase font-bold text-slate-500">{label}</label>
+                <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} className="w-full">
+                    <option value="">Select Site...</option>
+                    {sites.map(s => (
+                        <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
+                    ))}
+                </select>
+            </div>
+        );
+
+        // 1. AUDIT SCHEDULING TAB
+        const AuditScheduler = ({ siteId, onGenerate, sites, users, permissions, session }) => {
             const [plan, setPlan] = useState({
                 siteId: siteId === 'GLOBAL' ? '' : siteId,
-                dateFrom: '', dateTo: '',
+                area: 'Plant',
+                auditor: '',
+                auditee: '',
+                dateFrom: '',
+                dateTo: '',
                 standard: 'ISO 45001:2018',
-                scope: 'Health and Safety management system',
-                assignments: [] // Array of { area: '', auditor: '' }
+                scope: 'Health and Safety management system'
             });
 
-            const addAssignment = () => setPlan({...plan, assignments: [...plan.assignments, { area: '', auditor: '' }]});
-            const updateAssignment = (idx, field, val) => {
-                const newAssign = [...plan.assignments]; newAssign[idx][field] = val; setPlan({...plan, assignments: newAssign});
-            };
-            const removeAssignment = (idx) => setPlan({...plan, assignments: plan.assignments.filter((_, i) => i !== idx)});
+            // Filter users based on selected site
+            const siteUsers = useMemo(() => {
+                if (!plan.siteId) return users;
+                return users.filter(u => 
+                    u.role === 'Owner' || u.role === 'Lead Auditor' ||
+                    (u.accessibleSites && u.accessibleSites.includes(plan.siteId)) ||
+                    u.assignedSite === plan.siteId
+                );
+            }, [users, plan.siteId]);
+
+            const canEdit = !permissions.viewOnly;
 
             return (
                 <div className="space-y-6 animate-fade-in">
                     <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 no-print">
-                        <h2 className="text-xl font-bold text-white mb-4">1. Audit Scheduling</h2>
+                        <h2 className="text-xl font-bold text-white mb-4">1. Audit Scheduling & Plan</h2>
+                        {permissions.viewOnly && (
+                            <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg mb-4 text-yellow-400 text-xs">
+                                <i className="fas fa-eye mr-2"></i> View Only Mode - You cannot create or modify records
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Site</label>
-                                <select value={plan.siteId} onChange={e=>setPlan({...plan, siteId:e.target.value})} disabled={siteId!=='GLOBAL'} className="w-full">
-                                    <option value="">Select Site</option>
-                                    {sitesList.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
-                                </select>
-                            </div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Date From</label><input type="date" value={plan.dateFrom} onChange={e=>setPlan({...plan, dateFrom:e.target.value})} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Date To</label><input type="date" value={plan.dateTo} onChange={e=>setPlan({...plan, dateTo:e.target.value})} /></div>
-                            <div className="col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500">Standard</label><input value={plan.standard} onChange={e=>setPlan({...plan, standard:e.target.value})} /></div>
+                            <SiteSelect sites={sites} value={plan.siteId} onChange={v => setPlan({...plan, siteId: v, auditor: '', auditee: ''})} label="Site ID" disabled={!canEdit || siteId !== 'GLOBAL'} />
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Area / Department</label><input value={plan.area} onChange={e=>setPlan({...plan, area:e.target.value})} disabled={!canEdit} /></div>
+                            <UserSelect users={siteUsers} value={plan.auditor} onChange={v => setPlan({...plan, auditor: v})} label="Auditor Name" disabled={!canEdit} filterRoles={['Owner', 'Lead Auditor', 'Auditor', 'EHS Manager', 'Site Leader']} />
+                            <UserSelect users={siteUsers} value={plan.auditee} onChange={v => setPlan({...plan, auditee: v})} label="Auditee Name" disabled={!canEdit} />
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Date From</label><input type="date" value={plan.dateFrom} onChange={e=>setPlan({...plan, dateFrom:e.target.value})} disabled={!canEdit} /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Date To</label><input type="date" value={plan.dateTo} onChange={e=>setPlan({...plan, dateTo:e.target.value})} disabled={!canEdit} /></div>
+                            <div className="col-span-2"><label className="text-[10px] uppercase font-bold text-slate-500">Audit Scope / Standard</label><input value={plan.standard} onChange={e=>setPlan({...plan, standard:e.target.value})} disabled={!canEdit} /></div>
                         </div>
-                        
-                        {/* Multiple Assignments */}
-                        <div className="bg-slate-800/50 p-4 rounded-lg mb-4">
-                            <div className="flex justify-between mb-2">
-                                <h3 className="text-xs font-bold uppercase text-slate-400">Area Assignments</h3>
-                                <button onClick={addAssignment} className="text-xs bg-blue-600 px-2 py-1 rounded text-white">+ Add Area</button>
-                            </div>
-                            {plan.assignments.map((row, i) => (
-                                <div key={i} className="flex gap-2 mb-2">
-                                    <input placeholder="Area / Dept" value={row.area} onChange={e=>updateAssignment(i,'area',e.target.value)} className="w-1/2" />
-                                    <select value={row.auditor} onChange={e=>updateAssignment(i,'auditor',e.target.value)} className="w-1/2">
-                                        <option value="">Select Auditor</option>
-                                        {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
-                                    </select>
-                                    <button onClick={()=>removeAssignment(i)} className="text-red-400"><i className="fas fa-times"></i></button>
-                                </div>
-                            ))}
-                        </div>
-
                         <div className="flex justify-end gap-2">
                             <button onClick={()=>window.print()} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded font-bold text-sm"><i className="fas fa-print"></i> Print Plan</button>
-                            <button onClick={()=>onGenerate(plan)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold text-sm">Save & Generate Plan</button>
+                            {canEdit && <button onClick={()=>{ if(!plan.siteId) { alert('Select a site'); return; } onGenerate(plan); }} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold text-sm">Save & Generate Plan</button>}
                         </div>
                     </div>
 
-                    {/* PRINT VIEW */}
                     <div className="print-section">
                         <div className="text-center border-b-2 border-black mb-4 pb-2">
                             <h1 className="text-2xl font-bold uppercase">Internal Audit Plan</h1>
-                            <p>{plan.standard}</p>
+                            <p>ISO 45001 & ISO 14001 Management System</p>
                         </div>
                         <table className="w-full border-collapse border border-black text-sm">
                             <tbody>
-                                <tr><td className="border border-black p-2 font-bold">Site:</td><td className="border border-black p-2">{plan.siteId}</td><td className="border border-black p-2 font-bold">Dates:</td><td className="border border-black p-2">{plan.dateFrom} to {plan.dateTo}</td></tr>
+                                <tr><td className="border border-black p-2 font-bold">Site:</td><td className="border border-black p-2">{plan.siteId}</td><td className="border border-black p-2 font-bold">Date:</td><td className="border border-black p-2">{plan.dateFrom} to {plan.dateTo}</td></tr>
+                                <tr><td className="border border-black p-2 font-bold">Auditor:</td><td className="border border-black p-2">{plan.auditor}</td><td className="border border-black p-2 font-bold">Auditee:</td><td className="border border-black p-2">{plan.auditee}</td></tr>
                                 <tr><td className="border border-black p-2 font-bold">Scope:</td><td colSpan="3" className="border border-black p-2">{plan.scope}</td></tr>
-                            </tbody>
-                        </table>
-                        <br/>
-                        <h3 className="font-bold border-b border-black mb-2">Audit Assignments</h3>
-                        <table className="w-full border-collapse border border-black text-sm">
-                            <thead><tr><th className="border border-black p-2 text-left">Area / Department</th><th className="border border-black p-2 text-left">Assigned Auditor</th></tr></thead>
-                            <tbody>
-                                {plan.assignments.map((a, i) => (
-                                    <tr key={i}><td className="border border-black p-2">{a.area}</td><td className="border border-black p-2">{a.auditor}</td></tr>
-                                ))}
+                                <tr><td className="border border-black p-2 font-bold">Area:</td><td colSpan="3" className="border border-black p-2">{plan.area}</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -140,77 +150,119 @@
             );
         };
 
-        // 2. AUDIT FORM
-        const AuditForm = ({ siteId, users, sitesList, onSave, isReadOnly }) => {
+        // 2. INTERNAL AUDITING TAB
+        const AuditForm = ({ siteId, onSave, sites, users, permissions, session }) => {
+            const [selectedSite, setSelectedSite] = useState(siteId === 'GLOBAL' ? '' : siteId);
             const [data, setData] = useState({
                 scheduleRef: '', auditDate: new Date().toISOString().split('T')[0],
-                department: '', area: '', 
-                auditee: '', auditor: '', siteId: siteId === 'GLOBAL' ? '' : siteId,
+                department: '', area: '', auditee: '', auditor: '',
                 ncRef: '', classification: 'Minor', standard: 'ISO 45001', clause: '', 
-                criteria: '', ncStatement: '', evidence: '', status: 'Open'
+                criteria: '', ncStatement: '', evidence: '',
+                correction: '', rootCause: '', capa: '', responsibility: '', targetDate: '',
+                followUp: 'No', verificationStatus: 'Open', verifiedBy: '', verificationDate: '', comments: '',
+                status: 'Open', actionOwner: ''
             });
 
+            // Filter users based on selected site
+            const siteUsers = useMemo(() => {
+                if (!selectedSite) return users;
+                return users.filter(u => 
+                    u.role === 'Owner' || u.role === 'Lead Auditor' ||
+                    (u.accessibleSites && u.accessibleSites.includes(selectedSite)) ||
+                    u.assignedSite === selectedSite
+                );
+            }, [users, selectedSite]);
+
+            const canEdit = !permissions.viewOnly;
+
             const handleSubmit = () => {
-                if(isReadOnly) return;
                 if(!data.department || !data.ncStatement) { alert("Fill required fields"); return; }
-                onSave({ ...data, timestamp: Date.now() });
+                if(!selectedSite) { alert("Please select a site"); return; }
+                const payload = { ...data, siteId: selectedSite, timestamp: Date.now(), createdBy: session.user };
+                onSave(payload);
             };
 
             return (
                 <div className="space-y-6 animate-fade-in pb-20">
+                    {permissions.viewOnly && (
+                        <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg text-yellow-400 text-xs">
+                            <i className="fas fa-eye mr-2"></i> View Only Mode - You cannot create or modify records
+                        </div>
+                    )}
                     <div className="glass-panel p-6 rounded-xl border border-slate-700">
-                        <div className="bg-slate-800 p-2 rounded mb-4 text-xs font-bold text-slate-400 uppercase">Part A - Auditor Findings</div>
+                        <div className="bg-slate-800 p-2 rounded mb-4 text-xs font-bold text-slate-400 uppercase">Part A - To be filled by Auditor</div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Site</label>
-                                <select value={data.siteId} onChange={e=>setData({...data, siteId:e.target.value})} disabled={siteId!=='GLOBAL' || isReadOnly} className="w-full">
-                                    <option value="">Select Site</option>
-                                    {sitesList.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
-                                </select>
-                            </div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Audit Date</label><input type="date" value={data.auditDate} onChange={e=>setData({...data, auditDate:e.target.value})} disabled={isReadOnly}/></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Department</label><input value={data.department} onChange={e=>setData({...data, department:e.target.value})} disabled={isReadOnly}/></div>
-                            
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Auditor</label>
-                                <select value={data.auditor} onChange={e=>setData({...data, auditor:e.target.value})} disabled={isReadOnly}>
-                                    <option value="">Select</option>
-                                    {users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Auditee</label>
-                                <select value={data.auditee} onChange={e=>setData({...data, auditee:e.target.value})} disabled={isReadOnly}>
-                                    <option value="">Select</option>
-                                    {users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}
-                                </select>
-                            </div>
-                            
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500">NC Ref No</label><input value={data.ncRef} onChange={e=>setData({...data, ncRef:e.target.value})} disabled={isReadOnly}/></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Schedule Ref</label><input value={data.scheduleRef} onChange={e=>setData({...data, scheduleRef:e.target.value})} placeholder="e.g., IA-02" disabled={!canEdit} /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Audit Date</label><input type="date" value={data.auditDate} onChange={e=>setData({...data, auditDate:e.target.value})} disabled={!canEdit} /></div>
+                            <SiteSelect sites={sites} value={selectedSite} onChange={v => { setSelectedSite(v); setData({...data, auditor:'', auditee:'', actionOwner:''}); }} label="Site" disabled={!canEdit || siteId !== 'GLOBAL'} />
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Department</label><input value={data.department} onChange={e=>setData({...data, department:e.target.value})} disabled={!canEdit} /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Area / Phase</label><input value={data.area} onChange={e=>setData({...data, area:e.target.value})} disabled={!canEdit} /></div>
+                            <UserSelect users={siteUsers} value={data.auditor} onChange={v => setData({...data, auditor: v})} label="Auditor Name" disabled={!canEdit} filterRoles={['Owner', 'Lead Auditor', 'Auditor', 'EHS Manager', 'Site Leader']} />
+                            <UserSelect users={siteUsers} value={data.auditee} onChange={v => setData({...data, auditee: v})} label="Auditee Name" disabled={!canEdit} />
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">NC Ref No</label><input value={data.ncRef} onChange={e=>setData({...data, ncRef:e.target.value})} disabled={!canEdit} /></div>
                             <div>
                                 <label className="text-[10px] uppercase font-bold text-slate-500">Classification</label>
-                                <select value={data.classification} onChange={e=>setData({...data, classification:e.target.value})} disabled={isReadOnly}>
+                                <select value={data.classification} onChange={e=>setData({...data, classification:e.target.value})} disabled={!canEdit}>
                                     <option>Minor</option><option>Major</option><option>Observation</option><option>OFI</option>
                                 </select>
                             </div>
                         </div>
-                        <div className="mb-4"><label className="text-[10px] uppercase font-bold text-slate-500">NC Statement</label><textarea rows="3" value={data.ncStatement} onChange={e=>setData({...data, ncStatement:e.target.value})} className="w-full bg-slate-900" disabled={isReadOnly}></textarea></div>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Standard</label><select value={data.standard} onChange={e=>setData({...data, standard:e.target.value})} disabled={!canEdit}><option>ISO 45001</option><option>ISO 14001</option></select></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Clause / Title</label><input value={data.clause} onChange={e=>setData({...data, clause:e.target.value})} placeholder="e.g. 9.1.2 Evaluation" disabled={!canEdit} /></div>
+                        </div>
+                        <div className="mb-4">
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Audit Criteria (Policies/Procedures)</label>
+                            <input value={data.criteria} onChange={e=>setData({...data, criteria:e.target.value})} className="w-full" disabled={!canEdit} />
+                        </div>
+                        <div className="mb-4">
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Non-Conformity Statement</label>
+                            <textarea rows="3" value={data.ncStatement} onChange={e=>setData({...data, ncStatement:e.target.value})} className="w-full bg-slate-900 border border-red-500/30" disabled={!canEdit}></textarea>
+                        </div>
+                        <div className="mb-4">
+                            <label className="text-[10px] uppercase font-bold text-slate-500">Objective Evidence</label>
+                            <textarea rows="2" value={data.evidence} onChange={e=>setData({...data, evidence:e.target.value})} className="w-full" disabled={!canEdit}></textarea>
+                        </div>
+                        <div className="mb-4">
+                            <UserSelect users={siteUsers} value={data.actionOwner} onChange={v => setData({...data, actionOwner: v})} label="Action Owner (Responsible Person)" disabled={!canEdit} />
+                        </div>
                     </div>
-                    {!isReadOnly && <button onClick={handleSubmit} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg">Save Audit Finding</button>}
+                    {canEdit && <button onClick={handleSubmit} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg">Save Audit Finding</button>}
                 </div>
             );
         };
 
-        // 3. CLOSURE TAB
-        const AuditClosure = ({ audits, onUpdate, users, isReadOnly }) => {
+        // 3. AUDIT CLOSURE TAB
+        const AuditClosure = ({ audits, onUpdate, users, permissions, session }) => {
             const [selected, setSelected] = useState(null);
 
+            // Check if user can edit this specific record
+            const canEditRecord = (audit) => {
+                if (permissions.viewOnly && !permissions.canEditOwnedActions) return false;
+                if (permissions.canEditOwnedActions) {
+                    return audit.actionOwner === session.user || audit.responsibility === session.user;
+                }
+                return !permissions.viewOnly;
+            };
+
+            // Filter users for current audit's site
+            const siteUsers = useMemo(() => {
+                if (!selected?.siteId) return users;
+                return users.filter(u => 
+                    u.role === 'Owner' || u.role === 'Lead Auditor' ||
+                    (u.accessibleSites && u.accessibleSites.includes(selected.siteId)) ||
+                    u.assignedSite === selected.siteId
+                );
+            }, [users, selected?.siteId]);
+
             const handleClose = () => {
-                if(isReadOnly) return;
+                if(!selected) return;
                 const updated = { ...selected, status: selected.verificationStatus === 'Completely closed-out' ? 'Closed' : 'Open' };
                 onUpdate(updated);
                 setSelected(null);
             };
+
+            const isEditable = selected && canEditRecord(selected);
 
             return (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in h-full">
@@ -219,48 +271,63 @@
                         <div className="overflow-y-auto flex-1 p-2">
                             {audits.filter(a => a.status !== 'Closed').map(a => (
                                 <div key={a.id} onClick={()=>setSelected(a)} className={`p-3 mb-2 rounded cursor-pointer border hover:bg-slate-800 ${selected?.id===a.id ? 'border-blue-500 bg-slate-800' : 'border-slate-700 bg-slate-900'}`}>
-                                    <div className="flex justify-between mb-1"><span className="text-xs font-mono text-emerald-400">{a.ncRef}</span><span className="text-[10px] bg-red-900 text-red-300 px-1 rounded">{a.classification}</span></div>
+                                    <div className="flex justify-between mb-1"><span className="text-xs font-mono text-emerald-400">{a.ncRef || 'No Ref'}</span><span className="text-[10px] bg-red-900 text-red-300 px-1 rounded">{a.classification}</span></div>
                                     <div className="text-sm font-bold truncate">{a.department}</div>
+                                    <div className="text-[10px] text-slate-400 truncate">{a.ncStatement}</div>
+                                    {a.actionOwner && <div className="text-[10px] text-blue-400 mt-1"><i className="fas fa-user mr-1"></i>{a.actionOwner}</div>}
                                 </div>
                             ))}
                         </div>
                     </div>
 
                     <div className="col-span-2 glass-panel p-6 rounded-xl h-[70vh] overflow-y-auto">
-                        {!selected ? <div className="h-full flex items-center justify-center text-slate-500">Select a finding</div> : (
+                        {!selected ? <div className="h-full flex items-center justify-center text-slate-500">Select a finding to close</div> : (
                             <div className="space-y-6">
-                                <div className="border-b border-slate-700 pb-4"><h3 className="text-lg font-bold text-white mb-2">Finding: {selected.ncRef}</h3><p className="text-sm text-slate-300 bg-slate-800 p-3 rounded">{selected.ncStatement}</p></div>
+                                {!isEditable && (
+                                    <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg text-yellow-400 text-xs">
+                                        <i className="fas fa-eye mr-2"></i> 
+                                        {permissions.canEditOwnedActions ? "You can only edit records where you are the Action Owner" : "View Only Mode"}
+                                    </div>
+                                )}
+                                <div className="border-b border-slate-700 pb-4">
+                                    <h3 className="text-lg font-bold text-white mb-2">Finding: {selected.ncRef}</h3>
+                                    <p className="text-sm text-slate-300 bg-slate-800 p-3 rounded">{selected.ncStatement}</p>
+                                </div>
+
                                 <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
                                     <div className="text-xs font-bold text-blue-400 uppercase mb-3">Part B - Auditee Action</div>
                                     <div className="space-y-3">
-                                        <div><label className="text-[10px] uppercase">Correction</label><input value={selected.correction || ''} onChange={e=>setSelected({...selected, correction:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly && selected.role !== 'Auditee'} /></div>
+                                        <div><label className="text-[10px] uppercase">Correction</label><input value={selected.correction || ''} onChange={e=>setSelected({...selected, correction:e.target.value})} className="bg-slate-900 w-full" disabled={!isEditable} /></div>
+                                        <div><label className="text-[10px] uppercase">Root Cause Analysis</label><textarea value={selected.rootCause || ''} onChange={e=>setSelected({...selected, rootCause:e.target.value})} className="bg-slate-900 w-full" rows="2" disabled={!isEditable} /></div>
                                         <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-[10px] uppercase">Responsibility</label>
-                                                <select value={selected.responsibility || ''} onChange={e=>setSelected({...selected, responsibility:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly && selected.role !== 'Auditee'}>
-                                                    <option value="">Select</option>
-                                                    {users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div><label className="text-[10px] uppercase">Target Date</label><input type="date" value={selected.targetDate || ''} onChange={e=>setSelected({...selected, targetDate:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly && selected.role !== 'Auditee'} /></div>
+                                            <div><label className="text-[10px] uppercase">Corrective Action Plan (CAPA)</label><input value={selected.capa || ''} onChange={e=>setSelected({...selected, capa:e.target.value})} className="bg-slate-900 w-full" disabled={!isEditable} /></div>
+                                            <div><label className="text-[10px] uppercase">Target Date</label><input type="date" value={selected.targetDate || ''} onChange={e=>setSelected({...selected, targetDate:e.target.value})} className="bg-slate-900 w-full" disabled={!isEditable} /></div>
                                         </div>
+                                        <UserSelect users={siteUsers} value={selected.responsibility || ''} onChange={v => setSelected({...selected, responsibility: v})} label="Responsibility" disabled={!isEditable} />
                                     </div>
                                 </div>
+
                                 <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
                                     <div className="text-xs font-bold text-emerald-400 uppercase mb-3">Part C - Verification</div>
                                     <div className="space-y-3">
+                                        <div><label className="text-[10px] uppercase">Follow-up Required?</label><select value={selected.followUp || 'No'} onChange={e=>setSelected({...selected, followUp:e.target.value})} className="bg-slate-900 w-full" disabled={!isEditable}><option>Yes</option><option>No</option></select></div>
                                         <div>
                                             <label className="text-[10px] uppercase">Verification Status</label>
-                                            <select value={selected.verificationStatus || 'No action initiated'} onChange={e=>setSelected({...selected, verificationStatus:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly}>
+                                            <select value={selected.verificationStatus || 'No action initiated'} onChange={e=>setSelected({...selected, verificationStatus:e.target.value})} className="bg-slate-900 w-full" disabled={!isEditable}>
                                                 <option>No action initiated</option>
                                                 <option>Initiated & In-progress</option>
                                                 <option>Completely closed-out</option>
                                             </select>
                                         </div>
-                                        <div><label className="text-[10px] uppercase">Verified By</label><select value={selected.verifiedBy || ''} onChange={e=>setSelected({...selected, verifiedBy:e.target.value})} className="bg-slate-900 w-full" disabled={isReadOnly}><option value="">Select</option>{users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+                                        <UserSelect users={siteUsers} value={selected.verifiedBy || ''} onChange={v => setSelected({...selected, verifiedBy: v})} label="Verified By" disabled={!isEditable} filterRoles={['Owner', 'Lead Auditor', 'Auditor', 'EHS Manager', 'Site Leader']} />
+                                        <div><label className="text-[10px] uppercase">Comments / Evidence</label><textarea value={selected.comments || ''} onChange={e=>setSelected({...selected, comments:e.target.value})} className="bg-slate-900 w-full" rows="2" disabled={!isEditable} /></div>
                                     </div>
                                 </div>
-                                {!isReadOnly && <button onClick={handleClose} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg shadow-lg">Update & Close</button>}
+
+                                <div className="flex gap-2">
+                                    <button onClick={()=>window.print()} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg"><i className="fas fa-print mr-2"></i>Print PDF</button>
+                                    {isEditable && <button onClick={handleClose} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg shadow-lg">Update & Close</button>}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -268,10 +335,16 @@
             );
         };
 
-        const Dashboard = ({ audits, siteId, sitesList }) => {
+        // 4. DASHBOARD TAB
+        const Dashboard = ({ audits, siteId, permissions }) => {
             const [filterSite, setFilterSite] = useState(siteId === 'GLOBAL' ? 'All' : siteId);
+            const [filterArea, setFilterArea] = useState('All');
+
             const stats = useMemo(() => {
-                let filtered = filterSite === 'All' ? audits : audits.filter(a => a.siteId === filterSite);
+                let filtered = audits;
+                if(filterSite !== 'All') filtered = filtered.filter(a => a.siteId === filterSite);
+                if(filterArea !== 'All') filtered = filtered.filter(a => a.department === filterArea);
+
                 return {
                     total: filtered.length,
                     open: filtered.filter(a => a.status !== 'Closed').length,
@@ -279,33 +352,82 @@
                     major: filtered.filter(a => a.classification === 'Major').length,
                     filtered
                 };
-            }, [audits, filterSite]);
+            }, [audits, filterSite, filterArea]);
+
+            const areas = [...new Set(audits.map(a => a.department))];
+
+            const exportToExcel = () => {
+                const dataToExport = stats.filtered.map(a => ({
+                    'NC Ref': a.ncRef, 'Site': a.siteId, 'Department': a.department,
+                    'Classification': a.classification, 'Statement': a.ncStatement,
+                    'Status': a.status, 'Action Owner': a.actionOwner || '', 'Target Date': a.targetDate || ''
+                }));
+                const ws = XLSX.utils.json_to_sheet(dataToExport);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Audits");
+                XLSX.writeFile(wb, "Audit_Report.xlsx");
+            };
 
             return (
                 <div className="space-y-6 animate-fade-in">
-                    <div className="flex gap-4 mb-6">
-                        <select className="bg-slate-800 p-2 rounded" value={filterSite} onChange={e=>setFilterSite(e.target.value)} disabled={siteId!=='GLOBAL'}>
-                            <option value="All">All Sites</option>
-                            {sitesList.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
-                        </select>
+                    <div className="flex gap-4 mb-6 items-end">
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label>
+                            <select className="bg-slate-800 p-2 rounded" value={filterSite} onChange={e=>setFilterSite(e.target.value)} disabled={siteId!=='GLOBAL'}>
+                                <option value="All">All Sites</option>
+                                {[...new Set(audits.map(a=>a.siteId))].map(s=><option key={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Area</label>
+                            <select className="bg-slate-800 p-2 rounded" value={filterArea} onChange={e=>setFilterArea(e.target.value)}>
+                                <option value="All">All Areas</option>
+                                {areas.map(a=><option key={a}>{a}</option>)}
+                            </select>
+                        </div>
+                        <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-bold text-sm ml-auto">
+                            <i className="fas fa-file-excel mr-2"></i>Export Excel
+                        </button>
                     </div>
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-slate-800 p-4 rounded border-l-4 border-blue-500"><h3 className="text-slate-400 text-xs uppercase">Total</h3><p className="text-2xl font-bold">{stats.total}</p></div>
-                        <div className="bg-slate-800 p-4 rounded border-l-4 border-red-500"><h3 className="text-slate-400 text-xs uppercase">Open</h3><p className="text-2xl font-bold">{stats.open}</p></div>
+                        <div className="bg-slate-800 p-4 rounded border-l-4 border-blue-500"><h3 className="text-slate-400 text-xs uppercase">Total Findings</h3><p className="text-2xl font-bold">{stats.total}</p></div>
+                        <div className="bg-slate-800 p-4 rounded border-l-4 border-red-500"><h3 className="text-slate-400 text-xs uppercase">Open NCs</h3><p className="text-2xl font-bold">{stats.open}</p></div>
                         <div className="bg-slate-800 p-4 rounded border-l-4 border-green-500"><h3 className="text-slate-400 text-xs uppercase">Closed</h3><p className="text-2xl font-bold">{stats.closed}</p></div>
                         <div className="bg-slate-800 p-4 rounded border-l-4 border-yellow-500"><h3 className="text-slate-400 text-xs uppercase">Major NCs</h3><p className="text-2xl font-bold">{stats.major}</p></div>
+                    </div>
+
+                    <div className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                        <table className="w-full text-left text-sm text-slate-300">
+                            <thead className="bg-slate-800 text-xs uppercase font-bold text-slate-500"><tr><th className="p-3">Ref</th><th className="p-3">Site</th><th className="p-3">Area</th><th className="p-3">Type</th><th className="p-3">Owner</th><th className="p-3">Statement</th><th className="p-3">Status</th></tr></thead>
+                            <tbody className="divide-y divide-slate-800">
+                                {stats.filtered.map(a => (
+                                    <tr key={a.id} className="hover:bg-slate-800">
+                                        <td className="p-3 font-mono">{a.ncRef}</td>
+                                        <td className="p-3">{a.siteId}</td>
+                                        <td className="p-3">{a.department}</td>
+                                        <td className="p-3">{a.classification}</td>
+                                        <td className="p-3 text-blue-400">{a.actionOwner || '-'}</td>
+                                        <td className="p-3 truncate max-w-xs">{a.ncStatement}</td>
+                                        <td className="p-3"><span className={`px-2 py-1 rounded text-[10px] ${a.status==='Closed'?'bg-green-900 text-green-300':'bg-red-900 text-red-300'}`}>{a.status}</span></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             );
         };
 
+        // MAIN APP
         const App = () => {
-            const [tab, setTab] = useState('dashboard');
+            const [tab, setTab] = useState('schedule');
             const [session, setSession] = useState(null);
             const [audits, setAudits] = useState([]);
-            const [users, setUsers] = useState([]);
-            const [sitesList, setSitesList] = useState([]);
             const [siteId, setSiteId] = useState('GLOBAL');
+            const [sites, setSites] = useState([]);
+            const [users, setUsers] = useState([]);
+            const [permissions, setPermissions] = useState({ viewOnly: false, canEditOwnedActions: false });
 
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
@@ -317,61 +439,79 @@
                 const ctx = params.get('site');
                 if(ctx && ctx !== 'GLOBAL') setSiteId(ctx);
 
-                // ROLE BASED TAB REDIRECTION
-                if (sess.role === 'Auditee') { setTab('closure'); }
+                const viewOnly = params.get('viewOnly') === 'true';
+                const isAuditee = params.get('auditee') === 'true';
+                const role = params.get('role') || sess.role;
 
-                // LOAD DATA
-                const orgRef = window.fb.child(window.fb.ref(window.db), `organizations/${sess.orgId}`);
-                window.fb.get(orgRef).then(snap => {
+                const perms = {
+                    viewOnly: viewOnly || role === 'User',
+                    canEditOwnedActions: role === 'Manager',
+                    isAuditee: isAuditee || role === 'Auditee'
+                };
+                setPermissions(perms);
+
+                if (perms.isAuditee) setTab('closure');
+
+                const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
+                window.fb.get(dbRef).then(snap => {
                     if(snap.exists()) {
-                        const val = snap.val();
-                        // Filter users based on site access if not global
-                        const allUsers = val.users ? Object.values(val.users) : [];
-                        const filteredUsers = (ctx && ctx !== 'GLOBAL') 
-                            ? allUsers.filter(u => u.assignedSite === ctx || (u.accessibleSites && u.accessibleSites.includes(ctx))) 
-                            : allUsers;
-                        setUsers(filteredUsers);
-                        setSitesList(val.sites ? Object.values(val.sites) : []);
-                        setAudits(val.audits ? Object.entries(val.audits).map(([k,v])=>({id:k,...v})) : []);
+                        const data = snap.val();
+                        if(data.audits) setAudits(Object.entries(data.audits).map(([k,v])=>({id:k,...v})));
+                        if(data.sites) {
+                            const allSites = Object.values(data.sites);
+                            if (sess.role === 'Owner' || sess.role === 'Lead Auditor') {
+                                setSites(allSites);
+                            } else {
+                                const accessibleSites = sess.accessibleSites || (sess.assignedSite ? [sess.assignedSite] : []);
+                                setSites(allSites.filter(s => accessibleSites.includes(s.code)));
+                            }
+                        }
+                        if(data.users) setUsers(Object.entries(data.users).map(([k,v])=>({id:k,...v})).filter(u => u.status === 'Active'));
                     }
                 });
             }, []);
 
             const handleSaveAudit = async (data) => {
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/audits`), data);
-                alert("Saved"); window.location.reload();
+                alert("Audit Saved");
+                window.location.reload();
             };
 
             const handleUpdateAudit = async (data) => {
                 await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/audits/${data.id}`), data);
-                alert("Updated"); window.location.reload();
+                alert("Audit Updated");
+                window.location.reload();
             };
 
             if(!session) return null;
 
-            // Permission Checks
-            const canSchedule = ['Owner', 'Lead Auditor', 'Site Leader', 'EHS Manager'].includes(session.role);
-            const canAudit = ['Owner', 'Lead Auditor', 'Auditor'].includes(session.role);
-            const isReadOnly = session.role === 'User' || session.role === 'Auditee'; // Auditee handled in component specific logic
+            const allTabs = ['schedule', 'audit', 'closure', 'dashboard'];
+            const auditeeTabs = ['closure', 'dashboard'];
+            const availableTabs = permissions.isAuditee ? auditeeTabs : allTabs;
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans">
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
-                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Internal Audit</h1></div>
-                        
-                        <div className="grid grid-cols-4 gap-2 tabs-nav">
-                            {canSchedule && <div onClick={()=>setTab('schedule')} className={`cursor-pointer p-2 rounded-lg text-center border ${tab==='schedule'?'border-blue-500 bg-blue-500/10 text-blue-400':'border-slate-700 hover:bg-slate-800'}`}><i className="fas fa-calendar block text-sm mb-1"></i><span className="text-[10px] font-bold uppercase">Schedule</span></div>}
-                            {canAudit && <div onClick={()=>setTab('audit')} className={`cursor-pointer p-2 rounded-lg text-center border ${tab==='audit'?'border-blue-500 bg-blue-500/10 text-blue-400':'border-slate-700 hover:bg-slate-800'}`}><i className="fas fa-clipboard-check block text-sm mb-1"></i><span className="text-[10px] font-bold uppercase">Audit</span></div>}
-                            <div onClick={()=>setTab('closure')} className={`cursor-pointer p-2 rounded-lg text-center border ${tab==='closure'?'border-blue-500 bg-blue-500/10 text-blue-400':'border-slate-700 hover:bg-slate-800'}`}><i className="fas fa-tasks block text-sm mb-1"></i><span className="text-[10px] font-bold uppercase">Closure</span></div>
-                            <div onClick={()=>setTab('dashboard')} className={`cursor-pointer p-2 rounded-lg text-center border ${tab==='dashboard'?'border-blue-500 bg-blue-500/10 text-blue-400':'border-slate-700 hover:bg-slate-800'}`}><i className="fas fa-chart-pie block text-sm mb-1"></i><span className="text-[10px] font-bold uppercase">Stats</span></div>
+                        <div className="flex items-center gap-4">
+                            <a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a>
+                            <h1 className="font-bold text-lg">Internal Audit</h1>
+                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded border border-blue-500/30">{session.role}</span>
+                            {permissions.viewOnly && <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded border border-yellow-500/30">View Only</span>}
+                        </div>
+                        <div className="flex bg-slate-800 p-1 rounded-lg tabs-nav">
+                            {availableTabs.map(t => (
+                                <button key={t} onClick={()=>setTab(t)} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${tab===t?'bg-blue-600 text-white':'text-slate-400'}`}>
+                                    {t === 'schedule' ? '1. Schedule' : t === 'audit' ? '2. Audit' : t === 'closure' ? '3. Closure' : '4. Dashboard'}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
-                        {tab === 'schedule' && <AuditScheduler siteId={siteId} users={users} sitesList={sitesList} onGenerate={handleSaveAudit} />}
-                        {tab === 'audit' && <AuditForm siteId={siteId} users={users} sitesList={sitesList} onSave={handleSaveAudit} isReadOnly={isReadOnly} />}
-                        {tab === 'closure' && <AuditClosure audits={audits} users={users} onUpdate={handleUpdateAudit} isReadOnly={session.role === 'User'} />}
-                        {tab === 'dashboard' && <Dashboard audits={audits} siteId={siteId} sitesList={sitesList} />}
+                        {tab === 'schedule' && <AuditScheduler siteId={siteId} onGenerate={handleSaveAudit} sites={sites} users={users} permissions={permissions} session={session} />}
+                        {tab === 'audit' && <AuditForm siteId={siteId} onSave={handleSaveAudit} sites={sites} users={users} permissions={permissions} session={session} />}
+                        {tab === 'closure' && <AuditClosure audits={audits} onUpdate={handleUpdateAudit} users={users} permissions={permissions} session={session} />}
+                        {tab === 'dashboard' && <Dashboard audits={audits} siteId={siteId} permissions={permissions} />}
                     </div>
                 </div>
             );
