@@ -3,57 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audit Scheduler</title>
+    <title>Internal Audit Management</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script>
         tailwind.config = {
             theme: {
-                extend: {
-                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
-                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
-                }
+                extend: { colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' } }
             }
         }
     </script>
     <style>
-        body { background-color: #0f172a; color: #f8fafc; }
-        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px 12px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: transform 0.2s; }
+        .glass-panel:hover { transform: translateY(-2px); border-color: rgba(59, 130, 246, 0.5); }
+        .nav-card { cursor: pointer; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
         
-        .custom-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
-        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; }
+        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
 
-        /* PRINT STYLES */
+        /* --- CRITICAL PRINT STYLES --- */
         @media print {
             @page { size: A4 landscape; margin: 10mm; }
-            body, html, #root { width: 100%; height: auto; background: white !important; color: black !important; display: block !important; overflow: visible !important; }
-            .no-print, header, .back-btn, button { display: none !important; }
-            .print-container { display: block !important; }
-            .screen-container { display: none !important; }
             
-            /* Table Styling for Print */
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10pt; }
-            th, td { border: 1px solid black !important; padding: 6px; text-align: left; color: black !important; page-break-inside: avoid; }
-            th { background-color: #f0f0f0 !important; font-weight: bold; }
+            /* Hide the entire App UI */
+            body, #root, .glass-panel, header, .back-btn, .no-print { 
+                visibility: hidden !important; 
+                height: 0 !important; 
+                overflow: hidden !important; 
+                background: white !important;
+            }
+
+            /* Reset Body for Print */
+            body { 
+                background: white !important; 
+                color: black !important; 
+            }
+
+            /* Reveal ONLY the Print Container */
+            .print-container { 
+                visibility: visible !important; 
+                display: block !important; 
+                position: absolute; 
+                top: 0; 
+                left: 0; 
+                width: 100%; 
+                background: white; 
+                color: black; 
+                font-size: 11pt;
+                z-index: 9999;
+            }
+
+            /* Print-Specific Element Styling */
+            .print-container table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            .print-container th, .print-container td { border: 1px solid black; padding: 5px; text-align: left; }
+            .print-container th { background-color: #f0f0f0 !important; font-weight: bold; }
+            .print-container h1 { font-size: 18pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 10px; }
+            .print-container .doc-header { border-bottom: 2px solid black; margin-bottom: 20px; padding-bottom: 10px; }
+            .print-container .section-box { border: 1px solid black; padding: 10px; margin-bottom: 15px; }
             
-            .doc-header { text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
-            .doc-id { font-family: monospace; font-weight: bold; float: right; font-size: 9pt; margin-top: -10px; }
-            
-            /* Hide inputs, show values */
-            input, select { border: none !important; background: transparent !important; color: black !important; padding: 0; appearance: none; }
-            .text-emerald-400, .text-slate-400, .text-slate-500, .text-blue-400 { color: black !important; }
-            .border-l-4 { border: none !important; }
-            .bg-slate-900 { background: white !important; }
+            /* Signatures */
+            .print-container .signature-box { margin-top: 50px; display: flex; justify-content: space-between; }
+            .print-container .sign-line { border-top: 1px solid black; width: 200px; text-align: center; padding-top: 5px; }
         }
+        
+        /* Hide Print Container on Screen */
         .print-container { display: none; }
     </style>
 </head>
@@ -62,263 +82,443 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, push, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, get, push, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
-        window.fb = { ref, get, push, update };
+        window.fb = { ref, get, push, update, remove };
     </script>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        const AuditScheduler = () => {
-            const [session, setSession] = useState(null);
-            const [sites, setSites] = useState([]);
-            const [allUsers, setAllUsers] = useState([]);
-            const [loading, setLoading] = useState(true);
+        const UserSelect = ({ users, value, onChange, placeholder }) => (
+            <select value={value} onChange={e => onChange(e.target.value)} className="w-full">
+                <option value="">{placeholder || 'Select...'}</option>
+                {users.map(u => <option key={u.id} value={u.name}>{u.name} ({u.role})</option>)}
+            </select>
+        );
 
-            // Form State
-            const [plan, setPlan] = useState({
-                siteId: '',
+        const SiteSelect = ({ sites, value, onChange, disabled }) => (
+            <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} className="w-full">
+                <option value="">Select Site...</option>
+                {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
+            </select>
+        );
+
+        const fileToBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+
+        // 1. AUDIT SCHEDULER
+        const AuditScheduler = ({ siteId, sites, users, onBack, session }) => {
+            const [header, setHeader] = useState({
+                siteId: siteId === 'GLOBAL' ? '' : siteId,
                 leadAuditor: '',
-                team: [], // Array of user names
                 standard: 'ISO 45001:2018',
                 startDate: '',
-                endDate: '',
-                docId: ''
+                endDate: ''
             });
+            const [rows, setRows] = useState([{ auditor: '', auditee: '', dept: '', date: '', time: '', aspects: '' }]);
+            const [docId, setDocId] = useState('');
 
-            // Matrix State
-            const [rows, setRows] = useState([
-                { auditor: '', auditee: '', dept: '', area: '', aspect: '', date: '', time: '' }
-            ]);
-
-            // Load Data
             useEffect(() => {
-                const s = sessionStorage.getItem('isoSession');
-                if(!s) { window.location.href='index.html'; return; }
-                const sess = JSON.parse(s);
-                setSession(sess);
+                const seq = Math.floor(1000 + Math.random() * 9000);
+                setDocId(`${session.orgId} - ${header.siteId || 'GEN'} - IAP - ${seq}`);
+            }, [header.siteId]);
 
-                const orgRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
-                window.fb.get(orgRef).then(snap => {
-                    if(snap.exists()) {
-                        const val = snap.val();
-                        setSites(val.sites ? Object.values(val.sites) : []);
-                        setAllUsers(val.users ? Object.values(val.users) : []);
-                        setLoading(false);
-                    }
-                });
-            }, []);
-
-            // Generate Doc ID: ORG - SITE - IAP - Sr.No
-            useEffect(() => {
-                if(session && plan.siteId) {
-                    const seq = Math.floor(1000 + Math.random() * 9000);
-                    // CHANGED: IAC -> IAP
-                    setPlan(p => ({...p, docId: `${session.orgId}-${plan.siteId}-IAP-${seq}`}));
-                }
-            }, [plan.siteId]);
-
-            // Handlers
-            const addRow = () => setRows([...rows, { auditor: '', auditee: '', dept: '', area: '', aspect: '', date: '', time: '' }]);
-            const removeRow = (index) => setRows(rows.filter((_, i) => i !== index));
-            const updateRow = (index, field, value) => {
-                const newRows = [...rows];
-                newRows[index][field] = value;
-                setRows(newRows);
-            };
-
-            const toggleTeamMember = (userName) => {
-                if (plan.team.includes(userName)) {
-                    setPlan({...plan, team: plan.team.filter(t => t !== userName)});
-                } else {
-                    setPlan({...plan, team: [...plan.team, userName]});
-                }
-            };
-
-            const handleSave = async () => {
-                if (!plan.siteId || !plan.startDate || !plan.leadAuditor) return alert("Please fill in Site, Lead Auditor and Dates.");
-                
-                const payload = {
-                    ...plan,
-                    matrix: rows,
-                    createdAt: new Date().toISOString(),
-                    createdBy: session.user,
-                    status: 'Planned'
-                };
-
-                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/auditPlans`), payload);
-                alert("Audit Plan Saved Successfully!");
-                window.location.href = 'audit.html';
-            };
-
-            // Filter Users Logic
-            const siteUsers = useMemo(() => {
-                if (!plan.siteId) return [];
-                return allUsers.filter(u => u.assignedSite === plan.siteId || (u.accessibleSites && u.accessibleSites.includes(plan.siteId)) || u.role === 'Owner');
-            }, [allUsers, plan.siteId]);
-
-            const availableAuditors = allUsers.filter(u => ['Owner', 'Lead Auditor', 'Auditor', 'Site Leader', 'EHS Manager'].includes(u.role));
-
-            if (loading) return <div className="flex h-screen items-center justify-center text-white">Loading...</div>;
+            const addRow = () => setRows([...rows, { auditor: '', auditee: '', dept: '', date: '', time: '', aspects: '' }]);
+            const updateRow = (i, f, v) => { const n = [...rows]; n[i][f] = v; setRows(n); };
+            const removeRow = (i) => setRows(rows.filter((_, idx) => idx !== i));
 
             return (
-                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
-                    {/* Header */}
-                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
-                        <div className="flex items-center gap-4">
-                            <a href="audit.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition">
-                                <i className="fas fa-arrow-left"></i> Back
-                            </a>
-                            <h1 className="font-bold text-lg tracking-wide">Audit Scheduler</h1>
+                <div className="animate-fade-in">
+                    <button onClick={onBack} className="back-btn mb-4 text-slate-400 hover:text-white flex items-center gap-2 text-sm no-print"><i className="fas fa-arrow-left"></i> Back to Menu</button>
+                    
+                    <div className="glass-panel p-8 rounded-xl border-l-4 border-blue-500 no-print">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-white"><i className="fas fa-calendar-alt mr-2 text-blue-400"></i> Audit Scheduler</h2>
+                            <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-bold text-sm flex items-center gap-2"><i className="fas fa-file-pdf"></i> Generate Document</button>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={()=>window.print()} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i className="fas fa-print mr-2"></i> Print Plan</button>
-                            <button onClick={handleSave} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm"><i className="fas fa-save mr-2"></i> Save Plan</button>
+
+                        <div className="mb-8">
+                            <h3 className="text-blue-400 font-bold uppercase text-sm border-b border-blue-500/30 pb-2 mb-4">1. General Details</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label><SiteSelect sites={sites} value={header.siteId} onChange={v=>setHeader({...header, siteId:v})} disabled={siteId!=='GLOBAL'} /></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Lead Auditor</label><UserSelect users={users} value={header.leadAuditor} onChange={v=>setHeader({...header, leadAuditor:v})} placeholder="Select Lead..." /></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Standard</label><input value={header.standard} onChange={e=>setHeader({...header, standard:e.target.value})} /></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Start Date</label><input type="date" value={header.startDate} onChange={e=>setHeader({...header, startDate:e.target.value})} /></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">End Date</label><input type="date" value={header.endDate} onChange={e=>setHeader({...header, endDate:e.target.value})} /></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-end mb-2 border-b border-blue-500/30 pb-2"><h3 className="text-blue-400 font-bold uppercase text-sm m-0 border-none">2. Audit Matrix</h3><button onClick={addRow} className="text-xs bg-blue-600 px-3 py-1 rounded text-white">+ Add Row</button></div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left text-slate-300">
+                                    <thead className="bg-slate-800 text-slate-400 uppercase text-xs"><tr><th className="p-3 rounded-tl-lg">Auditor</th><th className="p-3">Auditee</th><th className="p-3">Department</th><th className="p-3">Date</th><th className="p-3">Time</th><th className="p-3">Aspects</th><th className="p-3 rounded-tr-lg"></th></tr></thead>
+                                    <tbody className="divide-y divide-slate-700">{rows.map((row, i) => (<tr key={i} className="hover:bg-slate-800/50"><td className="p-2"><UserSelect users={users} value={row.auditor} onChange={v=>updateRow(i, 'auditor', v)} placeholder="Auditor" /></td><td className="p-2"><UserSelect users={users} value={row.auditee} onChange={v=>updateRow(i, 'auditee', v)} placeholder="Auditee" /></td><td className="p-2"><input value={row.dept} onChange={e=>updateRow(i, 'dept', e.target.value)} className="bg-transparent border-none focus:ring-0 p-0" placeholder="Dept..." /></td><td className="p-2"><input type="date" value={row.date} onChange={e=>updateRow(i, 'date', e.target.value)} className="bg-transparent border-none p-0" /></td><td className="p-2"><input type="time" value={row.time} onChange={e=>updateRow(i, 'time', e.target.value)} className="bg-transparent border-none p-0" /></td><td className="p-2"><input value={row.aspects} onChange={e=>updateRow(i, 'aspects', e.target.value)} className="bg-transparent border-none p-0 w-full" placeholder="Scope..." /></td><td className="p-2 text-center"><button onClick={()=>removeRow(i)} className="text-red-400 hover:text-white"><i className="fas fa-times"></i></button></td></tr>))}</tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-8">
-                        <div className="max-w-7xl mx-auto space-y-6">
-                            
-                            {/* SECTION 1: GENERAL INFO */}
-                            <div className="glass-panel p-6 rounded-2xl border-l-4 border-blue-500">
-                                <div className="flex justify-between items-start mb-4">
-                                    <h2 className="text-xl font-bold text-blue-400">Section 1: General Information</h2>
-                                    <span className="hidden print:block font-mono font-bold text-sm border p-1">{plan.docId}</span>
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {/* Column 1 */}
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="text-[10px] uppercase font-bold text-slate-500">Target Site</label>
-                                            <select value={plan.siteId} onChange={e=>setPlan({...plan, siteId:e.target.value})} className="w-full bg-slate-900 border-slate-700" disabled={session.role !== 'Owner' && session.role !== 'Lead Auditor'}>
-                                                <option value="">Select Site...</option>
-                                                {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] uppercase font-bold text-slate-500">Standard</label>
-                                            <input value={plan.standard} onChange={e=>setPlan({...plan, standard:e.target.value})} className="bg-slate-900 border-slate-700" />
-                                        </div>
-                                    </div>
+                    {/* --- DEDICATED PRINT TEMPLATE FOR SCHEDULER --- */}
+                    <div className="print-container">
+                        <div className="doc-header">
+                            <span style={{float:'right', fontSize:'10px', fontWeight:'bold'}}>Doc ID: {docId}</span>
+                            <h1>Internal Audit Plan</h1>
+                            <p>{session.orgId} | Site: {header.siteId}</p>
+                        </div>
 
-                                    {/* Column 2 */}
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="text-[10px] uppercase font-bold text-slate-500">Lead Auditor</label>
-                                            <select value={plan.leadAuditor} onChange={e=>setPlan({...plan, leadAuditor:e.target.value})} className="w-full bg-slate-900 border-slate-700">
-                                                <option value="">Select...</option>
-                                                {availableAuditors.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="text-[10px] uppercase font-bold text-slate-500">Start Date</label>
-                                                <input type="date" value={plan.startDate} onChange={e=>setPlan({...plan, startDate:e.target.value})} className="bg-slate-900 border-slate-700" />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] uppercase font-bold text-slate-500">End Date</label>
-                                                <input type="date" value={plan.endDate} onChange={e=>setPlan({...plan, endDate:e.target.value})} className="bg-slate-900 border-slate-700" />
-                                            </div>
-                                        </div>
-                                    </div>
+                        <div className="section-box">
+                            <strong>General Information</strong>
+                            <table style={{marginTop:'5px'}}>
+                                <tr>
+                                    <td width="20%"><strong>Lead Auditor:</strong></td>
+                                    <td width="30%">{header.leadAuditor}</td>
+                                    <td width="20%"><strong>Standard:</strong></td>
+                                    <td width="30%">{header.standard}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Audit Dates:</strong></td>
+                                    <td colspan="3">{header.startDate} to {header.endDate}</td>
+                                </tr>
+                            </table>
+                        </div>
 
-                                    {/* Column 3: Audit Team Selection (Hidden on Print if empty) */}
-                                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 no-print">
-                                        <label className="text-[10px] uppercase font-bold text-slate-500 mb-2 block">Audit Team Members</label>
-                                        <div className="h-32 overflow-y-auto custom-scroll space-y-1">
-                                            {availableAuditors.map(u => (
-                                                <div key={u.id} onClick={()=>toggleTeamMember(u.name)} className={`flex items-center gap-2 p-2 rounded cursor-pointer text-xs ${plan.team.includes(u.name) ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
-                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${plan.team.includes(u.name) ? 'border-white bg-blue-500' : 'border-slate-500'}`}>
-                                                        {plan.team.includes(u.name) && <i className="fas fa-check text-[8px]"></i>}
-                                                    </div>
-                                                    {u.name}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Print Only Team List */}
-                                    <div className="hidden print:block border border-black p-2">
-                                        <label className="text-[10px] uppercase font-bold text-black mb-1 block">Audit Team</label>
-                                        <p className="text-sm">{plan.team.join(', ')}</p>
-                                    </div>
-                                </div>
+                        <h3>Audit Schedule Matrix</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date/Time</th>
+                                    <th>Department / Area</th>
+                                    <th>Aspects / Process</th>
+                                    <th>Auditor</th>
+                                    <th>Auditee</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((row, i) => (
+                                    <tr key={i}>
+                                        <td>{row.date} <br/> {row.time}</td>
+                                        <td><b>{row.dept}</b></td>
+                                        <td>{row.aspects}</td>
+                                        <td>{row.auditor}</td>
+                                        <td>{row.auditee}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+
+                        <div className="signature-box">
+                            <div className="sign-line">Lead Auditor Signature</div>
+                            <div className="sign-line">Management Rep Signature</div>
+                        </div>
+                    </div>
+                    {/* --- END PRINT TEMPLATE --- */}
+                </div>
+            );
+        };
+
+        // 2. AUDIT EXECUTION
+        const AuditExecution = ({ siteId, sites, users, onSave, onBack, session }) => {
+            const [header, setHeader] = useState({ siteId: siteId === 'GLOBAL' ? '' : siteId, auditDate: new Date().toISOString().split('T')[0], department: '', auditor: '', auditee: '' });
+            const [findings, setFindings] = useState([]);
+            const [currentFinding, setCurrentFinding] = useState({ refNo: '', classification: 'Minor', standard: 'ISO 45001', clause: '', ncStatement: '', evidence: '', evidenceFile: null });
+            const [docId, setDocId] = useState('');
+
+            useEffect(() => {
+                setCurrentFinding(prev => ({...prev, refNo: `AF-${Math.floor(1000 + Math.random() * 9000)}`}));
+                const seq = Math.floor(1000 + Math.random() * 9000);
+                setDocId(`${session.orgId}-${header.siteId || 'GEN'}-IAR-${seq}`);
+            }, [header.siteId, findings.length]);
+
+            const handleFile = async (e) => {
+                const file = e.target.files[0];
+                if (file) { const base64 = await fileToBase64(file); setCurrentFinding({ ...currentFinding, evidenceFile: base64, evidenceFileName: file.name }); }
+            };
+
+            const addFinding = () => {
+                if(!currentFinding.ncStatement) { alert("Enter NC Statement"); return; }
+                setFindings([...findings, { ...currentFinding }]);
+                setCurrentFinding({ refNo: `AF-${Math.floor(1000 + Math.random() * 9000)}`, classification: 'Minor', standard: 'ISO 45001', clause: '', ncStatement: '', evidence: '', evidenceFile: null });
+            };
+
+            const handleSubmitAll = () => {
+                if(findings.length === 0) { alert("No findings recorded."); return; }
+                const timestamp = Date.now();
+                findings.forEach(f => { onSave({ ...header, ...f, timestamp, status: 'Open' }); });
+                alert("All findings saved successfully!"); setFindings([]);
+            };
+
+            return (
+                <div className="animate-fade-in pb-20">
+                    <button onClick={onBack} className="back-btn mb-4 text-slate-400 hover:text-white flex items-center gap-2 text-sm no-print"><i className="fas fa-arrow-left"></i> Back to Menu</button>
+                    
+                    <div className="glass-panel p-6 rounded-xl border border-slate-700 no-print">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-white"><i className="fas fa-clipboard-check mr-2 text-emerald-400"></i> Record Findings (Part A)</h2>
+                            {findings.length > 0 && <button onClick={()=>window.print()} className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded font-bold text-sm"><i className="fas fa-file-pdf mr-2"></i> Print Report</button>}
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 pb-4 border-b border-slate-700">
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><SiteSelect sites={sites} value={header.siteId} onChange={v=>setHeader({...header, siteId:v})} disabled={siteId!=='GLOBAL'} /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Audit Date</label><input type="date" value={header.auditDate} onChange={e=>setHeader({...header, auditDate:e.target.value})} /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Department</label><input value={header.department} onChange={e=>setHeader({...header, department:e.target.value})} /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditor</label><UserSelect users={users} value={header.auditor} onChange={v => setHeader({...header, auditor: v})} placeholder="Select..." /></div>
+                        </div>
+
+                        <div className="bg-slate-800/50 p-4 rounded-xl mb-4">
+                            <h3 className="text-sm font-bold text-emerald-400 mb-2">New Finding</h3>
+                            <div className="grid grid-cols-2 gap-4 mb-3">
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Audit Finding Ref No.</label><input value={currentFinding.refNo} disabled className="bg-slate-900 text-slate-400" /></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Classification</label><select value={currentFinding.classification} onChange={e=>setCurrentFinding({...currentFinding, classification:e.target.value})}><option>Minor</option><option>Major</option><option>Observation</option><option>OFI</option></select></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Standard</label><select value={currentFinding.standard} onChange={e=>setCurrentFinding({...currentFinding, standard:e.target.value})}><option>ISO 45001</option><option>ISO 14001</option></select></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Clause</label><input value={currentFinding.clause} onChange={e=>setCurrentFinding({...currentFinding, clause:e.target.value})} placeholder="e.g. 9.1" /></div>
                             </div>
+                            <div className="mb-3"><label className="text-[10px] uppercase font-bold text-slate-500">Non-Conformity Statement</label><textarea rows="2" value={currentFinding.ncStatement} onChange={e=>setCurrentFinding({...currentFinding, ncStatement:e.target.value})} className="w-full bg-slate-900"></textarea></div>
+                            <div className="mb-3"><label className="text-[10px] uppercase font-bold text-slate-500">Evidence</label><input type="file" onChange={handleFile} className="text-xs" /></div>
+                            <button onClick={addFinding} className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-lg text-sm">+ Add to List</button>
+                        </div>
 
-                            {/* SECTION 2: AUDIT MATRIX */}
-                            <div className="glass-panel p-6 rounded-2xl border-t-4 border-emerald-500">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h2 className="text-xl font-bold text-emerald-400">Section 2: Audit Execution Matrix</h2>
-                                    <button onClick={addRow} className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-2 no-print">
-                                        <i className="fas fa-plus"></i> Add Row
-                                    </button>
+                        {findings.length > 0 && (
+                            <div>
+                                <h3 className="text-sm font-bold text-white mb-2">Findings Preview ({findings.length})</h3>
+                                <div className="space-y-2 mb-4">
+                                    {findings.map((f, i) => (
+                                        <div key={i} className="flex justify-between items-center bg-slate-900 p-2 rounded text-xs border border-slate-700">
+                                            <span><span className="text-emerald-400 font-mono mr-2">{f.refNo}</span> {f.ncStatement}</span>
+                                            <span className="text-slate-500">{f.classification}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                                
-                                <div className="overflow-x-auto rounded-lg border border-slate-700">
-                                    <table className="w-full text-left text-sm text-slate-300">
-                                        <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-400">
-                                            <tr>
-                                                <th className="p-3">Auditor</th>
-                                                <th className="p-3">Auditee</th>
-                                                <th className="p-3">Department</th>
-                                                <th className="p-3">Area</th>
-                                                <th className="p-3">Aspect / Process</th>
-                                                <th className="p-3 w-32">Date</th>
-                                                <th className="p-3 w-24">Time</th>
-                                                <th className="p-3 w-10 no-print"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-800">
-                                            {rows.map((row, i) => (
-                                                <tr key={i} className="hover:bg-slate-800/50">
-                                                    <td className="p-2">
-                                                        <select className="bg-transparent text-white w-full text-xs" value={row.auditor} onChange={e=>updateRow(i, 'auditor', e.target.value)}>
-                                                            <option value="">Select...</option>
-                                                            {plan.leadAuditor && <option value={plan.leadAuditor}>{plan.leadAuditor} (Lead)</option>}
-                                                            {plan.team.map(m => <option key={m} value={m}>{m}</option>)}
-                                                        </select>
-                                                    </td>
-                                                    <td className="p-2">
-                                                        <select className="bg-transparent text-white w-full text-xs" value={row.auditee} onChange={e=>updateRow(i, 'auditee', e.target.value)}>
-                                                            <option value="">Select...</option>
-                                                            {siteUsers.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
-                                                        </select>
-                                                    </td>
-                                                    <td className="p-2"><input className="bg-transparent border-none p-1 text-xs" placeholder="Dept" value={row.dept} onChange={e=>updateRow(i, 'dept', e.target.value)} /></td>
-                                                    <td className="p-2"><input className="bg-transparent border-none p-1 text-xs" placeholder="Area" value={row.area} onChange={e=>updateRow(i, 'area', e.target.value)} /></td>
-                                                    <td className="p-2"><input className="bg-transparent border-none p-1 text-xs w-full" placeholder="Scope..." value={row.aspect} onChange={e=>updateRow(i, 'aspect', e.target.value)} /></td>
-                                                    <td className="p-2"><input type="date" className="bg-transparent border-none p-1 text-xs" value={row.date} onChange={e=>updateRow(i, 'date', e.target.value)} /></td>
-                                                    <td className="p-2"><input type="time" className="bg-transparent border-none p-1 text-xs" value={row.time} onChange={e=>updateRow(i, 'time', e.target.value)} /></td>
-                                                    <td className="p-2 text-center no-print"><button onClick={()=>removeRow(i)} className="text-red-400 hover:text-red-300"><i className="fas fa-times"></i></button></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                <button onClick={handleSubmitAll} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg">Save All</button>
                             </div>
+                        )}
+                    </div>
 
-                            {/* PRINT FOOTER */}
-                            <div className="hidden print:block mt-10">
-                                <div className="flex justify-between text-sm">
-                                    <div><p className="border-t border-black w-40 pt-1 text-center">Lead Auditor Signature</p></div>
-                                    <div><p className="border-t border-black w-40 pt-1 text-center">Management Rep Signature</p></div>
-                                </div>
+                    {/* --- DEDICATED PRINT TEMPLATE FOR REPORT --- */}
+                    <div className="print-container">
+                        <div className="doc-header">
+                            <span style={{float:'right', fontSize:'10px', fontWeight:'bold'}}>Doc ID: {docId}</span>
+                            <h1>Internal Audit Findings Report</h1>
+                            <p>Part A - Observation Record</p>
+                        </div>
+
+                        <div className="section-box">
+                            <strong>Audit Details</strong>
+                            <table style={{marginTop:'5px'}}>
+                                <tr>
+                                    <td width="20%"><strong>Site:</strong></td><td width="30%">{header.siteId}</td>
+                                    <td width="20%"><strong>Date:</strong></td><td width="30%">{header.auditDate}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Department:</strong></td><td>{header.department}</td>
+                                    <td><strong>Auditor:</strong></td><td>{header.auditor}</td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <h3>Recorded Findings</h3>
+                        {findings.map((f, i) => (
+                            <div key={i} style={{marginBottom:'20px', border:'1px solid black', padding:'10px'}}>
+                                <table style={{marginTop:'0'}}>
+                                    <tr>
+                                        <td width="20%"><strong>Ref No:</strong> {f.refNo}</td>
+                                        <td width="20%"><strong>Type:</strong> {f.classification}</td>
+                                        <td width="30%"><strong>Standard:</strong> {f.standard}</td>
+                                        <td width="30%"><strong>Clause:</strong> {f.clause}</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="4">
+                                            <strong>Non-Conformity Statement:</strong><br/>
+                                            {f.ncStatement}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="4">
+                                            <strong>Objective Evidence:</strong><br/>
+                                            {f.evidenceFileName ? `Attached File: ${f.evidenceFileName}` : 'No specific file attached.'}
+                                        </td>
+                                    </tr>
+                                </table>
                             </div>
+                        ))}
 
+                        <div className="signature-box">
+                            <div className="sign-line">Auditor Signature</div>
+                            <div className="sign-line">Auditee Signature</div>
+                        </div>
+                    </div>
+                    {/* --- END PRINT TEMPLATE --- */}
+                </div>
+            );
+        };
+
+        // 3. AUDIT CLOSURE
+        const AuditClosure = ({ audits, onUpdate, onBack, session, users }) => {
+            const [selected, setSelected] = useState(null);
+            const [remarks, setRemarks] = useState('');
+            const [file, setFile] = useState(null);
+
+            const filteredAudits = audits.filter(a => {
+                if (session.role === 'Owner' || session.role === 'Lead Auditor') return true;
+                return a.siteId === session.assignedSite;
+            });
+
+            const handleSubmitReview = async () => {
+                if(!remarks) return alert("Enter remarks");
+                let evidence = selected.evidenceFile; 
+                let fName = selected.evidenceFileName;
+                if(file) { evidence = await fileToBase64(file); fName = file.name; }
+                
+                onUpdate({ ...selected, closureRemarks: remarks, evidenceFile: evidence, evidenceFileName: fName, status: 'Submitted for Review', submissionDate: new Date().toISOString().split('T')[0] });
+                setSelected(null); setRemarks(''); setFile(null);
+            };
+
+            const handleApprove = () => {
+                onUpdate({ ...selected, status: 'Closed', closureDate: new Date().toISOString().split('T')[0] });
+                setSelected(null);
+            };
+
+            return (
+                <div className="animate-fade-in h-full flex flex-col no-print">
+                    <div className="flex justify-between items-center mb-4"><button onClick={onBack} className="back-btn text-slate-400 hover:text-white flex items-center gap-2 text-sm"><i className="fas fa-arrow-left"></i> Back to Menu</button></div>
+                    
+                    <div className="flex-1 flex gap-6 overflow-hidden">
+                        <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-xl overflow-y-auto p-4">
+                            <h3 className="text-white font-bold mb-4">Findings ({filteredAudits.length})</h3>
+                            {filteredAudits.map(a => (
+                                <div key={a.id} onClick={()=>setSelected(a)} className={`p-4 rounded-lg border mb-3 cursor-pointer hover:bg-slate-800 transition ${a.status==='Open'?'border-red-500':a.status==='Submitted for Review'?'border-yellow-500':'border-green-500'}`}>
+                                    <div className="flex justify-between mb-1"><span className="text-xs font-mono text-emerald-400">{a.refNo}</span><span className={`text-[10px] font-bold px-2 py-0.5 rounded ${a.status==='Closed'?'bg-green-500/20 text-green-300':'bg-slate-700 text-slate-300'}`}>{a.status}</span></div>
+                                    <p className="text-sm text-slate-300 line-clamp-2">{a.ncStatement}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="w-2/3 glass-panel rounded-xl p-6 overflow-y-auto">
+                            {!selected ? <div className="h-full flex items-center justify-center text-slate-500">Select a finding to take action</div> : (
+                                <div>
+                                    <div className="border-b border-slate-700 pb-4 mb-4">
+                                        <h2 className="text-xl font-bold text-white mb-2">Finding: {selected.refNo}</h2>
+                                        <p className="text-slate-300 bg-slate-800 p-3 rounded text-sm">{selected.ncStatement}</p>
+                                    </div>
+
+                                    {selected.status === 'Open' && (
+                                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                                            <h3 className="text-blue-400 font-bold uppercase text-xs mb-3">Auditee Action (Closure)</h3>
+                                            <textarea className="w-full bg-slate-900 border border-slate-700 p-3 rounded mb-3 text-sm" placeholder="Root cause & corrective action details..." value={remarks} onChange={e=>setRemarks(e.target.value)}></textarea>
+                                            <div className="mb-4"><label className="text-xs text-slate-500 block mb-1">Upload Evidence</label><input type="file" onChange={e=>setFile(e.target.files[0])} className="text-xs text-slate-300"/></div>
+                                            <button onClick={handleSubmitReview} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded font-bold text-sm">Submit for Review</button>
+                                        </div>
+                                    )}
+
+                                    {selected.status === 'Submitted for Review' && (
+                                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                                            <h3 className="text-yellow-400 font-bold uppercase text-xs mb-3">Auditor Verification</h3>
+                                            <div className="mb-4 bg-slate-900 p-3 rounded"><p className="text-xs text-slate-500 uppercase mb-1">Auditee Remarks</p><p className="text-sm text-white">{selected.closureRemarks}</p></div>
+                                            {selected.evidenceFile ? <a href={selected.evidenceFile} download={selected.evidenceFileName} className="text-blue-400 underline text-sm block mb-4">Download Evidence</a> : <span className="text-xs text-red-400 block mb-4">No Evidence</span>}
+                                            {(session.role === 'Owner' || session.user === selected.auditor) ? <button onClick={handleApprove} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded font-bold text-sm">Approve Closure</button> : <p className="text-xs text-red-400">Only assigned auditor/owner can approve.</p>}
+                                        </div>
+                                    )}
+
+                                    {selected.status === 'Closed' && <div className="p-4 bg-green-500/10 border border-green-500/30 rounded text-center text-green-400 font-bold">This finding is Closed.</div>}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
             );
         };
 
+        // --- MAIN APP ---
+        const App = () => {
+            const [view, setView] = useState('menu');
+            const [session, setSession] = useState(null);
+            const [audits, setAudits] = useState([]);
+            const [sites, setSites] = useState([]);
+            const [users, setUsers] = useState([]);
+            const [siteId, setSiteId] = useState('GLOBAL');
+
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if(!s) { window.location.href='index.html'; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+
+                const params = new URLSearchParams(window.location.search);
+                const ctx = params.get('site');
+                if(ctx && ctx !== 'GLOBAL') setSiteId(ctx);
+
+                const orgRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
+                window.fb.get(orgRef).then(snap => {
+                    if(snap.exists()) {
+                        const val = snap.val();
+                        setSites(val.sites ? Object.values(val.sites) : []);
+                        setUsers(val.users ? Object.values(val.users) : []);
+                        setAudits(val.audits ? Object.entries(val.audits).map(([k,v])=>({id:k,...v})) : []);
+                    }
+                });
+            }, []);
+
+            const handleSave = async (data) => {
+                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/audits`), data);
+                // In a real app we would update local state here to avoid reload
+                alert("Saved Successfully");
+                window.location.reload(); 
+            };
+
+            const handleUpdate = async (data) => {
+                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/audits/${data.id}`), data);
+                setAudits(audits.map(a => a.id === data.id ? data : a)); // Optimistic UI update
+                alert("Status Updated");
+            };
+
+            if(!session) return null;
+
+            const canSchedule = ['Owner', 'Lead Auditor', 'Site Leader', 'EHS Manager'].includes(session.role);
+            const canAudit = ['Owner', 'Lead Auditor', 'Auditor'].includes(session.role);
+            
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    <header className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
+                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Internal Audit</h1></div>
+                        <span className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900">{siteId}</span>
+                    </header>
+
+                    <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+                        {view === 'menu' && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full content-center audit-menu no-print">
+                                <div onClick={() => canSchedule ? setView('scheduler') : alert('Access Denied')} className={`glass-panel p-8 rounded-2xl nav-card border-t-4 border-blue-500 ${!canSchedule && 'opacity-50 cursor-not-allowed'}`}>
+                                    <div className="text-5xl text-blue-400 mb-4"><i className="fas fa-calendar-alt"></i></div>
+                                    <div><h3 className="text-2xl font-bold mb-2">Audit Scheduler</h3><p className="text-slate-400 text-sm">Create and print annual audit plans.</p></div>
+                                </div>
+                                <div onClick={() => canAudit ? setView('auditing') : alert('Access Denied')} className={`glass-panel p-8 rounded-2xl nav-card border-t-4 border-emerald-500 ${!canAudit && 'opacity-50 cursor-not-allowed'}`}>
+                                    <div className="text-5xl text-emerald-400 mb-4"><i className="fas fa-clipboard-list"></i></div>
+                                    <div><h3 className="text-2xl font-bold mb-2">Auditing</h3><p className="text-slate-400 text-sm">Execute audits and record findings.</p></div>
+                                </div>
+                                <div onClick={() => setView('reporting')} className="glass-panel p-8 rounded-2xl nav-card border-t-4 border-purple-500">
+                                    <div className="text-5xl text-purple-400 mb-4"><i className="fas fa-check-circle"></i></div>
+                                    <div><h3 className="text-2xl font-bold mb-2">Audit Closure</h3><p className="text-slate-400 text-sm">Submit evidence and approve closure.</p></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'scheduler' && <AuditScheduler siteId={siteId} sites={sites} users={users} onBack={()=>setView('menu')} session={session} />}
+                        {view === 'auditing' && <AuditExecution siteId={siteId} sites={sites} users={users} onSave={handleSave} onBack={()=>setView('menu')} session={session} />}
+                        {view === 'reporting' && <AuditClosure audits={audits} users={users} onUpdate={handleUpdate} onBack={()=>setView('menu')} session={session} />}
+                    </div>
+                </div>
+            );
+        };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<AuditScheduler />);
+        root.render(<App />);
     </script>
 </body>
 </html>
