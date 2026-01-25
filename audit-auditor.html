@@ -101,6 +101,7 @@
                             if(plan.matrix && Array.isArray(plan.matrix)) {
                                 plan.matrix.forEach(row => {
                                     // Check if assigned to current user (Name match)
+                                    // Also show tasks for Owner to debug/oversee
                                     if(row.auditor === sess.user || sess.role === 'Owner') {
                                         tasks.push({
                                             ...row, // auditor, auditee, dept, area, date, time
@@ -164,9 +165,10 @@
             const handleSave = async () => {
                 if(findings.some(f => !f.desc)) return alert("Please fill description for all findings.");
                 
+                // This payload structure is CRITICAL for the Auditee page to read it
                 const payload = {
                     docId: docId,
-                    taskDetails: currentTask,
+                    taskDetails: currentTask, // Contains 'auditee' which is key for filtering
                     findings: findings,
                     status: 'Reported',
                     auditDate: new Date().toISOString(),
@@ -174,9 +176,14 @@
                 };
 
                 // Save to 'auditFindings' node
-                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/auditFindings`), payload);
-                alert("Audit Findings Saved Successfully!");
-                setView('list');
+                try {
+                    await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/auditFindings`), payload);
+                    alert("Audit Findings Saved Successfully! Sent to Auditee.");
+                    setView('list');
+                } catch (error) {
+                    console.error("Firebase Error:", error);
+                    alert("Failed to save findings: " + error.message);
+                }
             };
 
             if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Assignments...</div>;
