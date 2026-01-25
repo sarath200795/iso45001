@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Reports</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
+                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        input, select { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; }
+        
+        /* SCROLLBAR */
+        .custom-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+
+        /* PRINT STYLES */
+        @media print {
+            @page { size: A4 portrait; margin: 10mm; }
+            body * { visibility: hidden; }
+            .print-container, .print-container * { visibility: visible !important; color: black !important; }
+            .print-container { position: absolute; left: 0; top: 0; width: 100%; background: white; z-index: 9999; display: block !important; }
+            
+            /* Print Typography */
+            h1 { font-size: 24pt; font-weight: bold; text-transform: uppercase; text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            h2 { font-size: 14pt; font-weight: bold; background: #eee; padding: 5px; margin-top: 20px; border-bottom: 1px solid black; }
+            
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
+            th, td { border: 1px solid black !important; padding: 6px; text-align: left; page-break-inside: avoid; }
+            th { background-color: #f0f0f0 !important; font-weight: bold; }
+            
+            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; font-size: 10pt; }
+            .meta-item { border-bottom: 1px dotted #ccc; padding-bottom: 2px; }
+            .label { font-weight: bold; text-transform: uppercase; font-size: 8pt; color: #555; }
+        }
+        .print-container { display: none; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { ref, get };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const AuditReports = () => {
+            const [session, setSession] = useState(null);
+            const [reports, setReports] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [filters, setFilters] = useState({ search: '', status: '', dept: '' });
+            const [printData, setPrintData] = useState(null);
+
+            // Load Data
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if(!s) { window.location.href='index.html'; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+
+                const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}/auditFindings`);
+                window.fb.get(dbRef).then(snap => {
+                    if(snap.exists()) {
+                        const data = Object.entries(snap.val()).map(([k, v]) => ({...v, firebaseKey: k}));
+                        // Sort by date descending
+                        data.sort((a,b) => new Date(b.auditDate) - new Date(a.auditDate));
+                        setReports(data);
+                    }
+                    setLoading(false);
+                });
+            }, []);
+
+            // Filter Logic
+            const filteredReports = useMemo(() => {
+                return reports.filter(r => {
+                    const matchSearch = 
+                        r.docId.toLowerCase().includes(filters.search.toLowerCase()) || 
+                        r.taskDetails.auditor.toLowerCase().includes(filters.search.toLowerCase()) ||
+                        r.taskDetails.auditee.toLowerCase().includes(filters.search.toLowerCase());
+                    const matchStatus = !filters.status || r.status === filters.status;
+                    const matchDept = !filters.dept || r.taskDetails.dept.toLowerCase().includes(filters.dept.toLowerCase());
+                    return matchSearch && matchStatus && matchDept;
+                });
+            }, [reports, filters]);
+
+            // Print Handler
+            const handlePrint = (report) => {
+                setPrintData(report);
+                // Allow DOM to update then print
+                setTimeout(() => window.print(), 100);
+            };
+
+            const getStatusColor = (status) => {
+                if(status === 'Closed') return 'bg-emerald-500/20 text-emerald-400 border-emerald-500';
+                if(status === 'Submitted for Verification') return 'bg-orange-500/20 text-orange-400 border-orange-500';
+                return 'bg-red-500/20 text-red-400 border-red-500';
+            };
+
+            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Archive...</div>;
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    {/* Header */}
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
+                        <div className="flex items-center gap-4">
+                            <a href="audit.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition">
+                                <i className="fas fa-arrow-left"></i> Back
+                            </a>
+                            <h1 className="font-bold text-lg tracking-wide">Audit Reports Repository</h1>
+                        </div>
+                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-purple-400 border border-purple-900">
+                            {session.orgId}
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-8 custom-scroll">
+                        <div className="max-w-7xl mx-auto space-y-6">
+                            
+                            {/* FILTER BAR */}
+                            <div className="glass-panel p-4 rounded-xl flex gap-4 items-center no-print">
+                                <div className="flex-1">
+                                    <input placeholder="Search ID, Auditor, Auditee..." value={filters.search} onChange={e=>setFilters({...filters, search:e.target.value})} className="bg-slate-900 border-slate-700" />
+                                </div>
+                                <div className="w-48">
+                                    <input placeholder="Filter Department" value={filters.dept} onChange={e=>setFilters({...filters, dept:e.target.value})} className="bg-slate-900 border-slate-700" />
+                                </div>
+                                <div className="w-48">
+                                    <select value={filters.status} onChange={e=>setFilters({...filters, status:e.target.value})} className="bg-slate-900 border-slate-700">
+                                        <option value="">All Statuses</option>
+                                        <option value="Reported">Open / Reported</option>
+                                        <option value="Submitted for Verification">Verification Pending</option>
+                                        <option value="Closed">Closed</option>
+                                    </select>
+                                </div>
+                                <button onClick={()=>setFilters({search:'',status:'',dept:''})} className="px-4 py-2 text-slate-400 hover:text-white text-sm"><i className="fas fa-undo"></i> Reset</button>
+                            </div>
+
+                            {/* REPORT LIST */}
+                            <div className="glass-panel rounded-2xl overflow-hidden border border-slate-700 no-print">
+                                <table className="w-full text-left text-sm text-slate-300">
+                                    <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
+                                        <tr>
+                                            <th className="p-4">Report Ref</th>
+                                            <th className="p-4">Date</th>
+                                            <th className="p-4">Auditee / Dept</th>
+                                            <th className="p-4">Findings</th>
+                                            <th className="p-4">Status</th>
+                                            <th className="p-4 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800">
+                                        {filteredReports.map((report, i) => (
+                                            <tr key={i} className="hover:bg-slate-800/50 transition">
+                                                <td className="p-4 font-mono text-xs text-white">{report.docId}</td>
+                                                <td className="p-4">{report.auditDate.split('T')[0]}</td>
+                                                <td className="p-4">
+                                                    <div className="font-bold text-white">{report.taskDetails.dept}</div>
+                                                    <div className="text-xs text-slate-500">{report.taskDetails.auditee}</div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className="bg-slate-800 px-2 py-1 rounded text-xs">{report.findings.length}</span>
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${getStatusColor(report.status)}`}>
+                                                        {report.status}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <button onClick={()=>handlePrint(report)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-2 ml-auto">
+                                                        <i className="fas fa-file-pdf"></i> Generate PDF
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {filteredReports.length === 0 && (
+                                            <tr><td colSpan="6" className="p-8 text-center text-slate-500">No reports match your filters.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* --- HIDDEN PRINT CONTAINER --- */}
+                    {printData && (
+                        <div className="print-container">
+                            <div className="doc-header">
+                                <h1>Audit Report</h1>
+                                <p>Ref: <strong>{printData.docId}</strong> | Date: {printData.auditDate.split('T')[0]}</p>
+                            </div>
+
+                            {/* Section 1: Context */}
+                            <div className="meta-grid">
+                                <div className="meta-item"><div className="label">Site / Location</div>{printData.taskDetails.siteId}</div>
+                                <div className="meta-item"><div className="label">Standard</div>{printData.taskDetails.standard}</div>
+                                <div className="meta-item"><div className="label">Lead Auditor</div>{printData.taskDetails.leadAuditor}</div>
+                                <div className="meta-item"><div className="label">Auditor</div>{printData.taskDetails.auditor}</div>
+                                <div className="meta-item"><div className="label">Auditee</div>{printData.taskDetails.auditee}</div>
+                                <div className="meta-item"><div className="label">Department</div>{printData.taskDetails.dept}</div>
+                                <div className="meta-item"><div className="label">Area</div>{printData.taskDetails.area}</div>
+                                <div className="meta-item"><div className="label">Audit Scope</div>{printData.taskDetails.scope}</div>
+                            </div>
+
+                            {/* Section 2: Findings Matrix */}
+                            <h2>1. Findings Summary</h2>
+                            <table>
+                                <thead><tr><th>ID</th><th>Type</th><th>Clause</th><th>Description of Finding</th></tr></thead>
+                                <tbody>
+                                    {printData.findings.map((f, i) => (
+                                        <tr key={i}>
+                                            <td style={{width:'10%'}}>{f.id}</td>
+                                            <td style={{width:'15%'}}>{f.type}</td>
+                                            <td style={{width:'10%'}}>{f.clause}</td>
+                                            <td>{f.desc}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            {/* Section 3: Detailed Corrective Actions */}
+                            <h2>2. Corrective Action Report (CAR)</h2>
+                            {printData.findings.map((f, i) => (
+                                <div key={i} style={{marginBottom:'20px', border:'1px solid black', padding:'10px', pageBreakInside:'avoid'}}>
+                                    <div style={{fontWeight:'bold', borderBottom:'1px solid #ccc', paddingBottom:'5px', marginBottom:'5px'}}>
+                                        Finding {f.id} ({f.type})
+                                    </div>
+                                    <div style={{fontStyle:'italic', marginBottom:'10px'}}>"{f.desc}"</div>
+                                    
+                                    {f.response && f.response.status === 'Completed' ? (
+                                        <div style={{fontSize:'10pt'}}>
+                                            <div style={{marginBottom:'5px'}}><strong>Root Cause Analysis:</strong><br/>{f.response.rootCause}</div>
+                                            <div style={{marginBottom:'5px'}}><strong>Immediate Correction:</strong><br/>{f.response.correction}</div>
+                                            <div style={{marginBottom:'5px'}}><strong>Corrective Action (CAPA):</strong><br/>{f.response.capa}</div>
+                                            <div style={{display:'flex', justifyContent:'space-between', marginTop:'10px'}}>
+                                                <div><strong>Target Date:</strong> {f.response.targetDate}</div>
+                                                <div><strong>Evidence:</strong> {f.response.evidenceFileName || 'N/A'}</div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{color:'red', fontStyle:'italic'}}>No corrective action submitted yet.</div>
+                                    )}
+                                </div>
+                            ))}
+
+                            {/* Footer */}
+                            <div style={{marginTop:'50px', display:'flex', justifyContent:'space-between'}}>
+                                <div style={{borderTop:'1px solid black', width:'40%', textAlign:'center', paddingTop:'5px'}}>Auditor Signature</div>
+                                <div style={{borderTop:'1px solid black', width:'40%', textAlign:'center', paddingTop:'5px'}}>Auditee Signature</div>
+                            </div>
+                            <div style={{textAlign:'center', fontSize:'8pt', marginTop:'20px', color:'#777'}}>
+                                Generated by OHSMS Portal | {new Date().toLocaleString()}
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AuditReports />);
+    </script>
+</body>
+</html>
