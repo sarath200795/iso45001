@@ -11,24 +11,15 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] },
-                    colors: { 'glass': 'rgba(30, 41, 59, 0.7)' }
-                }
-            }
-        }
+        tailwind.config = { theme: { extend: { fontFamily: { 'display': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] }, colors: { 'glass': 'rgba(30, 41, 59, 0.7)' } } } }
     </script>
     <style>
         body { font-family: 'Space Grotesk', sans-serif; background-color: #0f172a; color: white; }
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s; cursor: pointer; }
         .glass-panel:hover { border-color: rgba(59, 130, 246, 0.3); transform: translateY(-2px); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); }
-        .glass-panel.disabled { opacity: 0.5; cursor: not-allowed; }
-        .glass-panel.disabled:hover { transform: none; border-color: rgba(255, 255, 255, 0.05); }
         .card-glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.1), transparent 70%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
         .glass-panel:hover .card-glow { opacity: 1; }
         ::-webkit-scrollbar { width: 8px; }
@@ -43,16 +34,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
-            authDomain: "ohsms-fa534.firebaseapp.com",
-            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
-            projectId: "ohsms-fa534",
-            storageBucket: "ohsms-fa534.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
-
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
         window.fb = { get, ref, child };
@@ -66,99 +48,103 @@
             { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
             { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
             { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' },
-            { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' },
+            { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' }, 
             { id: 'improvement', label: 'Improvement', desc: 'CAPA Tracking', icon: 'fa-chart-line', color: 'text-blue-400' },
             { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true },
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
         ];
 
-        // ROLE-BASED ACCESS CONTROL CONFIGURATION
-        const ROLE_PERMISSIONS = {
-            'Owner': {
-                modules: ['dashboard', 'incidents', 'risk', 'consultation', 'audit', 'improvement', 'users', 'sites'],
-                allSites: true,
-                canEdit: true,
-                canDelete: true,
-                viewOnly: false
-            },
-            'Site Leader': {
-                modules: ['dashboard', 'incidents', 'risk', 'consultation', 'audit', 'improvement'],
-                allSites: false,
-                canEdit: true,
-                canDelete: false,
-                viewOnly: false
-            },
-            'EHS Manager': {
-                modules: ['dashboard', 'incidents', 'risk', 'consultation', 'audit', 'improvement'],
-                allSites: false,
-                canEdit: true,
-                canDelete: false,
-                viewOnly: false
-            },
-            'Manager': {
-                modules: ['dashboard', 'incidents', 'risk', 'consultation', 'audit', 'improvement'],
-                allSites: false,
-                canEdit: false,
-                canDelete: false,
-                viewOnly: true,
-                canEditOwnedActions: true
-            },
-            'Lead Auditor': {
-                modules: ['audit'],
-                allSites: true,
-                canEdit: true,
-                canDelete: false,
-                viewOnly: false
-            },
-            'Auditor': {
-                modules: ['audit'],
-                allSites: false,
-                canEdit: true,
-                canDelete: false,
-                viewOnly: false
-            },
-            'Auditee': {
-                modules: ['audit'],
-                allSites: false,
-                canEdit: true,
-                canDelete: false,
-                viewOnly: false,
-                auditTabsOnly: [3, 4]
-            },
-            'User': {
-                modules: ['dashboard', 'incidents', 'risk', 'consultation', 'audit', 'improvement'],
-                allSites: false,
-                canEdit: false,
-                canDelete: false,
-                viewOnly: true
-            }
+        // NOTIFICATION COMPONENT
+        const Notifications = ({ data, session, selectedSite }) => {
+            const [alerts, setAlerts] = useState([]);
+
+            useEffect(() => {
+                const newAlerts = [];
+                const today = new Date();
+                const sevenDays = new Date(today);
+                sevenDays.setDate(today.getDate() + 7);
+
+                // 1. Pending Users (Owner Only)
+                if(session.role === 'Owner') {
+                    const pendingUsers = Object.values(data.users || {}).filter(u => u.status === 'Pending');
+                    if(pendingUsers.length > 0) {
+                        newAlerts.push({ type: 'admin', msg: `${pendingUsers.length} user(s) requesting access.`, link: 'users.html' });
+                    }
+                }
+
+                // Filter content based on current view context
+                const filterSite = (item) => selectedSite === 'GLOBAL' ? true : item.siteId === selectedSite;
+
+                // 2. Incomplete Records & 3. Due Dates
+                // Incidents
+                Object.values(data.incidents || {}).filter(filterSite).forEach(inc => {
+                    if(inc.status !== 'Closed') {
+                        newAlerts.push({ type: 'warn', msg: `Incident ${inc.id} is still Open.`, link: `incidents.html?site=${inc.siteId}` });
+                    }
+                    (inc.capa || []).forEach(c => {
+                        if(c.status === 'Open' && c.due) {
+                            const due = new Date(c.due);
+                            if(due < today) newAlerts.push({ type: 'danger', msg: `Overdue Action in ${inc.id}: ${c.act}`, link: `incidents.html?site=${inc.siteId}` });
+                            else if(due <= sevenDays) newAlerts.push({ type: 'warn', msg: `Action due soon in ${inc.id}: ${c.act}`, link: `incidents.html?site=${inc.siteId}` });
+                        }
+                    });
+                });
+
+                // Audits
+                Object.values(data.audits || {}).filter(filterSite).forEach(aud => {
+                    if(aud.status === 'Open') {
+                        newAlerts.push({ type: 'warn', msg: `Audit Finding ${aud.ncRef} is Open.`, link: `audit.html?site=${aud.siteId}` });
+                    }
+                    if(aud.targetDate && aud.status === 'Open') {
+                        const due = new Date(aud.targetDate);
+                        if(due < today) newAlerts.push({ type: 'danger', msg: `Audit CAPA Overdue: ${aud.ncRef}`, link: `audit.html?site=${aud.siteId}` });
+                        else if(due <= sevenDays) newAlerts.push({ type: 'warn', msg: `Audit CAPA Due Soon: ${aud.ncRef}`, link: `audit.html?site=${aud.siteId}` });
+                    }
+                });
+
+                setAlerts(newAlerts);
+            }, [data, session, selectedSite]);
+
+            if(alerts.length === 0) return null;
+
+            return (
+                <div className="mb-8">
+                    <h3 className="text-white font-bold mb-3 flex items-center gap-2"><i className="fas fa-bell text-yellow-400"></i> Alerts & Notifications</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {alerts.map((a, i) => (
+                            <div key={i} onClick={() => window.location.href = a.link} className={`p-3 rounded-lg border cursor-pointer transition-transform hover:-translate-y-1 flex items-center gap-3 ${
+                                a.type === 'admin' ? 'bg-blue-900/30 border-blue-500/50 text-blue-200' :
+                                a.type === 'danger' ? 'bg-red-900/30 border-red-500/50 text-red-200' :
+                                'bg-yellow-900/30 border-yellow-500/50 text-yellow-200'
+                            }`}>
+                                <i className={`fas ${a.type === 'admin' ? 'fa-user-shield' : a.type === 'danger' ? 'fa-exclamation-circle' : 'fa-clock'}`}></i>
+                                <span className="text-xs font-medium">{a.msg}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
         };
 
-        const NavCard = ({ module, onClick, disabled, accessNote }) => (
-            <div 
-                onClick={disabled ? null : onClick} 
-                className={`glass-panel p-6 rounded-2xl relative overflow-hidden group h-40 flex flex-col justify-between ${disabled ? 'disabled' : ''}`}
-            >
+        const NavCard = ({ module, onClick }) => (
+            <div onClick={onClick} className="glass-panel p-6 rounded-2xl relative overflow-hidden group h-40 flex flex-col justify-between">
                 <div className="card-glow"></div>
                 <div className="relative z-10 flex justify-between items-start">
                     <div className={`w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center text-lg shadow-lg ${module.color}`}>
                         <i className={`fas ${module.icon}`}></i>
                     </div>
-                    <div className="flex gap-1">
-                        {module.admin && <span className="text-[9px] font-bold uppercase bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-600">Admin</span>}
-                        {disabled && <span className="text-[9px] font-bold uppercase bg-red-900/50 text-red-400 px-2 py-0.5 rounded border border-red-500/30"><i className="fas fa-lock mr-1"></i>No Access</span>}
-                    </div>
+                    {module.admin && <span className="text-[9px] font-bold uppercase bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-600">Admin</span>}
                 </div>
                 <div className="relative z-10">
-                    <h3 className={`text-base font-bold mb-0.5 ${disabled ? 'text-slate-500' : 'text-white group-hover:text-blue-400'} transition-colors`}>{module.label}</h3>
-                    <p className="text-[10px] text-slate-400">{accessNote || module.desc}</p>
+                    <h3 className="text-base font-bold text-white mb-0.5 group-hover:text-blue-400 transition-colors">{module.label}</h3>
+                    <p className="text-[10px] text-slate-400">{module.desc}</p>
                 </div>
             </div>
         );
 
         const App = () => {
             const [session, setSession] = useState(null);
-            const [data, setData] = useState({ sites: [] });
+            const [data, setData] = useState({ sites: [], users: {}, incidents: {}, audits: {} });
             const [selectedSite, setSelectedSite] = useState('GLOBAL');
             const [isDropdownOpen, setIsDropdownOpen] = useState(false);
             const dropdownRef = useRef(null);
@@ -168,17 +154,18 @@
                 if (!s) { window.location.href = "index.html"; return; }
                 const sess = JSON.parse(s);
                 setSession(sess);
-                
-                const permissions = ROLE_PERMISSIONS[sess.role] || ROLE_PERMISSIONS['User'];
-                if(!permissions.allSites && sess.assignedSite) {
-                    setSelectedSite(sess.assignedSite);
-                }
+                if(sess.role !== 'Owner' && sess.role !== 'Lead Auditor' && sess.assignedSite) setSelectedSite(sess.assignedSite);
                 
                 const dbRef = window.fb.ref(window.db);
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}`)).then((snap) => {
                     if (snap.exists()) {
                         const val = snap.val();
-                        setData({ sites: val.sites ? Object.values(val.sites) : [] });
+                        setData({ 
+                            sites: val.sites ? Object.values(val.sites) : [],
+                            users: val.users || {},
+                            incidents: val.incidents || {},
+                            audits: val.audits || {}
+                        });
                     }
                 });
 
@@ -189,97 +176,15 @@
 
             const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
 
-            const canAccessModule = (moduleId) => {
-                if (!session) return false;
-                const permissions = ROLE_PERMISSIONS[session.role] || ROLE_PERMISSIONS['User'];
-                return permissions.modules.includes(moduleId);
-            };
-
-            const getAccessNote = (moduleId) => {
-                if (!session) return '';
-                const permissions = ROLE_PERMISSIONS[session.role] || ROLE_PERMISSIONS['User'];
-                
-                if (!permissions.modules.includes(moduleId)) {
-                    return 'Access restricted';
-                }
-                if (permissions.viewOnly && moduleId !== 'audit') {
-                    return 'View & PDF only';
-                }
-                if (session.role === 'Auditee' && moduleId === 'audit') {
-                    return 'Closure & Dashboard only';
-                }
-                if (session.role === 'Lead Auditor' && moduleId === 'audit') {
-                    return 'All sites audit access';
-                }
-                return '';
-            };
-
             const handleNav = (moduleId) => {
-                const module = MODULES.find(m => m.id === moduleId);
-                const permissions = ROLE_PERMISSIONS[session.role] || ROLE_PERMISSIONS['User'];
-
-                if (!canAccessModule(moduleId)) {
-                    alert(`Access Denied: Your role (${session.role}) does not have access to ${module.label}.`);
-                    return;
-                }
-
-                let siteParam = selectedSite;
-                if (session.role === 'Lead Auditor' && moduleId === 'audit') {
-                    siteParam = selectedSite;
-                } else if (!permissions.allSites && selectedSite === 'GLOBAL') {
-                    if (session.assignedSite) {
-                        siteParam = session.assignedSite;
-                    } else {
-                        alert("Please select a specific site first.");
-                        return;
-                    }
-                }
-
-                const roleParams = `&role=${encodeURIComponent(session.role)}&viewOnly=${permissions.viewOnly || false}`;
-
-                if (moduleId === 'incidents') {
-                    window.location.href = `incidents.html?site=${siteParam}${roleParams}`;
-                    return;
-                }
-                if (moduleId === 'consultation') {
-                    window.location.href = `consultation.html?site=${siteParam}${roleParams}`;
-                    return;
-                }
-                if (moduleId === 'audit') {
-                    const auditeeParam = session.role === 'Auditee' ? '&auditee=true' : '';
-                    window.location.href = `audit.html?site=${siteParam}${roleParams}${auditeeParam}`;
-                    return;
-                }
-                if (moduleId === 'risk') {
-                    window.location.href = `risk.html?site=${siteParam}${roleParams}`;
-                    return;
-                }
-                if (moduleId === 'sites') {
-                    window.location.href = 'sites.html';
-                    return;
-                }
-                if (moduleId === 'users') {
-                    window.location.href = 'users.html';
-                    return;
-                }
-                if (moduleId === 'dashboard') {
-                    alert("Dashboard view coming soon.");
-                    return;
-                }
-                alert(`Module ${module.label} is under construction.`);
+                if (moduleId === 'users') window.location.href = 'users.html';
+                else if (moduleId === 'sites') window.location.href = 'sites.html';
+                else if (moduleId === 'dashboard') alert("Dashboard coming soon.");
+                else window.location.href = `${moduleId}.html?site=${selectedSite}`;
             };
 
             if (!session) return null;
-            
-            const permissions = ROLE_PERMISSIONS[session.role] || ROLE_PERMISSIONS['User'];
-            
-            let visibleSites = [];
-            if (permissions.allSites) {
-                visibleSites = data.sites;
-            } else {
-                const accessibleSites = session.accessibleSites || (session.assignedSite ? [session.assignedSite] : []);
-                visibleSites = data.sites.filter(s => accessibleSites.includes(s.code));
-            }
+            const visibleSites = session.role === 'Owner' || session.role === 'Lead Auditor' ? data.sites : data.sites.filter(s => s.code === session.assignedSite);
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 relative overflow-hidden">
@@ -287,75 +192,35 @@
 
                     <header className="h-16 px-6 flex items-center justify-between z-20 backdrop-blur-sm bg-slate-900/50 border-b border-white/5">
                         <div className="flex items-center gap-4">
-                            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg">
-                                <i className="fas fa-shield-halved"></i>
-                            </div>
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg"><i className="fas fa-shield-halved"></i></div>
                             <h1 className="text-base font-bold text-white hidden md:block">ISO 45001 Hub</h1>
-                            <div className="h-6 w-[1px] bg-slate-700 mx-2 hidden md:block"></div>
-                            
                             <div className="relative" ref={dropdownRef}>
                                 <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="flex items-center gap-2 text-xs font-bold bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:text-white hover:border-blue-500 transition-all w-48 justify-between">
-                                    <span className="flex items-center gap-2 truncate">
-                                        <i className="fas fa-location-dot text-emerald-400"></i>
-                                        {selectedSite === 'GLOBAL' ? 'Global View' : (data.sites.find(s=>s.code===selectedSite)?.name || selectedSite)}
-                                    </span>
-                                    <i className={`fas fa-chevron-down ml-1 text-[10px] transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}></i>
+                                    <span className="flex items-center gap-2 truncate"><i className="fas fa-location-dot text-emerald-400"></i>{selectedSite === 'GLOBAL' ? 'Global View' : selectedSite}</span><i className={`fas fa-chevron-down ml-1 text-[10px] transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}></i>
                                 </button>
-                                
                                 {isDropdownOpen && (
                                     <div className="absolute top-full left-0 mt-2 w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
-                                        {permissions.allSites && (
-                                            <button onClick={()=>{setSelectedSite('GLOBAL'); setIsDropdownOpen(false)}} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-800 text-blue-400 border-b border-slate-800">
-                                                Global (All Sites)
-                                            </button>
-                                        )}
-                                        <div className="max-h-60 overflow-y-auto">
-                                            {visibleSites.map(s => (
-                                                <button key={s.code} onClick={()=>{setSelectedSite(s.code); setIsDropdownOpen(false)}} className="w-full text-left px-4 py-3 text-xs hover:bg-slate-800 text-slate-400 hover:text-white border-b border-slate-800 last:border-0">
-                                                    <div className="font-bold">{s.name}</div>
-                                                    <div className="text-[10px] text-slate-600 font-mono">{s.code}</div>
-                                                </button>
-                                            ))}
-                                            {visibleSites.length === 0 && <div className="px-4 py-3 text-xs text-slate-500 italic">No assigned sites</div>}
-                                        </div>
+                                        {(session.role === 'Owner' || session.role === 'Lead Auditor') && <button onClick={()=>{setSelectedSite('GLOBAL'); setIsDropdownOpen(false)}} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-800 text-blue-400 border-b border-slate-800">Global (All Sites)</button>}
+                                        <div className="max-h-60 overflow-y-auto">{visibleSites.map(s => (<button key={s.code} onClick={()=>{setSelectedSite(s.code); setIsDropdownOpen(false)}} className="w-full text-left px-4 py-3 text-xs hover:bg-slate-800 text-slate-400 hover:text-white border-b border-slate-800 last:border-0"><div className="font-bold">{s.name}</div><div className="text-[10px] text-slate-600 font-mono">{s.code}</div></button>))}</div>
                                     </div>
                                 )}
                             </div>
                         </div>
-
-                        <div className="flex items-center gap-4">
-                            <div className="text-right hidden md:block">
-                                <p className="text-xs font-bold text-white">{session.user}</p>
-                                <p className="text-[10px] text-slate-400 uppercase tracking-wider">{session.role}</p>
-                            </div>
-                            <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-sm font-bold text-slate-300 border border-slate-700">
-                                {session.user.charAt(0)}
-                            </div>
-                            <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors ml-2" title="Logout">
-                                <i className="fas fa-power-off"></i>
-                            </button>
-                        </div>
+                        <div className="flex items-center gap-4"><div className="text-right hidden md:block"><p className="text-xs font-bold text-white">{session.user}</p><p className="text-[10px] text-slate-400 uppercase tracking-wider">{session.role}</p></div><div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-sm font-bold text-slate-300 border border-slate-700">{session.user.charAt(0)}</div><button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors ml-2"><i className="fas fa-power-off"></i></button></div>
                     </header>
 
                     <main className="flex-1 overflow-y-auto p-8 z-10 max-w-7xl mx-auto w-full">
+                        {/* NOTIFICATIONS SECTION */}
+                        <Notifications data={data} session={session} selectedSite={selectedSite} />
+
                         <div className="mb-8 animate-fade-in">
                             <h2 className="text-3xl font-bold text-white mb-2">Enterprise Modules</h2>
-                            <p className="text-slate-400 text-sm">
-                                Context: <span className="text-emerald-400 font-bold px-2 py-0.5 bg-emerald-400/10 rounded border border-emerald-400/20">{selectedSite === 'GLOBAL' ? 'Global Organization' : selectedSite}</span>
-                                <span className="ml-3 text-blue-400 font-bold px-2 py-0.5 bg-blue-400/10 rounded border border-blue-400/20">{session.role}</span>
-                                {permissions.viewOnly && <span className="ml-2 text-yellow-400 text-[10px] px-2 py-0.5 bg-yellow-400/10 rounded border border-yellow-400/20">View Only</span>}
-                            </p>
+                            <p className="text-slate-400 text-sm">Context: <span className="text-emerald-400 font-bold px-2 py-0.5 bg-emerald-400/10 rounded border border-emerald-400/20">{selectedSite === 'GLOBAL' ? 'Global Organization' : selectedSite}</span></p>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fade-in">
                             {MODULES.map(module => (
-                                <NavCard 
-                                    key={module.id} 
-                                    module={module} 
-                                    onClick={() => handleNav(module.id)}
-                                    disabled={!canAccessModule(module.id)}
-                                    accessNote={getAccessNote(module.id)}
-                                />
+                                <NavCard key={module.id} module={module} onClick={() => handleNav(module.id)} />
                             ))}
                         </div>
                     </main>
