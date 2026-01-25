@@ -10,10 +10,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Space Grotesk', sans-serif; }
-        .glass-panel { background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(59, 130, 246, 0.2); }
-    </style>
+    <style> body { font-family: 'Space Grotesk', sans-serif; } .glass-panel { background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(59, 130, 246, 0.2); } </style>
 </head>
 <body class="bg-slate-950 min-h-screen flex items-center justify-center relative overflow-hidden">
     <div class="absolute inset-0 z-0"><div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-900/20 rounded-full blur-[150px]"></div></div>
@@ -22,8 +19,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, set, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        // PASTE YOUR CONFIG HERE
-        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "SENDER_ID", appId: "APP_ID" };
+        
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
         
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
@@ -32,6 +29,8 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
+
+        const ROLES = ['Site Leader', 'EHS Manager', 'Manager', 'Lead Auditor', 'Auditor', 'Auditee', 'User'];
 
         const Input = ({ label, type="text", value, onChange, placeholder, icon }) => (
             <div className="mb-4">
@@ -45,14 +44,23 @@
 
         const Auth = () => {
             const [mode, setMode] = useState('login');
-            const [data, setData] = useState({ orgId: '', email: '', password: '', name: '' });
+            const [data, setData] = useState({ orgId: '', email: '', password: '', name: '', reqRole: 'User', reqSite: '' });
             const [loading, setLoading] = useState(false);
             const [msg, setMsg] = useState({ text: '', type: '' });
+            const [availableSites, setAvailableSites] = useState([]);
 
-            useEffect(() => {
-                // CLEAR SESSION ON MOUNT
-                sessionStorage.clear();
-            }, []);
+            useEffect(() => { sessionStorage.clear(); }, []);
+
+            // Fetch sites when OrgID is entered in Join mode
+            const checkOrgSites = async () => {
+                if(data.orgId.length < 3) return;
+                const cleanOrgId = data.orgId.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                try {
+                    const snap = await window.fb.get(window.fb.child(window.fb.ref(window.db), `organizations/${cleanOrgId}/sites`));
+                    if(snap.exists()) setAvailableSites(Object.values(snap.val()));
+                    else setAvailableSites([]);
+                } catch(e) { console.log("Org not found yet"); }
+            };
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
@@ -77,16 +85,28 @@
                         const session = {
                             orgId: cleanOrgId, orgName: orgData.meta.name,
                             user: user.name, email: user.email, role: user.role,
-                            assignedSite: user.assignedSite || '', uid: uid
+                            assignedSite: user.assignedSite || '', accessibleSites: user.accessibleSites || [], uid: uid
                         };
                         sessionStorage.setItem('isoSession', JSON.stringify(session));
-                        window.location.href = "home.html"; // LINK TO HOME
+                        window.location.href = "home.html"; 
                     } else {
                         if (userEntry) throw new Error("Email already registered.");
                         const newUid = `USR-${Date.now().toString().substr(-6)}`;
-                        const newUser = { id: newUid, name: data.name, email: data.email, password: data.password, role: 'Guest', status: 'Pending', assignedSite: '' };
+                        
+                        // Create pending user with requested permissions
+                        const newUser = { 
+                            id: newUid, 
+                            name: data.name, 
+                            email: data.email, 
+                            password: data.password, 
+                            role: 'User', // Default safe role
+                            status: 'Pending', 
+                            assignedSite: '',
+                            requestedRole: data.reqRole, // Store request
+                            requestedSite: data.reqSite  // Store request
+                        };
                         await window.fb.set(window.fb.ref(window.db, `organizations/${cleanOrgId}/users/${newUid}`), newUser);
-                        setMsg({ text: "Request sent! Ask Owner to approve.", type: "success" });
+                        setMsg({ text: "Request sent! Owner must approve.", type: "success" });
                         setMode('login'); setData(prev => ({ ...prev, password: '' }));
                     }
                 } catch (err) { setMsg({ text: err.message, type: "error" }); }
@@ -95,17 +115,38 @@
 
             return (
                 <div className="glass-panel rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-                    <div className="text-center mb-8"><h1 className="text-2xl font-bold text-white">ISO 45001</h1><p className="text-blue-400 text-xs font-mono uppercase tracking-widest mt-1">{mode === 'login' ? 'Secure Login' : 'Join Organization'}</p></div>
+                    <div className="text-center mb-8"><h1 className="text-2xl font-bold text-white">ISO 45001</h1><p className="text-blue-400 text-xs font-mono uppercase tracking-widest mt-1">{mode === 'login' ? 'Secure Login' : 'Request Access'}</p></div>
                     {msg.text && <div className={`p-3 rounded-lg text-xs font-bold text-center mb-4 ${msg.type === 'error' ? 'bg-red-500/20 text-red-200' : 'bg-emerald-500/20 text-emerald-200'}`}>{msg.text}</div>}
                     <form onSubmit={handleSubmit}>
-                        <Input label="Organization ID" value={data.orgId} onChange={(e) => setData({...data, orgId:e.target.value})} placeholder="ORG-001" icon="fa-building" />
-                        {mode === 'join' && <Input label="Full Name" value={data.name} onChange={(e) => setData({...data, name:e.target.value})} placeholder="John Doe" icon="fa-user" />}
+                        <div onBlur={mode === 'join' ? checkOrgSites : null}>
+                            <Input label="Organization ID" value={data.orgId} onChange={(e) => setData({...data, orgId:e.target.value})} placeholder="ORG-001" icon="fa-building" />
+                        </div>
+                        {mode === 'join' && (
+                            <>
+                                <Input label="Full Name" value={data.name} onChange={(e) => setData({...data, name:e.target.value})} placeholder="John Doe" icon="fa-user" />
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Requested Role</label>
+                                        <select className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 px-2 text-white text-xs outline-none" value={data.reqRole} onChange={e=>setData({...data, reqRole:e.target.value})}>
+                                            {ROLES.map(r=><option key={r} value={r}>{r}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Requested Site</label>
+                                        <select className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 px-2 text-white text-xs outline-none" value={data.reqSite} onChange={e=>setData({...data, reqSite:e.target.value})}>
+                                            <option value="">Global/None</option>
+                                            {availableSites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                         <Input label="Email" type="email" value={data.email} onChange={(e) => setData({...data, email:e.target.value})} placeholder="user@company.com" icon="fa-envelope" />
                         <Input label="Password" type="password" value={data.password} onChange={(e) => setData({...data, password:e.target.value})} placeholder="••••••••" icon="fa-lock" />
-                        <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold uppercase text-sm tracking-wider shadow-lg shadow-blue-500/20 transition-all mt-2">{loading ? <i className="fas fa-spinner fa-spin"></i> : (mode === 'login' ? 'Login' : 'Send Request')}</button>
+                        <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold uppercase text-sm tracking-wider shadow-lg shadow-blue-500/20 transition-all mt-2">{loading ? <i className="fas fa-spinner fa-spin"></i> : (mode === 'login' ? 'Login' : 'Submit Request')}</button>
                     </form>
                     <div className="mt-6 pt-6 border-t border-slate-700/50 flex justify-between items-center text-xs">
-                        <button onClick={() => setMode(mode === 'login' ? 'join' : 'login')} className="text-slate-400 hover:text-white transition-colors">{mode === 'login' ? 'Join Existing Team' : 'Back to Login'}</button>
+                        <button onClick={() => setMode(mode === 'login' ? 'join' : 'login')} className="text-slate-400 hover:text-white transition-colors">{mode === 'login' ? 'Join Organization' : 'Back to Login'}</button>
                         <a href="register.html" className="text-blue-400 hover:text-blue-300 font-bold">New Org?</a>
                     </div>
                 </div>
