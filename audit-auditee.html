@@ -4,36 +4,83 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auditee Workplace</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Space Grotesk', 'sans-serif'] }, colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' } } } }</script>
-    <style>body { background-color: #0f172a; color: #f8fafc; } .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); } input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; }</style>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
+                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+        
+        /* Status Borders */
+        .status-reported { border-left: 4px solid #ef4444; } /* Red: Action Needed */
+        .status-submitted { border-left: 4px solid #f97316; } /* Orange: Pending Verify */
+        .status-closed { border-left: 4px solid #22c55e; }   /* Green: Done */
+        
+        .finding-card { transition: all 0.2s; cursor: pointer; }
+        .finding-card:hover { transform: translateX(4px); background: rgba(30, 41, 59, 0.8); }
+        
+        /* Scrollbar */
+        .custom-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    </style>
 </head>
 <body class="min-h-screen flex flex-col">
     <div id="root" class="h-full flex flex-col"></div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, get, update, push } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
         const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
         window.fb = { ref, get, update, push };
     </script>
+
     <script type="text/babel">
         const { useState, useEffect } = React;
-        const fileToBase64 = (file) => new Promise((r) => { const x=new FileReader(); x.readAsDataURL(file); x.onload=()=>r(x.result); });
+
+        const fileToBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
 
         const AuditeeWorkplace = () => {
             const [session, setSession] = useState(null);
             const [myFindings, setMyFindings] = useState([]);
             const [selected, setSelected] = useState(null);
-            
-            const [response, setResponse] = useState({ rootCause: '', correction: '', actions: [], evidenceFile: null, evidenceFileName: '' });
+            const [loading, setLoading] = useState(true);
 
+            // Form Data
+            const [formData, setFormData] = useState({
+                rootCause: '',
+                correction: '',
+                closureDate: new Date().toISOString().split('T')[0],
+                evidenceFile: null,
+                evidenceFileName: ''
+            });
+
+            // 1. Load Data
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
@@ -44,92 +91,219 @@
                 window.fb.get(dbRef).then(snap => {
                     if(snap.exists()) {
                         const all = Object.entries(snap.val()).map(([k, v]) => ({...v, firebaseKey: k}));
-                        // Show ALL records relevant to this auditee, regardless of status
+                        // Filter: Findings assigned to THIS user
                         const mine = all.filter(f => f.taskDetails.auditee === sess.user);
                         setMyFindings(mine);
                     }
+                    setLoading(false);
                 });
             }, []);
 
+            // 2. Select Finding
+            const handleSelect = (finding) => {
+                setSelected(finding);
+                // Pre-fill if data exists, otherwise blank
+                setFormData({
+                    rootCause: finding.rootCause || '',
+                    correction: finding.correction || '',
+                    closureDate: finding.closureDate ? finding.closureDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                    evidenceFile: finding.evidenceFile || null,
+                    evidenceFileName: finding.evidenceFileName || ''
+                });
+            };
+
+            // 3. Handle File Upload
+            const handleFile = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const base64 = await fileToBase64(file);
+                    setFormData({ ...formData, evidenceFile: base64, evidenceFileName: file.name });
+                }
+            };
+
+            // 4. Submit for Verification
             const handleSubmit = async () => {
-                if(!response.rootCause) return alert("Root Cause is required.");
+                if (!formData.rootCause || !formData.correction) return alert("Please fill Root Cause and Corrective Action.");
                 
                 const updatedRecord = {
-                    ...selected,
-                    ...response,
-                    status: 'Submitted for Verification', // This triggers the Auditor's "Verify" button
+                    ...selected, // Keep original audit data
+                    ...formData, // Overwrite with closure data
+                    status: 'Submitted for Verification', // Change Status
                     submissionDate: new Date().toISOString()
                 };
 
+                // Update Firebase
                 await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/auditFindings/${selected.firebaseKey}`), updatedRecord);
-                alert("Submitted! The Auditor will now verify.");
-                window.location.reload();
+                
+                alert("Response Submitted! Sent to Auditor for Final Verification.");
+                
+                // Update local list to reflect change immediately
+                const updatedList = myFindings.map(f => f.firebaseKey === selected.firebaseKey ? updatedRecord : f);
+                setMyFindings(updatedList);
+                setSelected(updatedRecord); // Update selected view
             };
 
-            const addAction = () => setResponse({...response, actions: [...response.actions, { action: '', resp: session.user, target: '' }]});
-            const updateAction = (i, f, v) => { const u = [...response.actions]; u[i][f] = v; setResponse({...response, actions: u}); };
-            const handleFile = async (e) => { const f=e.target.files[0]; if(f) { const b=await fileToBase64(f); setResponse({...response, evidenceFile: b, evidenceFileName: f.name}); }};
+            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Tasks...</div>;
 
-            if(!session) return null;
-
-            const isEditable = selected && selected.status === 'Reported'; // Only editable if fresh from Auditor
+            // Is the form editable? Only if status is 'Reported' (i.e., freshly sent by Auditor)
+            // Once submitted, it's read-only until Auditor rejects or closes.
+            const isEditable = selected && selected.status === 'Reported';
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    {/* Header */}
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
-                        <div className="flex items-center gap-4"><a href="audit.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Auditee Workplace</h1></div>
-                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-amber-400">{session.user}</div>
+                        <div className="flex items-center gap-4">
+                            <a href="audit.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition">
+                                <i className="fas fa-arrow-left"></i> Back
+                            </a>
+                            <h1 className="font-bold text-lg tracking-wide">Auditee Workplace</h1>
+                        </div>
+                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-amber-400 border border-amber-900">
+                            {session.user}
+                        </div>
                     </div>
 
                     <div className="flex-1 overflow-hidden p-6 flex gap-6">
-                        {/* LIST */}
-                        <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-2xl overflow-y-auto p-3">
-                            {myFindings.map(f => (
-                                <div key={f.firebaseKey} onClick={() => setSelected(f)} className={`p-4 mb-3 rounded-xl border-l-4 cursor-pointer transition ${
-                                    f.status === 'Reported' ? 'border-red-500 bg-red-900/10' :
-                                    f.status === 'Submitted for Verification' ? 'border-blue-500 bg-blue-900/10' :
-                                    'border-emerald-500 bg-emerald-900/10'
-                                }`}>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className="text-[10px] font-bold uppercase">{f.status}</span>
-                                        <span className="text-[10px] text-slate-400">{f.auditDate.split('T')[0]}</span>
-                                    </div>
-                                    <h3 className="font-bold text-sm text-white mb-1">{f.taskDetails.dept}</h3>
-                                    <p className="text-xs text-slate-400">{f.findings.length} Finding(s)</p>
-                                </div>
-                            ))}
+                        
+                        {/* LEFT: LIST OF FINDINGS */}
+                        <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-2xl flex flex-col">
+                            <div className="p-4 border-b border-slate-700 bg-slate-800/50 rounded-t-2xl">
+                                <h2 className="font-bold text-slate-300 uppercase text-xs tracking-wider">My Actions ({myFindings.length})</h2>
+                            </div>
+                            <div className="overflow-y-auto flex-1 p-3 custom-scroll">
+                                {myFindings.length === 0 && <div className="text-slate-500 text-center text-sm mt-10">No pending actions.</div>}
+                                {myFindings.map(f => {
+                                    const statusClass = f.status === 'Reported' ? 'status-reported' : f.status === 'Submitted for Verification' ? 'status-submitted' : 'status-closed';
+                                    const statusLabel = f.status === 'Reported' ? 'Action Required' : f.status === 'Submitted for Verification' ? 'Pending Approval' : 'Closed';
+                                    
+                                    return (
+                                        <div key={f.firebaseKey} onClick={() => handleSelect(f)} className={`p-4 mb-3 rounded-r-xl bg-slate-800 finding-card ${statusClass} ${selected?.firebaseKey === f.firebaseKey ? 'bg-slate-700 ring-1 ring-blue-500' : ''}`}>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${f.status === 'Reported' ? 'bg-red-900 text-red-200' : f.status==='Closed' ? 'bg-green-900 text-green-200' : 'bg-orange-900 text-orange-200'}`}>{statusLabel}</span>
+                                                <span className="text-[10px] text-slate-400">{f.auditDate.split('T')[0]}</span>
+                                            </div>
+                                            <h3 className="font-bold text-sm text-white mb-1 line-clamp-1">{f.taskDetails.standard} Audit</h3>
+                                            <p className="text-xs text-slate-400 truncate">{f.docId}</p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
 
-                        {/* FORM */}
-                        <div className="w-2/3 glass-panel rounded-2xl p-8 overflow-y-auto">
-                            {!selected ? <div className="text-center text-slate-500 mt-20">Select an item</div> : (
-                                <div>
-                                    <div className="flex justify-between border-b border-slate-700 pb-4 mb-6">
-                                        <h2 className="text-xl font-bold">Audit Findings</h2>
-                                        <div className={`px-3 py-1 rounded text-xs font-bold ${selected.status==='Closed'?'bg-emerald-600':'bg-slate-700'}`}>{selected.status}</div>
-                                    </div>
-
-                                    {/* Findings Read-Only */}
-                                    <div className="space-y-3 mb-8">
-                                        {selected.findings.map((f, i) => (
-                                            <div key={i} className="bg-slate-900 p-3 rounded border border-slate-700">
-                                                <div className="flex justify-between text-xs text-slate-400 mb-1"><span>{f.id}</span><span>{f.type}</span></div>
-                                                <p className="text-sm">{f.desc}</p>
+                        {/* RIGHT: ACTION FORM */}
+                        <div className="w-2/3 glass-panel rounded-2xl p-8 overflow-y-auto custom-scroll relative">
+                            {!selected ? (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
+                                    <i className="fas fa-file-signature text-6xl mb-4"></i>
+                                    <p>Select a finding to respond</p>
+                                </div>
+                            ) : (
+                                <div className="animate-fade-in pb-10">
+                                    {/* Header Info */}
+                                    <div className="flex justify-between items-start mb-6 border-b border-slate-700 pb-4">
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-white mb-1">Audit Response</h2>
+                                            <p className="text-sm text-slate-400">Ref: <span className="font-mono text-emerald-400">{selected.docId}</span></p>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className={`px-3 py-1 rounded text-xs font-bold uppercase ${selected.status==='Reported' ? 'bg-red-600 text-white' : selected.status==='Closed' ? 'bg-green-600 text-white' : 'bg-orange-500 text-white'}`}>
+                                                {selected.status}
                                             </div>
-                                        ))}
+                                        </div>
                                     </div>
 
-                                    {/* Response Section */}
-                                    <div className={`space-y-4 ${!isEditable ? 'opacity-70 pointer-events-none' : ''}`}>
-                                        <h3 className="text-amber-400 font-bold text-sm uppercase">Your Response</h3>
-                                        <div><label className="text-[10px] uppercase text-slate-500 block mb-1">Root Cause</label><textarea className="bg-slate-900 w-full rounded p-2" rows="2" value={isEditable ? response.rootCause : selected.rootCause} onChange={e=>setResponse({...response, rootCause:e.target.value})}></textarea></div>
-                                        <div><label className="text-[10px] uppercase text-slate-500 block mb-1">Correction</label><input className="bg-slate-900 w-full rounded p-2" value={isEditable ? response.correction : selected.correction} onChange={e=>setResponse({...response, correction:e.target.value})} /></div>
-                                        
-                                        {/* CAPA & File Inputs simplified for brevity - assume similar logic to previous code */}
-                                        <div className="pt-4">
-                                            {isEditable && <button onClick={handleSubmit} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg w-full">Submit Response</button>}
-                                            {selected.status === 'Submitted for Verification' && <div className="text-center text-blue-400 text-sm">Waiting for Auditor Verification...</div>}
-                                            {selected.status === 'Closed' && <div className="text-center text-emerald-400 text-sm font-bold">Audit Closed Successfully.</div>}
+                                    {/* READ ONLY: Auditor's Findings */}
+                                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 mb-6">
+                                        <h3 className="text-slate-400 font-bold text-xs uppercase mb-3">Auditor Findings</h3>
+                                        <div className="space-y-2">
+                                            {selected.findings.map((find, idx) => (
+                                                <div key={idx} className="bg-slate-950 p-3 rounded border border-slate-800 flex gap-4">
+                                                    <span className="text-xs font-mono text-red-400">{find.id}</span>
+                                                    <span className="text-xs font-bold text-slate-300 w-24">{find.type}</span>
+                                                    <span className="text-sm text-slate-200 flex-1">{find.desc}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* EDITABLE: Auditee Response */}
+                                    <div className={`space-y-6 ${!isEditable ? 'opacity-90' : ''}`}>
+                                        <div className="grid grid-cols-1 gap-6">
+                                            
+                                            {/* Root Cause */}
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">1. Root Cause Analysis</label>
+                                                <textarea 
+                                                    rows="3" 
+                                                    className="bg-slate-900 border-slate-700 w-full rounded p-3 text-sm focus:border-amber-500" 
+                                                    placeholder="Why did this non-conformity occur?" 
+                                                    value={formData.rootCause} 
+                                                    onChange={e=>setFormData({...formData, rootCause:e.target.value})}
+                                                    disabled={!isEditable}
+                                                ></textarea>
+                                            </div>
+
+                                            {/* Corrective Action */}
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">2. Corrective Action (CAPA)</label>
+                                                <textarea 
+                                                    rows="3" 
+                                                    className="bg-slate-900 border-slate-700 w-full rounded p-3 text-sm focus:border-amber-500" 
+                                                    placeholder="What actions are taken to correct and prevent recurrence?" 
+                                                    value={formData.correction} 
+                                                    onChange={e=>setFormData({...formData, correction:e.target.value})}
+                                                    disabled={!isEditable}
+                                                ></textarea>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-6">
+                                                {/* Date */}
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">3. Date of Closure</label>
+                                                    <input 
+                                                        type="date" 
+                                                        className="bg-slate-900 border-slate-700 w-full rounded p-3 text-sm" 
+                                                        value={formData.closureDate} 
+                                                        onChange={e=>setFormData({...formData, closureDate:e.target.value})}
+                                                        disabled={!isEditable}
+                                                    />
+                                                </div>
+
+                                                {/* Evidence */}
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">4. Evidence of Closure</label>
+                                                    <div className="flex items-center gap-3 mt-1">
+                                                        {isEditable && (
+                                                            <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-3 rounded border border-slate-600 flex items-center gap-2 transition">
+                                                                <i className="fas fa-paperclip"></i> Attach Evidence
+                                                                <input type="file" className="hidden" onChange={handleFile} />
+                                                            </label>
+                                                        )}
+                                                        {formData.evidenceFileName ? (
+                                                            <div className="text-xs text-emerald-400 bg-emerald-900/20 px-3 py-2 rounded border border-emerald-900 flex items-center gap-2">
+                                                                <i className="fas fa-file-check"></i> {formData.evidenceFileName}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-slate-500 italic">No file attached</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Action Button */}
+                                        <div className="pt-6 border-t border-slate-700 flex justify-end">
+                                            {isEditable ? (
+                                                <button onClick={handleSubmit} className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg flex items-center gap-2 transition transform hover:-translate-y-1">
+                                                    <i className="fas fa-paper-plane"></i> Submit for Verification
+                                                </button>
+                                            ) : (
+                                                <div className="flex items-center gap-2 text-slate-400 bg-slate-900 px-4 py-2 rounded-lg border border-slate-700">
+                                                    <i className={`fas ${selected.status==='Closed'?'fa-check-circle text-green-500':'fa-clock text-orange-500'}`}></i>
+                                                    <span>{selected.status === 'Closed' ? 'Audit Closed' : 'Waiting for Auditor Verification'}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -139,6 +313,7 @@
                 </div>
             );
         };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<AuditeeWorkplace />);
     </script>
