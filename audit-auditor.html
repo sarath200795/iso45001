@@ -108,7 +108,8 @@
                             if(plan.matrix && Array.isArray(plan.matrix)) {
                                 plan.matrix.forEach(row => {
                                     if(row.auditor === sess.user || sess.role === 'Owner') {
-                                        // --- CRITICAL FIX: SAFEGUARD AGAINST UNDEFINED ---
+                                        // --- FIX: SAFEGUARD AGAINST UNDEFINED ---
+                                        // Firebase crashes if any value is undefined. We use || '' to force empty string.
                                         tasks.push({
                                             auditor: row.auditor || '',
                                             auditee: row.auditee || '',
@@ -116,13 +117,13 @@
                                             area: row.area || '',
                                             date: row.date || '',
                                             time: row.time || '',
-                                            aspect: row.aspect || '', // Ensure this exists
+                                            aspect: row.aspect || row.aspects || '', // Handle different naming conventions
                                             
                                             planId: plan.docId || '',
                                             siteId: plan.siteId || '',
                                             leadAuditor: plan.leadAuditor || '',
                                             standard: plan.standard || '',
-                                            scope: plan.scope || 'OH&S Management System' // Default if undefined
+                                            scope: plan.scope || 'OH&S Audit' // Default to prevent crash
                                         });
                                     }
                                 });
@@ -177,8 +178,8 @@
             const handleSave = async () => {
                 if(findings.some(f => !f.desc)) return alert("Please fill description for all findings.");
                 
-                // Construct clean payload to avoid 'undefined' errors
-                const cleanTask = {
+                // --- FIX: Sanitize Payload before pushing to Firebase ---
+                const sanitizedTask = {
                     siteId: currentTask.siteId || '',
                     leadAuditor: currentTask.leadAuditor || '',
                     auditor: currentTask.auditor || '',
@@ -190,7 +191,7 @@
                     scope: currentTask.scope || ''
                 };
 
-                const cleanFindings = findings.map(f => ({
+                const sanitizedFindings = findings.map(f => ({
                     id: f.id || '',
                     type: f.type || 'Observation',
                     clause: f.clause || '',
@@ -201,12 +202,12 @@
 
                 const payload = {
                     docId: docId || '',
-                    taskDetails: cleanTask,
-                    findings: cleanFindings,
+                    taskDetails: sanitizedTask,
+                    findings: sanitizedFindings,
                     status: 'Reported',
                     auditDate: new Date().toISOString(),
                     auditor: session.user || '',
-                    siteId: cleanTask.siteId
+                    siteId: sanitizedTask.siteId
                 };
 
                 try {
@@ -214,7 +215,7 @@
                     alert("Success! Findings saved and sent to Auditee.");
                     setView('list');
                 } catch (e) {
-                    console.error(e);
+                    console.error("Firebase Save Error:", e);
                     alert("Error saving: " + e.message);
                 }
             };
@@ -276,14 +277,13 @@
                             {/* VIEW 2: EXECUTION FORM */}
                             {view === 'perform' && currentTask && (
                                 <div className="animate-fade-in">
-                                    
                                     {/* SECTION 1: HEADER */}
                                     <div className="glass-panel p-6 rounded-2xl border-l-4 border-emerald-500 mb-6 screen-ui">
                                         <h3 className="text-emerald-400 font-bold uppercase text-sm mb-4">Section 1: Audit Context</h3>
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
                                             <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Site</label><div className="font-bold">{currentTask.siteId}</div></div>
                                             <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Lead Auditor</label><div className="font-bold">{currentTask.leadAuditor}</div></div>
-                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Auditor</label><div className="font-bold">{currentTask.auditor}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Auditor (You)</label><div className="font-bold">{currentTask.auditor}</div></div>
                                             <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Auditee</label><div className="font-bold text-amber-400">{currentTask.auditee}</div></div>
                                             <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Department</label><div className="font-bold">{currentTask.dept}</div></div>
                                             <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Area</label><div className="font-bold">{currentTask.area}</div></div>
