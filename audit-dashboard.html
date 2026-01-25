@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Dashboard</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
+                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        
+        /* Modal Overlay */
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); }
+        
+        /* Scrollbar */
+        .custom-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+
+        .stat-card { transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-5px); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, get, update, push, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { ref, get, update, push, onValue };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const AuditDashboard = () => {
+            const [session, setSession] = useState(null);
+            const [audits, setAudits] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [selectedAudit, setSelectedAudit] = useState(null);
+
+            // LOAD DATA
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if(!s) { window.location.href='index.html'; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+
+                const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}/auditFindings`);
+                
+                // Use onValue for Real-time updates
+                window.fb.onValue(dbRef, (snapshot) => {
+                    if(snapshot.exists()) {
+                        const data = Object.entries(snapshot.val()).map(([k, v]) => ({...v, firebaseKey: k}));
+                        setAudits(data);
+                    } else {
+                        setAudits([]);
+                    }
+                    setLoading(false);
+                });
+            }, []);
+
+            // CALCULATE STATS
+            const stats = useMemo(() => {
+                return {
+                    open: audits.filter(a => a.status === 'Reported').length,
+                    inProgress: audits.filter(a => a.status === 'Submitted for Verification').length,
+                    closed: audits.filter(a => a.status === 'Closed').length,
+                    total: audits.length
+                };
+            }, [audits]);
+
+            // HELPER: STATUS COLOR
+            const getStatusColor = (status) => {
+                if(status === 'Reported') return 'text-red-400 bg-red-900/20 border-red-900';
+                if(status === 'Submitted for Verification') return 'text-orange-400 bg-orange-900/20 border-orange-900';
+                if(status === 'Closed') return 'text-emerald-400 bg-emerald-900/20 border-emerald-900';
+                return 'text-slate-400';
+            };
+
+            const getStatusLabel = (status) => {
+                if(status === 'Reported') return 'Open Finding';
+                if(status === 'Submitted for Verification') return 'Verification Pending';
+                return status;
+            };
+
+            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Dashboard...</div>;
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    {/* Header */}
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
+                        <div className="flex items-center gap-4">
+                            <a href="audit.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition">
+                                <i className="fas fa-arrow-left"></i> Back
+                            </a>
+                            <h1 className="font-bold text-lg tracking-wide">Audit Dashboard</h1>
+                        </div>
+                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-blue-400 border border-blue-900">
+                            {session.orgId} Overview
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-8 custom-scroll">
+                        <div className="max-w-7xl mx-auto space-y-8">
+                            
+                            {/* 1. STAT CARDS */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div className="glass-panel p-6 rounded-2xl border-l-4 border-red-500 stat-card">
+                                    <div className="text-slate-400 text-xs uppercase font-bold mb-1">Open Findings</div>
+                                    <div className="text-4xl font-bold text-white">{stats.open}</div>
+                                    <div className="text-[10px] text-red-400 mt-2">Action Required</div>
+                                </div>
+                                <div className="glass-panel p-6 rounded-2xl border-l-4 border-orange-500 stat-card">
+                                    <div className="text-slate-400 text-xs uppercase font-bold mb-1">In Progress</div>
+                                    <div className="text-4xl font-bold text-white">{stats.inProgress}</div>
+                                    <div className="text-[10px] text-orange-400 mt-2">Verification Pending</div>
+                                </div>
+                                <div className="glass-panel p-6 rounded-2xl border-l-4 border-emerald-500 stat-card">
+                                    <div className="text-slate-400 text-xs uppercase font-bold mb-1">Closed</div>
+                                    <div className="text-4xl font-bold text-white">{stats.closed}</div>
+                                    <div className="text-[10px] text-emerald-400 mt-2">Verified & Done</div>
+                                </div>
+                                <div className="glass-panel p-6 rounded-2xl border-l-4 border-blue-500 stat-card">
+                                    <div className="text-slate-400 text-xs uppercase font-bold mb-1">Total Audits</div>
+                                    <div className="text-4xl font-bold text-white">{stats.total}</div>
+                                    <div className="text-[10px] text-blue-400 mt-2">All Time</div>
+                                </div>
+                            </div>
+
+                            {/* 2. FINDINGS TABLE */}
+                            <div className="glass-panel rounded-2xl overflow-hidden border border-slate-700">
+                                <div className="p-4 bg-slate-900/50 border-b border-slate-700 flex justify-between items-center">
+                                    <h3 className="font-bold text-white">Audit Records</h3>
+                                    <span className="text-xs text-slate-500">Click row for details</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm text-slate-300">
+                                        <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
+                                            <tr>
+                                                <th className="p-4">Ref ID</th>
+                                                <th className="p-4">Status</th>
+                                                <th className="p-4">Date</th>
+                                                <th className="p-4">Department</th>
+                                                <th className="p-4">Auditor</th>
+                                                <th className="p-4">Auditee</th>
+                                                <th className="p-4 text-center">Findings</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800">
+                                            {audits.map((audit, i) => (
+                                                <tr key={i} onClick={() => setSelectedAudit(audit)} className="hover:bg-slate-800/50 cursor-pointer transition">
+                                                    <td className="p-4 font-mono text-xs text-blue-300">{audit.docId}</td>
+                                                    <td className="p-4">
+                                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${getStatusColor(audit.status)}`}>
+                                                            {getStatusLabel(audit.status)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-xs">{audit.auditDate.split('T')[0]}</td>
+                                                    <td className="p-4">{audit.taskDetails.dept}</td>
+                                                    <td className="p-4">{audit.auditor}</td>
+                                                    <td className="p-4 text-slate-400 italic">{audit.taskDetails.auditee}</td>
+                                                    <td className="p-4 text-center">
+                                                        <span className="bg-slate-800 px-2 py-1 rounded text-xs font-bold">{audit.findings.length}</span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {audits.length === 0 && (
+                                                <tr><td colSpan="7" className="p-8 text-center text-slate-500">No audit records found.</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* 3. DETAIL MODAL */}
+                    {selectedAudit && (
+                        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-6 animate-fade-in">
+                            <div className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col max-h-full">
+                                
+                                {/* Modal Header */}
+                                <div className="p-6 border-b border-slate-700 flex justify-between items-start">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-white mb-1">Audit Details</h2>
+                                        <p className="text-sm text-emerald-400 font-mono">{selectedAudit.docId}</p>
+                                    </div>
+                                    <button onClick={() => setSelectedAudit(null)} className="text-slate-400 hover:text-white transition">
+                                        <i className="fas fa-times text-xl"></i>
+                                    </button>
+                                </div>
+
+                                {/* Modal Body (Scrollable) */}
+                                <div className="flex-1 overflow-y-auto p-6 custom-scroll">
+                                    
+                                    {/* Section 1: Context */}
+                                    <div className="grid grid-cols-4 gap-4 mb-8 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                        <div><label className="text-[10px] text-slate-500 uppercase block">Site</label><span className="text-sm text-white font-bold">{selectedAudit.taskDetails.siteId}</span></div>
+                                        <div><label className="text-[10px] text-slate-500 uppercase block">Date</label><span className="text-sm text-white font-bold">{selectedAudit.auditDate.split('T')[0]}</span></div>
+                                        <div><label className="text-[10px] text-slate-500 uppercase block">Auditor</label><span className="text-sm text-white font-bold">{selectedAudit.auditor}</span></div>
+                                        <div><label className="text-[10px] text-slate-500 uppercase block">Auditee</label><span className="text-sm text-white font-bold">{selectedAudit.taskDetails.auditee}</span></div>
+                                        
+                                        <div><label className="text-[10px] text-slate-500 uppercase block">Department</label><span className="text-sm text-white font-bold">{selectedAudit.taskDetails.dept}</span></div>
+                                        <div><label className="text-[10px] text-slate-500 uppercase block">Area</label><span className="text-sm text-white font-bold">{selectedAudit.taskDetails.area}</span></div>
+                                        <div className="col-span-2"><label className="text-[10px] text-slate-500 uppercase block">Scope</label><span className="text-sm text-white font-bold">{selectedAudit.taskDetails.scope}</span></div>
+                                    </div>
+
+                                    {/* Section 2: Findings */}
+                                    <h3 className="text-blue-400 font-bold uppercase text-sm mb-3">Audit Findings ({selectedAudit.findings.length})</h3>
+                                    <div className="space-y-4 mb-8">
+                                        {selectedAudit.findings.map((f, i) => (
+                                            <div key={i} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                                <div className="flex justify-between mb-2">
+                                                    <div className="flex gap-2">
+                                                        <span className="text-xs font-mono text-red-400 bg-red-900/10 px-2 rounded">{f.id}</span>
+                                                        <span className="text-xs font-bold text-white">{f.type}</span>
+                                                    </div>
+                                                    <span className="text-xs text-slate-500">Clause: {f.clause}</span>
+                                                </div>
+                                                <p className="text-sm text-slate-300 mb-4">{f.desc}</p>
+                                                
+                                                {/* Response Preview */}
+                                                {f.response && f.response.status === 'Completed' && (
+                                                    <div className="mt-2 pt-2 border-t border-slate-700/50 bg-slate-900/50 p-3 rounded">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <i className="fas fa-reply text-orange-400 text-xs"></i>
+                                                            <span className="text-xs font-bold text-orange-300 uppercase">Corrective Action</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-4 text-xs text-slate-400">
+                                                            <div><span className="block text-slate-600 uppercase">Root Cause:</span> {f.response.rootCause}</div>
+                                                            <div><span className="block text-slate-600 uppercase">CAPA:</span> {f.response.capa}</div>
+                                                        </div>
+                                                        {f.response.evidenceFileName && (
+                                                            <div className="mt-2 text-xs text-emerald-400"><i className="fas fa-paperclip"></i> {f.response.evidenceFileName}</div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Section 3: Closure Status */}
+                                    <div className={`p-4 rounded-xl border flex justify-between items-center ${selectedAudit.status==='Closed'?'bg-emerald-900/10 border-emerald-600':'bg-slate-800 border-slate-700'}`}>
+                                        <div>
+                                            <span className="text-xs text-slate-500 uppercase block">Current Status</span>
+                                            <span className={`text-lg font-bold ${selectedAudit.status==='Closed'?'text-emerald-400':'text-white'}`}>{getStatusLabel(selectedAudit.status)}</span>
+                                        </div>
+                                        {selectedAudit.closureDate && (
+                                            <div className="text-right">
+                                                <span className="text-xs text-slate-500 uppercase block">Closed On</span>
+                                                <span className="text-sm text-white font-mono">{selectedAudit.closureDate.split('T')[0]}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AuditDashboard />);
+    </script>
+</body>
+</html>
