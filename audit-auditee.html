@@ -28,13 +28,11 @@
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
         
-        /* Status Borders */
-        .status-reported { border-left: 4px solid #ef4444; } /* Red: Action Needed */
-        .status-submitted { border-left: 4px solid #f97316; } /* Orange: Pending Verify */
-        .status-closed { border-left: 4px solid #22c55e; }   /* Green: Done */
-        
-        .finding-card { transition: all 0.2s; cursor: pointer; }
+        .finding-card { border-left-width: 4px; transition: transform 0.2s; cursor: pointer; }
         .finding-card:hover { transform: translateX(4px); background: rgba(30, 41, 59, 0.8); }
+        
+        /* Modal Overlay */
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px); }
         
         /* Scrollbar */
         .custom-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
@@ -67,15 +65,18 @@
 
         const AuditeeWorkplace = () => {
             const [session, setSession] = useState(null);
-            const [myFindings, setMyFindings] = useState([]);
-            const [selected, setSelected] = useState(null);
+            const [myAudits, setMyAudits] = useState([]);
+            const [selectedAudit, setSelectedAudit] = useState(null);
             const [loading, setLoading] = useState(true);
-
-            // Form Data
-            const [formData, setFormData] = useState({
+            
+            // Modal State for Individual Finding Response
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [currentFinding, setCurrentFinding] = useState(null); // The finding being edited
+            const [responseForm, setResponseForm] = useState({
                 rootCause: '',
                 correction: '',
-                closureDate: new Date().toISOString().split('T')[0],
+                capa: '',
+                targetDate: '',
                 evidenceFile: null,
                 evidenceFileName: ''
             });
@@ -93,61 +94,77 @@
                         const all = Object.entries(snap.val()).map(([k, v]) => ({...v, firebaseKey: k}));
                         // Filter: Findings assigned to THIS user
                         const mine = all.filter(f => f.taskDetails.auditee === sess.user);
-                        setMyFindings(mine);
+                        setMyAudits(mine);
                     }
                     setLoading(false);
                 });
             }, []);
 
-            // 2. Select Finding
-            const handleSelect = (finding) => {
-                setSelected(finding);
-                // Pre-fill if data exists, otherwise blank
-                setFormData({
-                    rootCause: finding.rootCause || '',
-                    correction: finding.correction || '',
-                    closureDate: finding.closureDate ? finding.closureDate.split('T')[0] : new Date().toISOString().split('T')[0],
-                    evidenceFile: finding.evidenceFile || null,
-                    evidenceFileName: finding.evidenceFileName || ''
+            // 2. Open Modal for Specific Finding
+            const openResponseModal = (finding) => {
+                setCurrentFinding(finding);
+                // Pre-fill if data exists
+                setResponseForm({
+                    rootCause: finding.response?.rootCause || '',
+                    correction: finding.response?.correction || '',
+                    capa: finding.response?.capa || '',
+                    targetDate: finding.response?.targetDate || new Date().toISOString().split('T')[0],
+                    evidenceFile: finding.response?.evidenceFile || null,
+                    evidenceFileName: finding.response?.evidenceFileName || ''
                 });
+                setIsModalOpen(true);
             };
 
-            // 3. Handle File Upload
+            // 3. Handle File in Modal
             const handleFile = async (e) => {
                 const file = e.target.files[0];
                 if (file) {
                     const base64 = await fileToBase64(file);
-                    setFormData({ ...formData, evidenceFile: base64, evidenceFileName: file.name });
+                    setResponseForm({ ...responseForm, evidenceFile: base64, evidenceFileName: file.name });
                 }
             };
 
-            // 4. Submit for Verification
-            const handleSubmit = async () => {
-                if (!formData.rootCause || !formData.correction) return alert("Please fill Root Cause and Corrective Action.");
-                
+            // 4. Save Response to Local State (Inside selectedAudit)
+            const saveFindingResponse = () => {
+                if(!responseForm.rootCause || !responseForm.correction) return alert("Root Cause and Correction are required.");
+
+                // Update the specific finding within the selected audit
+                const updatedFindings = selectedAudit.findings.map(f => {
+                    if (f.id === currentFinding.id) {
+                        return { ...f, response: { ...responseForm, status: 'Completed' } };
+                    }
+                    return f;
+                });
+
+                setSelectedAudit({ ...selectedAudit, findings: updatedFindings });
+                setIsModalOpen(false);
+            };
+
+            // 5. Submit Entire Audit to Auditor
+            const submitAuditToAuditor = async () => {
+                // Check if all findings have responses
+                const allDone = selectedAudit.findings.every(f => f.response && f.response.status === 'Completed');
+                if(!allDone) return alert("Please provide a response for ALL findings before submitting.");
+
                 const updatedRecord = {
-                    ...selected, // Keep original audit data
-                    ...formData, // Overwrite with closure data
-                    status: 'Submitted for Verification', // Change Status
+                    ...selectedAudit,
+                    status: 'Submitted for Verification', // Changes status to Orange
                     submissionDate: new Date().toISOString()
                 };
 
-                // Update Firebase
-                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/auditFindings/${selected.firebaseKey}`), updatedRecord);
+                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/auditFindings/${selectedAudit.firebaseKey}`), updatedRecord);
                 
-                alert("Response Submitted! Sent to Auditor for Final Verification.");
+                alert("Audit Response Submitted Successfully!");
                 
-                // Update local list to reflect change immediately
-                const updatedList = myFindings.map(f => f.firebaseKey === selected.firebaseKey ? updatedRecord : f);
-                setMyFindings(updatedList);
-                setSelected(updatedRecord); // Update selected view
+                // Update List
+                setMyAudits(myAudits.map(a => a.firebaseKey === selectedAudit.firebaseKey ? updatedRecord : a));
+                setSelectedAudit(updatedRecord);
             };
 
             if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Tasks...</div>;
 
-            // Is the form editable? Only if status is 'Reported' (i.e., freshly sent by Auditor)
-            // Once submitted, it's read-only until Auditor rejects or closes.
-            const isEditable = selected && selected.status === 'Reported';
+            // Is the main view editable? Only if status is 'Reported' (Red)
+            const isEditable = selectedAudit && selectedAudit.status === 'Reported';
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
@@ -166,150 +183,157 @@
 
                     <div className="flex-1 overflow-hidden p-6 flex gap-6">
                         
-                        {/* LEFT: LIST OF FINDINGS */}
+                        {/* LEFT: LIST OF AUDIT REPORTS */}
                         <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-2xl flex flex-col">
                             <div className="p-4 border-b border-slate-700 bg-slate-800/50 rounded-t-2xl">
-                                <h2 className="font-bold text-slate-300 uppercase text-xs tracking-wider">My Actions ({myFindings.length})</h2>
+                                <h2 className="font-bold text-slate-300 uppercase text-xs tracking-wider">Assigned Audits ({myAudits.length})</h2>
                             </div>
                             <div className="overflow-y-auto flex-1 p-3 custom-scroll">
-                                {myFindings.length === 0 && <div className="text-slate-500 text-center text-sm mt-10">No pending actions.</div>}
-                                {myFindings.map(f => {
-                                    const statusClass = f.status === 'Reported' ? 'status-reported' : f.status === 'Submitted for Verification' ? 'status-submitted' : 'status-closed';
-                                    const statusLabel = f.status === 'Reported' ? 'Action Required' : f.status === 'Submitted for Verification' ? 'Pending Approval' : 'Closed';
+                                {myAudits.length === 0 && <div className="text-slate-500 text-center text-sm mt-10">No pending audits.</div>}
+                                {myAudits.map(audit => {
+                                    const statusColor = audit.status === 'Reported' ? 'border-red-500' : audit.status === 'Submitted for Verification' ? 'border-orange-500' : 'border-green-500';
+                                    const statusText = audit.status === 'Reported' ? 'Action Required' : audit.status === 'Submitted for Verification' ? 'Pending Approval' : 'Closed';
                                     
                                     return (
-                                        <div key={f.firebaseKey} onClick={() => handleSelect(f)} className={`p-4 mb-3 rounded-r-xl bg-slate-800 finding-card ${statusClass} ${selected?.firebaseKey === f.firebaseKey ? 'bg-slate-700 ring-1 ring-blue-500' : ''}`}>
+                                        <div key={audit.firebaseKey} onClick={() => setSelectedAudit(audit)} className={`p-4 mb-3 rounded-r-xl bg-slate-800 finding-card border-l-4 ${statusColor} ${selectedAudit?.firebaseKey === audit.firebaseKey ? 'bg-slate-700 ring-1 ring-blue-500' : ''}`}>
                                             <div className="flex justify-between items-start mb-2">
-                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${f.status === 'Reported' ? 'bg-red-900 text-red-200' : f.status==='Closed' ? 'bg-green-900 text-green-200' : 'bg-orange-900 text-orange-200'}`}>{statusLabel}</span>
-                                                <span className="text-[10px] text-slate-400">{f.auditDate.split('T')[0]}</span>
+                                                <span className="text-[10px] font-mono text-slate-400">{audit.docId}</span>
+                                                <span className="text-[10px] font-bold uppercase bg-slate-900 px-2 py-0.5 rounded text-white">{statusText}</span>
                                             </div>
-                                            <h3 className="font-bold text-sm text-white mb-1 line-clamp-1">{f.taskDetails.standard} Audit</h3>
-                                            <p className="text-xs text-slate-400 truncate">{f.docId}</p>
+                                            <h3 className="font-bold text-sm text-white mb-1">{audit.taskDetails.dept} - {audit.taskDetails.area}</h3>
+                                            <div className="text-xs text-slate-400 mt-1">{audit.findings.length} Findings</div>
                                         </div>
                                     );
                                 })}
                             </div>
                         </div>
 
-                        {/* RIGHT: ACTION FORM */}
+                        {/* RIGHT: FINDINGS DETAIL & RESPONSE */}
                         <div className="w-2/3 glass-panel rounded-2xl p-8 overflow-y-auto custom-scroll relative">
-                            {!selected ? (
+                            {!selectedAudit ? (
                                 <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
                                     <i className="fas fa-file-signature text-6xl mb-4"></i>
-                                    <p>Select a finding to respond</p>
+                                    <p>Select an audit to view findings</p>
                                 </div>
                             ) : (
                                 <div className="animate-fade-in pb-10">
-                                    {/* Header Info */}
+                                    {/* Audit Header */}
                                     <div className="flex justify-between items-start mb-6 border-b border-slate-700 pb-4">
                                         <div>
-                                            <h2 className="text-2xl font-bold text-white mb-1">Audit Response</h2>
-                                            <p className="text-sm text-slate-400">Ref: <span className="font-mono text-emerald-400">{selected.docId}</span></p>
+                                            <h2 className="text-2xl font-bold text-white mb-1">Audit Findings</h2>
+                                            <p className="text-sm text-slate-400">Ref: <span className="font-mono text-emerald-400">{selectedAudit.docId}</span></p>
                                         </div>
                                         <div className="text-right">
-                                            <div className={`px-3 py-1 rounded text-xs font-bold uppercase ${selected.status==='Reported' ? 'bg-red-600 text-white' : selected.status==='Closed' ? 'bg-green-600 text-white' : 'bg-orange-500 text-white'}`}>
-                                                {selected.status}
-                                            </div>
+                                            <p className="text-xs text-slate-500">Auditor: {selectedAudit.auditor}</p>
+                                            <p className="text-xs text-slate-500">Date: {selectedAudit.auditDate.split('T')[0]}</p>
                                         </div>
                                     </div>
 
-                                    {/* READ ONLY: Auditor's Findings */}
-                                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 mb-6">
-                                        <h3 className="text-slate-400 font-bold text-xs uppercase mb-3">Auditor Findings</h3>
-                                        <div className="space-y-2">
-                                            {selected.findings.map((find, idx) => (
-                                                <div key={idx} className="bg-slate-950 p-3 rounded border border-slate-800 flex gap-4">
-                                                    <span className="text-xs font-mono text-red-400">{find.id}</span>
-                                                    <span className="text-xs font-bold text-slate-300 w-24">{find.type}</span>
-                                                    <span className="text-sm text-slate-200 flex-1">{find.desc}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* EDITABLE: Auditee Response */}
-                                    <div className={`space-y-6 ${!isEditable ? 'opacity-90' : ''}`}>
-                                        <div className="grid grid-cols-1 gap-6">
-                                            
-                                            {/* Root Cause */}
-                                            <div>
-                                                <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">1. Root Cause Analysis</label>
-                                                <textarea 
-                                                    rows="3" 
-                                                    className="bg-slate-900 border-slate-700 w-full rounded p-3 text-sm focus:border-amber-500" 
-                                                    placeholder="Why did this non-conformity occur?" 
-                                                    value={formData.rootCause} 
-                                                    onChange={e=>setFormData({...formData, rootCause:e.target.value})}
-                                                    disabled={!isEditable}
-                                                ></textarea>
-                                            </div>
-
-                                            {/* Corrective Action */}
-                                            <div>
-                                                <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">2. Corrective Action (CAPA)</label>
-                                                <textarea 
-                                                    rows="3" 
-                                                    className="bg-slate-900 border-slate-700 w-full rounded p-3 text-sm focus:border-amber-500" 
-                                                    placeholder="What actions are taken to correct and prevent recurrence?" 
-                                                    value={formData.correction} 
-                                                    onChange={e=>setFormData({...formData, correction:e.target.value})}
-                                                    disabled={!isEditable}
-                                                ></textarea>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-6">
-                                                {/* Date */}
-                                                <div>
-                                                    <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">3. Date of Closure</label>
-                                                    <input 
-                                                        type="date" 
-                                                        className="bg-slate-900 border-slate-700 w-full rounded p-3 text-sm" 
-                                                        value={formData.closureDate} 
-                                                        onChange={e=>setFormData({...formData, closureDate:e.target.value})}
-                                                        disabled={!isEditable}
-                                                    />
-                                                </div>
-
-                                                {/* Evidence */}
-                                                <div>
-                                                    <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">4. Evidence of Closure</label>
-                                                    <div className="flex items-center gap-3 mt-1">
+                                    {/* FINDINGS LIST */}
+                                    <div className="space-y-4 mb-8">
+                                        {selectedAudit.findings.map((f, i) => {
+                                            const hasResponse = f.response && f.response.status === 'Completed';
+                                            return (
+                                                <div key={i} className={`bg-slate-900/50 p-4 rounded-xl border transition-all ${hasResponse ? 'border-green-500/50' : 'border-slate-700'}`}>
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-xs font-mono text-red-400 bg-red-900/10 px-2 py-1 rounded">{f.id}</span>
+                                                            <span className="text-xs font-bold text-slate-300">{f.type}</span>
+                                                        </div>
                                                         {isEditable && (
-                                                            <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-4 py-3 rounded border border-slate-600 flex items-center gap-2 transition">
-                                                                <i className="fas fa-paperclip"></i> Attach Evidence
-                                                                <input type="file" className="hidden" onChange={handleFile} />
-                                                            </label>
-                                                        )}
-                                                        {formData.evidenceFileName ? (
-                                                            <div className="text-xs text-emerald-400 bg-emerald-900/20 px-3 py-2 rounded border border-emerald-900 flex items-center gap-2">
-                                                                <i className="fas fa-file-check"></i> {formData.evidenceFileName}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-xs text-slate-500 italic">No file attached</span>
+                                                            <button onClick={() => openResponseModal(f)} className={`text-xs px-3 py-1 rounded font-bold transition ${hasResponse ? 'bg-green-600 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}>
+                                                                {hasResponse ? 'Edit Response' : 'Respond'}
+                                                            </button>
                                                         )}
                                                     </div>
+                                                    <p className="text-sm text-slate-200 mb-2">{f.desc}</p>
+                                                    
+                                                    {/* Display Response Preview if exists */}
+                                                    {hasResponse && (
+                                                        <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <i className="fas fa-check-circle text-green-500"></i> 
+                                                                <span className="text-green-400 font-bold">Response Saved</span>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <div><b>Root Cause:</b> {f.response.rootCause}</div>
+                                                                <div><b>CAPA:</b> {f.response.capa}</div>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Action Button */}
-                                        <div className="pt-6 border-t border-slate-700 flex justify-end">
-                                            {isEditable ? (
-                                                <button onClick={handleSubmit} className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg flex items-center gap-2 transition transform hover:-translate-y-1">
-                                                    <i className="fas fa-paper-plane"></i> Submit for Verification
-                                                </button>
-                                            ) : (
-                                                <div className="flex items-center gap-2 text-slate-400 bg-slate-900 px-4 py-2 rounded-lg border border-slate-700">
-                                                    <i className={`fas ${selected.status==='Closed'?'fa-check-circle text-green-500':'fa-clock text-orange-500'}`}></i>
-                                                    <span>{selected.status === 'Closed' ? 'Audit Closed' : 'Waiting for Auditor Verification'}</span>
-                                                </div>
-                                            )}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
+
+                                    {/* FINAL SUBMIT BUTTON */}
+                                    {isEditable ? (
+                                        <div className="pt-6 border-t border-slate-700 flex justify-end">
+                                            <button onClick={submitAuditToAuditor} className={`font-bold py-3 px-8 rounded-xl shadow-lg flex items-center gap-2 transition transform hover:-translate-y-1 ${selectedAudit.findings.every(f => f.response?.status === 'Completed') ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
+                                                <i className="fas fa-paper-plane"></i> Submit to Auditor
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="pt-6 border-t border-slate-700 text-center">
+                                            <span className={`px-4 py-2 rounded-lg text-sm font-bold ${selectedAudit.status === 'Closed' ? 'bg-green-600 text-white' : 'bg-slate-800 text-orange-400'}`}>
+                                                Status: {selectedAudit.status}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
                     </div>
+
+                    {/* --- RESPONSE MODAL --- */}
+                    {isModalOpen && currentFinding && (
+                        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+                            <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl p-6 shadow-2xl relative animate-fade-in max-h-[90vh] overflow-y-auto custom-scroll">
+                                <button onClick={()=>setIsModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><i className="fas fa-times"></i></button>
+                                
+                                <h2 className="text-xl font-bold text-white mb-1">Respond to Finding</h2>
+                                <p className="text-xs text-slate-400 mb-4 font-mono">{currentFinding.id}</p>
+                                
+                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-6">
+                                    <p className="text-sm text-slate-300 italic">"{currentFinding.desc}"</p>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">1. Root Cause Analysis</label>
+                                        <textarea rows="2" className="bg-slate-800 border-slate-700 w-full" value={responseForm.rootCause} onChange={e=>setResponseForm({...responseForm, rootCause:e.target.value})} placeholder="Why did this occur?"></textarea>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">2. Correction (Immediate)</label>
+                                        <input className="bg-slate-800 border-slate-700 w-full" value={responseForm.correction} onChange={e=>setResponseForm({...responseForm, correction:e.target.value})} placeholder="Immediate fix" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">3. CAPA (Long Term)</label>
+                                            <textarea rows="2" className="bg-slate-800 border-slate-700 w-full" value={responseForm.capa} onChange={e=>setResponseForm({...responseForm, capa:e.target.value})} placeholder="Preventive action"></textarea>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">4. Target Closure Date</label>
+                                            <input type="date" className="bg-slate-800 border-slate-700 w-full" value={responseForm.targetDate} onChange={e=>setResponseForm({...responseForm, targetDate:e.target.value})} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">5. Evidence</label>
+                                        <div className="flex items-center gap-2">
+                                            <input type="file" className="text-xs text-slate-400" onChange={handleFile} />
+                                            {responseForm.evidenceFileName && <span className="text-xs text-green-400 truncate">{responseForm.evidenceFileName}</span>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 flex justify-end gap-3">
+                                    <button onClick={()=>setIsModalOpen(false)} className="px-4 py-2 border border-slate-600 rounded text-slate-400 text-sm">Cancel</button>
+                                    <button onClick={saveFindingResponse} className="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded text-white font-bold text-sm shadow-lg">Save Response</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             );
         };
