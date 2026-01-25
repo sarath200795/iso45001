@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditor Workplace</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
+                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+        
+        /* Finding Type Badges */
+        .badge-Major { background: #7f1d1d; color: #fca5a5; border: 1px solid #f87171; }
+        .badge-Minor { background: #7c2d12; color: #fdba74; border: 1px solid #fb923c; }
+        .badge-OFI { background: #713f12; color: #fde047; border: 1px solid #facc15; }
+        .badge-Observation { background: #1e3a8a; color: #93c5fd; border: 1px solid #60a5fa; }
+
+        /* PRINT STYLES */
+        @media print {
+            @page { size: A4 landscape; margin: 10mm; }
+            body, html, #root { width: 100%; height: auto; background: white !important; color: black !important; display: block !important; overflow: visible !important; }
+            .no-print, header, .back-btn, button, .screen-ui { display: none !important; }
+            
+            .print-container { display: block !important; }
+            
+            /* Table Styling */
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 10pt; }
+            th, td { border: 1px solid black !important; padding: 6px; text-align: left; color: black !important; page-break-inside: avoid; }
+            th { background-color: #f0f0f0 !important; font-weight: bold; }
+            
+            .doc-header { text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            .doc-id { font-family: monospace; font-weight: bold; float: right; font-size: 9pt; }
+            
+            .section-box { border: 1px solid black; padding: 10px; margin-bottom: 15px; }
+            .field-label { font-weight: bold; font-size: 9pt; text-transform: uppercase; color: #555; }
+            .field-value { font-weight: bold; font-size: 10pt; }
+        }
+        .print-container { display: none; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, get, push, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { ref, get, push, update };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const AuditorWorkplace = () => {
+            const [session, setSession] = useState(null);
+            const [view, setView] = useState('list'); // list or perform
+            const [myTasks, setMyTasks] = useState([]);
+            const [loading, setLoading] = useState(true);
+            
+            // Execution State
+            const [currentTask, setCurrentTask] = useState(null);
+            const [findings, setFindings] = useState([]);
+            const [docId, setDocId] = useState('');
+
+            // Load Session & Tasks
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if(!s) { window.location.href='index.html'; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+
+                const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}/auditPlans`);
+                window.fb.get(dbRef).then(snap => {
+                    if(snap.exists()) {
+                        const plans = Object.entries(snap.val()).map(([k, v]) => ({...v, firebaseId: k}));
+                        const tasks = [];
+                        
+                        plans.forEach(plan => {
+                            if(plan.matrix && Array.isArray(plan.matrix)) {
+                                plan.matrix.forEach(row => {
+                                    // Check if assigned to current user (Name match)
+                                    if(row.auditor === sess.user || sess.role === 'Owner') {
+                                        tasks.push({
+                                            ...row, // auditor, auditee, dept, area, date, time
+                                            planId: plan.docId,
+                                            siteId: plan.siteId,
+                                            leadAuditor: plan.leadAuditor,
+                                            standard: plan.standard,
+                                            scope: plan.scope
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                        setMyTasks(tasks);
+                    }
+                    setLoading(false);
+                });
+            }, []);
+
+            // Generate Doc ID on Form Load
+            useEffect(() => {
+                if(currentTask) {
+                    const seq = Math.floor(10000 + Math.random() * 90000);
+                    setDocId(`${session.orgId}-${currentTask.siteId}-IAF-${seq}`);
+                }
+            }, [currentTask]);
+
+            const handlePerform = (task) => {
+                setCurrentTask(task);
+                setFindings([{ id: generateID(), type: 'Observation', desc: '', clause: '', evidence: '', file: null }]); // Start with 1 row
+                setView('perform');
+            };
+
+            const generateID = () => `AF-${Math.floor(1000 + Math.random() * 9000)}`;
+
+            const addRow = () => {
+                setFindings([...findings, { id: generateID(), type: 'Observation', desc: '', clause: '', evidence: '', file: null }]);
+            };
+
+            const removeRow = (index) => {
+                setFindings(findings.filter((_, i) => i !== index));
+            };
+
+            const updateRow = (index, field, value) => {
+                const updated = [...findings];
+                updated[index][field] = value;
+                setFindings(updated);
+            };
+
+            const handleFile = async (index, file) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => {
+                    const updated = [...findings];
+                    updated[index].evidence = reader.result; // Base64
+                    updated[index].fileName = file.name;
+                    setFindings(updated);
+                };
+            };
+
+            const handleSave = async () => {
+                if(findings.some(f => !f.desc)) return alert("Please fill description for all findings.");
+                
+                const payload = {
+                    docId: docId,
+                    taskDetails: currentTask,
+                    findings: findings,
+                    status: 'Reported',
+                    auditDate: new Date().toISOString(),
+                    auditor: session.user
+                };
+
+                // Save to 'auditFindings' node
+                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/auditFindings`), payload);
+                alert("Audit Findings Saved Successfully!");
+                setView('list');
+            };
+
+            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Assignments...</div>;
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    {/* Header */}
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
+                        <div className="flex items-center gap-4">
+                            <a href="audit.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition">
+                                <i className="fas fa-arrow-left"></i> Back
+                            </a>
+                            <h1 className="font-bold text-lg tracking-wide">Auditor Workplace</h1>
+                        </div>
+                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900">
+                            User: {session.user}
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-8">
+                        <div className="max-w-7xl mx-auto">
+                            
+                            {/* VIEW 1: TASK LIST */}
+                            {view === 'list' && (
+                                <div className="screen-ui">
+                                    <h2 className="text-xl font-bold mb-6 text-white flex items-center gap-2">
+                                        <i className="fas fa-tasks text-blue-400"></i> Assigned Audits
+                                    </h2>
+                                    {myTasks.length === 0 ? (
+                                        <div className="text-center p-10 text-slate-500 bg-slate-900 rounded-xl border border-slate-800">
+                                            No audits scheduled for you at this time.
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {myTasks.map((task, i) => (
+                                                <div key={i} className="glass-panel p-6 rounded-xl relative group">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <span className="text-[10px] font-bold uppercase bg-blue-900 text-blue-200 px-2 py-1 rounded border border-blue-700">{task.siteId}</span>
+                                                        <span className="text-xs text-slate-400 font-mono">{task.date}</span>
+                                                    </div>
+                                                    <h3 className="text-lg font-bold text-white mb-1">{task.dept}</h3>
+                                                    <p className="text-sm text-slate-400 mb-4">{task.area}</p>
+                                                    <div className="text-xs text-slate-500 mb-4 pt-4 border-t border-slate-700">
+                                                        <div><span className="font-bold">Auditee:</span> {task.auditee}</div>
+                                                        <div><span className="font-bold">Aspects:</span> {task.aspect}</div>
+                                                    </div>
+                                                    <button onClick={() => handlePerform(task)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-bold text-sm shadow-lg transition">
+                                                        Perform Audit <i className="fas fa-arrow-right ml-2"></i>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* VIEW 2: EXECUTION FORM */}
+                            {view === 'perform' && currentTask && (
+                                <div className="animate-fade-in">
+                                    {/* SECTION 1: HEADER INFO (Pre-filled) */}
+                                    <div className="glass-panel p-6 rounded-2xl border-l-4 border-emerald-500 mb-6 screen-ui">
+                                        <h3 className="text-emerald-400 font-bold uppercase text-sm mb-4">Section 1: Audit Context</h3>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Site</label><div className="font-bold">{currentTask.siteId}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Lead Auditor</label><div className="font-bold">{currentTask.leadAuditor}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Auditor (You)</label><div className="font-bold">{currentTask.auditor}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Auditee</label><div className="font-bold">{currentTask.auditee}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Department</label><div className="font-bold">{currentTask.dept}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Area</label><div className="font-bold">{currentTask.area}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Date</label><div className="font-bold">{currentTask.date}</div></div>
+                                            <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Standard</label><div className="font-bold">{currentTask.standard}</div></div>
+                                        </div>
+                                    </div>
+
+                                    {/* SECTION 2: FINDINGS MATRIX */}
+                                    <div className="glass-panel p-6 rounded-2xl border-t-4 border-blue-500 screen-ui">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-blue-400 font-bold uppercase text-sm">Section 2: Audit Findings</h3>
+                                            <button onClick={addRow} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs">+ Add Finding</button>
+                                        </div>
+                                        
+                                        <div className="space-y-4">
+                                            {findings.map((f, i) => (
+                                                <div key={i} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative">
+                                                    <div className="absolute top-2 right-2 text-xs text-slate-600 font-mono">{f.id}</div>
+                                                    <div className="grid grid-cols-12 gap-4 items-start">
+                                                        {/* Type */}
+                                                        <div className="col-span-2">
+                                                            <label className="text-[10px] text-slate-500 uppercase block mb-1">Type</label>
+                                                            <select value={f.type} onChange={e=>updateRow(i, 'type', e.target.value)} className={`w-full text-xs font-bold badge-${f.type.replace(' ','')}`}>
+                                                                <option value="Observation">Observation</option>
+                                                                <option value="OFI">Opp. for Improv.</option>
+                                                                <option value="Minor NC">Minor NC</option>
+                                                                <option value="Major NC">Major NC</option>
+                                                            </select>
+                                                        </div>
+                                                        {/* Clause */}
+                                                        <div className="col-span-2">
+                                                            <label className="text-[10px] text-slate-500 uppercase block mb-1">Clause</label>
+                                                            <input value={f.clause} onChange={e=>updateRow(i, 'clause', e.target.value)} className="bg-slate-900 text-xs w-full" placeholder="e.g. 9.1" />
+                                                        </div>
+                                                        {/* Description */}
+                                                        <div className="col-span-4">
+                                                            <label className="text-[10px] text-slate-500 uppercase block mb-1">Description of Finding</label>
+                                                            <textarea value={f.desc} onChange={e=>updateRow(i, 'desc', e.target.value)} className="bg-slate-900 text-xs w-full" rows="2"></textarea>
+                                                        </div>
+                                                        {/* Evidence */}
+                                                        <div className="col-span-3">
+                                                            <label className="text-[10px] text-slate-500 uppercase block mb-1">Objective Evidence</label>
+                                                            <input type="file" onChange={(e)=>handleFile(i, e.target.files[0])} className="text-[10px] text-slate-400 file:bg-slate-700 file:text-white file:border-none file:rounded file:px-2 file:py-1" />
+                                                            {f.fileName && <div className="text-[9px] text-emerald-400 mt-1 truncate">{f.fileName}</div>}
+                                                        </div>
+                                                        {/* Delete */}
+                                                        <div className="col-span-1 flex justify-center pt-6">
+                                                            <button onClick={()=>removeRow(i)} className="text-red-400 hover:text-white"><i className="fas fa-trash"></i></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="mt-8 flex justify-end gap-3 pt-4 border-t border-slate-700">
+                                            <button onClick={()=>setView('list')} className="px-6 py-2 rounded-lg border border-slate-600 text-slate-400 hover:text-white text-sm">Cancel</button>
+                                            <button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded-lg text-white font-bold text-sm shadow-lg">Save Findings</button>
+                                            <button onClick={()=>window.print()} className="bg-purple-600 hover:bg-purple-500 px-6 py-2 rounded-lg text-white font-bold text-sm shadow-lg flex items-center gap-2"><i className="fas fa-print"></i> Print Report</button>
+                                        </div>
+                                    </div>
+
+                                    {/* --- PRINT TEMPLATE --- */}
+                                    <div className="print-container">
+                                        <div className="doc-header">
+                                            <span className="doc-id">Doc Ref: {docId}</span>
+                                            <h1>Internal Audit Finding Report</h1>
+                                            <p>{currentTask.standard} | {session.orgId}</p>
+                                        </div>
+
+                                        <div className="section-box">
+                                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}>
+                                                <div><span className="field-label">Site:</span> <span className="field-value">{currentTask.siteId}</span></div>
+                                                <div><span className="field-label">Date:</span> <span className="field-value">{currentTask.date}</span></div>
+                                            </div>
+                                            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}>
+                                                <div><span className="field-label">Department:</span> <span className="field-value">{currentTask.dept}</span></div>
+                                                <div><span className="field-label">Area:</span> <span className="field-value">{currentTask.area}</span></div>
+                                            </div>
+                                            <div style={{display:'flex', justifyContent:'space-between'}}>
+                                                <div><span className="field-label">Auditor:</span> <span className="field-value">{currentTask.auditor}</span></div>
+                                                <div><span className="field-label">Auditee:</span> <span className="field-value">{currentTask.auditee}</span></div>
+                                            </div>
+                                        </div>
+
+                                        <h3>Audit Findings Matrix</h3>
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th style={{width:'15%'}}>Finding ID</th>
+                                                    <th style={{width:'15%'}}>Type</th>
+                                                    <th style={{width:'10%'}}>Clause</th>
+                                                    <th style={{width:'40%'}}>Description of Finding</th>
+                                                    <th style={{width:'20%'}}>Evidence Ref</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {findings.map((f, i) => (
+                                                    <tr key={i}>
+                                                        <td>{f.id}</td>
+                                                        <td>{f.type}</td>
+                                                        <td>{f.clause}</td>
+                                                        <td>{f.desc}</td>
+                                                        <td>{f.fileName || 'N/A'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+
+                                        <div className="section-box" style={{marginTop:'30px', border:'none'}}>
+                                            <p style={{fontSize:'10pt', marginBottom:'40px'}}>
+                                                <strong>Declaration:</strong> The audit findings listed above have been discussed and agreed upon. Corrective actions will be initiated for non-conformities.
+                                            </p>
+                                            <div style={{display:'flex', justifyContent:'space-between'}}>
+                                                <div style={{borderTop:'1px solid black', width:'40%', paddingTop:'5px', textAlign:'center'}}>Auditor Signature</div>
+                                                <div style={{borderTop:'1px solid black', width:'40%', paddingTop:'5px', textAlign:'center'}}>Auditee Signature</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* --- END PRINT TEMPLATE --- */}
+
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AuditorWorkplace />);
+    </script>
+</body>
+</html>
