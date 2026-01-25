@@ -33,9 +33,9 @@
         .task-card { border-left-width: 4px; transition: transform 0.2s; }
         .task-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
         .status-red { border-left-color: #ef4444; background: linear-gradient(90deg, rgba(239, 68, 68, 0.1) 0%, rgba(30, 41, 59, 0.4) 100%); }
-        .status-yellow { border-left-color: #eab308; background: linear-gradient(90deg, rgba(234, 179, 8, 0.1) 0%, rgba(30, 41, 59, 0.4) 100%); opacity: 0.8; }
+        .status-yellow { border-left-color: #eab308; background: linear-gradient(90deg, rgba(234, 179, 8, 0.1) 0%, rgba(30, 41, 59, 0.4) 100%); opacity: 0.9; }
         .status-orange { border-left-color: #f97316; background: linear-gradient(90deg, rgba(249, 115, 22, 0.1) 0%, rgba(30, 41, 59, 0.4) 100%); }
-        .status-green { border-left-color: #22c55e; background: linear-gradient(90deg, rgba(34, 197, 94, 0.1) 0%, rgba(30, 41, 59, 0.4) 100%); opacity: 0.8; }
+        .status-green { border-left-color: #22c55e; background: linear-gradient(90deg, rgba(34, 197, 94, 0.1) 0%, rgba(30, 41, 59, 0.4) 100%); opacity: 0.9; }
 
         /* FINDING BADGES */
         .type-major { background-color: rgba(127, 29, 29, 0.5); color: #fca5a5; border: 1px solid #f87171; }
@@ -77,7 +77,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- HELPER: COLOR CODING ---
         const getTypeClass = (type) => {
             const t = type || '';
             if (t.includes('Major')) return 'type-major';
@@ -91,75 +90,88 @@
             const [view, setView] = useState('list');
             const [myTasks, setMyTasks] = useState([]);
             const [loading, setLoading] = useState(true);
-            
-            // Filters
             const [filters, setFilters] = useState({ date: '', auditor: '', auditee: '', id: '' });
-
+            
             const [currentTask, setCurrentTask] = useState(null);
             const [findings, setFindings] = useState([]);
             const [docId, setDocId] = useState('');
             const [criteria, setCriteria] = useState('');
 
-            // LOAD DATA
+            // --- ROBUST DATA FETCHING ---
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
                 const sess = JSON.parse(s);
                 setSession(sess);
 
-                const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}/auditPlans`);
-                window.fb.get(dbRef).then(snap => {
-                    if(snap.exists()) {
-                        const plans = Object.entries(snap.val()).map(([k, v]) => ({...v, firebaseId: k}));
-                        const tasks = [];
-                        
-                        plans.forEach(plan => {
-                            if(plan.matrix && Array.isArray(plan.matrix)) {
+                const fetchAll = async () => {
+                    // 1. Fetch Existing Findings (The "Truth" of what's been reported)
+                    const fSnap = await window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}/auditFindings`));
+                    let findingsList = [];
+                    if (fSnap.exists()) {
+                        Object.entries(fSnap.val()).forEach(([k, v]) => {
+                            if (v.auditor === sess.user || sess.role === 'Owner') {
+                                findingsList.push({
+                                    ...v.taskDetails, // Spread original details (site, area, etc)
+                                    status: v.status,
+                                    findingRecord: { ...v, firebaseKey: k },
+                                    // Composite key to match against plans later
+                                    _key: `${v.taskDetails.planId}_${v.taskDetails.area}_${v.taskDetails.auditee}` 
+                                });
+                            }
+                        });
+                    }
+
+                    // 2. Fetch Audit Plans (The "Future" tasks)
+                    const pSnap = await window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}/auditPlans`));
+                    let plannedList = [];
+                    if (pSnap.exists()) {
+                        Object.entries(pSnap.val()).forEach(([k, plan]) => {
+                            if (plan.matrix && Array.isArray(plan.matrix)) {
                                 plan.matrix.forEach(row => {
-                                    if(row.auditor === sess.user || sess.role === 'Owner') {
-                                        tasks.push({
-                                            auditor: row.auditor || '',
-                                            auditee: row.auditee || '',
-                                            dept: row.dept || '',
-                                            area: row.area || '',
-                                            date: row.date || '',
-                                            time: row.time || '',
-                                            aspect: row.aspect || row.aspects || '', 
-                                            planId: plan.docId || '',
-                                            siteId: plan.siteId || '',
-                                            leadAuditor: plan.leadAuditor || '',
-                                            standard: plan.standard || '',
-                                            scope: plan.scope || 'OH&S Management System',
-                                            status: 'Planned', 
-                                            findingRecord: null
-                                        });
+                                    if (row.auditor === sess.user || sess.role === 'Owner') {
+                                        const uniqueKey = `${plan.docId}_${row.area}_${row.auditee}`;
+                                        
+                                        // ONLY add if it DOES NOT exist in findingsList
+                                        if (!findingsList.some(f => f._key === uniqueKey)) {
+                                            plannedList.push({
+                                                auditor: row.auditor || '',
+                                                auditee: row.auditee || '',
+                                                dept: row.dept || '',
+                                                area: row.area || '',
+                                                date: row.date || '',
+                                                time: row.time || '',
+                                                aspect: row.aspect || row.aspects || '', 
+                                                planId: plan.docId || '',
+                                                siteId: plan.siteId || '',
+                                                leadAuditor: plan.leadAuditor || '',
+                                                standard: plan.standard || '',
+                                                scope: plan.scope || 'OH&S Management System',
+                                                status: 'Planned', 
+                                                findingRecord: null,
+                                                _key: uniqueKey
+                                            });
+                                        }
                                     }
                                 });
                             }
                         });
-                        
-                        window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}/auditFindings`)).then(fSnap => {
-                            const existingFindings = fSnap.exists() ? Object.entries(fSnap.val()).map(([k,v]) => ({...v, firebaseKey: k})) : [];
-                            const mergedTasks = tasks.map(t => {
-                                const match = existingFindings.find(f => f.taskDetails.planId === t.planId && f.taskDetails.auditor === t.auditor && f.taskDetails.area === t.area);
-                                if(match) return { ...t, status: match.status, findingRecord: match };
-                                return t;
-                            });
-                            setMyTasks(mergedTasks);
-                            setLoading(false);
-                        });
-                    } else { setLoading(false); }
-                });
+                    }
+
+                    setMyTasks([...findingsList, ...plannedList]);
+                    setLoading(false);
+                };
+
+                fetchAll();
             }, []);
 
-            // FILTER LOGIC
+            // Filter Logic
             const filteredTasks = useMemo(() => {
                 return myTasks.filter(t => {
                     const matchDate = !filters.date || t.date.includes(filters.date);
                     const matchAuditor = !filters.auditor || t.auditor.toLowerCase().includes(filters.auditor.toLowerCase());
                     const matchAuditee = !filters.auditee || t.auditee.toLowerCase().includes(filters.auditee.toLowerCase());
                     
-                    // Search ID in main doc ID OR inside findings array
                     const matchId = !filters.id || 
                         (t.findingRecord && t.findingRecord.docId.toLowerCase().includes(filters.id.toLowerCase())) ||
                         (t.findingRecord && t.findingRecord.findings && t.findingRecord.findings.some(f => f.id.toLowerCase().includes(filters.id.toLowerCase())));
@@ -168,7 +180,7 @@
                 });
             }, [myTasks, filters]);
 
-            // GENERATE ID
+            // Generate ID logic
             useEffect(() => {
                 if(currentTask && !currentTask.findingRecord) {
                     const seq = Math.floor(10000 + Math.random() * 90000);
@@ -180,7 +192,6 @@
 
             const generateID = () => `AF-${Math.floor(10000 + Math.random() * 90000)}`;
 
-            // ACTIONS
             const handleCardClick = (task) => {
                 setCurrentTask(task);
                 setCriteria(task.standard || ''); 
@@ -245,7 +256,7 @@
 
             if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading...</div>;
 
-            // --- PRINT VIEW ---
+            // PRINT VIEW
             const renderPrintView = (data) => (
                 <div className="print-container">
                     <div className="doc-header">
@@ -270,25 +281,8 @@
                     <h3>Audit Findings</h3>
                     <table>
                         <thead><tr><th style={{width:'15%'}}>ID</th><th style={{width:'15%'}}>Type</th><th style={{width:'40%'}}>Description</th><th style={{width:'10%'}}>Clause</th><th style={{width:'20%'}}>Evidence</th></tr></thead>
-                        <tbody>
-                            {(data.findings || findings).map((f, i) => (
-                                <tr key={i}><td>{f.id}</td><td>{f.type}</td><td>{f.desc}</td><td>{f.clause}</td><td>{f.fileName || 'N/A'}</td></tr>
-                            ))}
-                        </tbody>
+                        <tbody>{(data.findings || findings).map((f, i) => (<tr key={i}><td>{f.id}</td><td>{f.type}</td><td>{f.desc}</td><td>{f.clause}</td><td>{f.fileName || 'N/A'}</td></tr>))}</tbody>
                     </table>
-                    {data.rootCause && (
-                        <div className="section-box" style={{marginTop:'20px'}}>
-                            <h3>Closure</h3>
-                            <div><strong>Root Cause:</strong> {data.rootCause}</div>
-                            <div><strong>Correction:</strong> {data.correction}</div>
-                            {data.actions && (
-                                <div style={{marginTop:'5px'}}>
-                                    <strong>CAPA Plan:</strong>
-                                    <ul>{data.actions.map((a,k) => <li key={k}>{a.action} (By: {a.resp}, Due: {a.target})</li>)}</ul>
-                                </div>
-                            )}
-                        </div>
-                    )}
                     <div className="section-box" style={{marginTop:'30px', border:'none'}}>
                         <div style={{display:'flex', justifyContent:'space-between'}}>
                             <div style={{borderTop:'1px solid black', width:'40%', paddingTop:'5px', textAlign:'center'}}>Auditor Signature</div>
@@ -308,40 +302,31 @@
                     <div className="flex-1 overflow-y-auto p-8">
                         <div className="max-w-7xl mx-auto">
                             
-                            {/* VIEW 1: TASK LIST + FILTER */}
+                            {/* LIST VIEW */}
                             {view === 'list' && (
                                 <div className="screen-ui">
                                     <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
                                         <h2 className="text-xl font-bold text-white flex items-center gap-2"><i className="fas fa-tasks text-blue-400"></i> Assigned Audits</h2>
-                                        
-                                        {/* FILTER BAR */}
                                         <div className="flex gap-2 bg-slate-900 p-2 rounded-lg border border-slate-800">
                                             <input type="date" className="bg-slate-800 text-xs w-32 border-none" value={filters.date} onChange={e=>setFilters({...filters, date:e.target.value})} />
-                                            <input type="text" placeholder="Auditor Name" className="bg-slate-800 text-xs w-32 border-none" value={filters.auditor} onChange={e=>setFilters({...filters, auditor:e.target.value})} />
-                                            <input type="text" placeholder="Auditee Name" className="bg-slate-800 text-xs w-32 border-none" value={filters.auditee} onChange={e=>setFilters({...filters, auditee:e.target.value})} />
-                                            <input type="text" placeholder="ID (AF-xxx)" className="bg-slate-800 text-xs w-24 border-none" value={filters.id} onChange={e=>setFilters({...filters, id:e.target.value})} />
+                                            <input type="text" placeholder="Auditor" className="bg-slate-800 text-xs w-32 border-none" value={filters.auditor} onChange={e=>setFilters({...filters, auditor:e.target.value})} />
+                                            <input type="text" placeholder="Auditee" className="bg-slate-800 text-xs w-32 border-none" value={filters.auditee} onChange={e=>setFilters({...filters, auditee:e.target.value})} />
+                                            <input type="text" placeholder="ID" className="bg-slate-800 text-xs w-24 border-none" value={filters.id} onChange={e=>setFilters({...filters, id:e.target.value})} />
                                             <button onClick={()=>setFilters({date:'',auditor:'',auditee:'',id:''})} className="text-xs text-red-400 hover:text-white px-2"><i className="fas fa-times"></i></button>
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {filteredTasks.length === 0 ? <div className="col-span-3 text-center text-slate-500 py-10">No audits match filters.</div> : 
+                                        {filteredTasks.length === 0 ? <div className="col-span-3 text-center text-slate-500 py-10">No audits found.</div> : 
                                         filteredTasks.map((task, i) => {
                                             const isEnabled = task.status === 'Planned' || task.status === 'Submitted for Verification' || task.status === 'Reported' || task.status === 'Closed';
-                                            const statusClass = 
-                                                task.status === 'Planned' ? 'status-red' : 
-                                                task.status === 'Reported' ? 'status-yellow' : 
-                                                task.status === 'Submitted for Verification' ? 'status-orange' : 'status-green';
-                                            
-                                            let statusText = 'Needs Audit';
-                                            if(task.status === 'Reported') statusText = 'Sent for Correction';
-                                            if(task.status === 'Submitted for Verification') statusText = 'Correction Received';
-                                            if(task.status === 'Closed') statusText = 'Closed';
+                                            const statusClass = task.status === 'Planned' ? 'status-red' : task.status === 'Reported' ? 'status-yellow' : task.status === 'Submitted for Verification' ? 'status-orange' : 'status-green';
+                                            let statusText = task.status === 'Planned' ? 'Needs Audit' : task.status === 'Reported' ? 'Sent for Correction' : task.status === 'Submitted for Verification' ? 'Correction Received' : 'Closed';
 
                                             return (
                                                 <div key={i} onClick={() => isEnabled && handleCardClick(task)} className={`glass-panel p-6 rounded-xl relative task-card ${statusClass} ${isEnabled?'cursor-pointer':'cursor-not-allowed opacity-80'}`}>
                                                     <div className="flex justify-between mb-4">
-                                                        <span className="text-[10px] font-bold uppercase bg-slate-900/50 px-2 py-1 rounded text-white border border-slate-700">{task.status}</span>
+                                                        <span className="text-[10px] font-bold uppercase bg-slate-900/50 px-2 py-1 rounded text-white border border-slate-700">{statusText}</span>
                                                         <span className="text-xs font-bold text-slate-300">{task.date}</span>
                                                     </div>
                                                     <div className="space-y-1 text-sm text-slate-300 mb-4">
@@ -351,7 +336,10 @@
                                                         <div className="pt-2 italic text-slate-400">Auditee: {task.auditee}</div>
                                                     </div>
                                                     <div className="pt-3 border-t border-slate-700/50 text-center">
-                                                        <span className="text-xs font-bold uppercase text-white">{statusText}</span>
+                                                        {task.status === 'Planned' && <span className="text-xs font-bold text-white uppercase">Perform Audit</span>}
+                                                        {task.status === 'Reported' && <span className="text-xs font-bold text-white uppercase">View Report</span>}
+                                                        {task.status === 'Submitted for Verification' && <span className="text-xs font-bold text-white uppercase animate-pulse">Verify Now</span>}
+                                                        {task.status === 'Closed' && <span className="text-xs font-bold text-white uppercase">View Final</span>}
                                                     </div>
                                                 </div>
                                             );
@@ -360,7 +348,7 @@
                                 </div>
                             )}
 
-                            {/* VIEW 2: EXECUTION FORM */}
+                            {/* PERFORM AUDIT */}
                             {view === 'perform' && currentTask && (
                                 <div className="animate-fade-in screen-ui">
                                     <div className="glass-panel p-6 rounded-2xl border-l-4 border-emerald-500 mb-6">
@@ -373,7 +361,6 @@
                                             <div className="col-span-2"><label className="text-[10px] text-slate-500 uppercase block mb-1">Criteria</label><input value={criteria} onChange={e=>setCriteria(e.target.value)} className="bg-slate-900 border-slate-700 w-full text-xs"/></div>
                                         </div>
                                     </div>
-
                                     <div className="glass-panel p-6 rounded-2xl border-t-4 border-blue-500">
                                         <div className="flex justify-between items-center mb-4"><h3 className="text-blue-400 font-bold uppercase text-sm">Section 2: Audit Findings</h3><button onClick={addRow} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs">+ Add Finding</button></div>
                                         <div className="space-y-4">{findings.map((f, i) => (<div key={i} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative"><div className="absolute top-2 right-2 text-xs font-bold text-emerald-400 font-mono bg-emerald-900/30 px-2 rounded">{f.id}</div><div className="grid grid-cols-12 gap-4 items-start"><div className="col-span-2"><label className="text-[10px] text-slate-500 uppercase block mb-1">Type</label><select value={f.type} onChange={e=>updateRow(i, 'type', e.target.value)} className={`w-full text-xs font-bold border rounded p-2 outline-none ${getTypeClass(f.type)}`}><option value="Observation" className="text-black">Observation</option><option value="OFI" className="text-black">Opp. for Improv.</option><option value="Minor NC" className="text-black">Minor NC</option><option value="Major NC" className="text-black">Major NC</option></select></div><div className="col-span-2"><label className="text-[10px] text-slate-500 uppercase block mb-1">Clause</label><input value={f.clause} onChange={e=>updateRow(i, 'clause', e.target.value)} className="bg-slate-900 text-xs w-full border border-slate-700 rounded p-2" placeholder="e.g. 9.1" /></div><div className="col-span-4"><label className="text-[10px] text-slate-500 uppercase block mb-1">Description of Finding</label><textarea value={f.desc} onChange={e=>updateRow(i, 'desc', e.target.value)} className="bg-slate-900 text-xs w-full border border-slate-700 rounded p-2" rows="2"></textarea></div><div className="col-span-3"><label className="text-[10px] text-slate-500 uppercase block mb-1">Objective Evidence</label><input type="file" onChange={(e)=>handleFile(i, e.target.files[0])} className="text-[10px] text-slate-400 file:bg-slate-700 file:text-white file:border-none file:rounded file:px-2 file:py-1" />{f.fileName && <div className="text-[9px] text-emerald-400 mt-1 truncate"><i className="fas fa-paperclip mr-1"></i>{f.fileName}</div>}</div><div className="col-span-1 flex justify-center pt-6"><button onClick={()=>removeRow(i)} className="text-red-400 hover:text-white transition"><i className="fas fa-trash"></i></button></div></div></div>))}</div>
@@ -383,7 +370,7 @@
                                 </div>
                             )}
 
-                            {/* VIEW 3: READ ONLY / VERIFY */}
+                            {/* VIEW 3: VERIFICATION */}
                             {(view === 'readOnly' || view === 'verify') && currentTask.findingRecord && (
                                 <div className="animate-fade-in screen-ui">
                                     <div className="flex justify-between mb-4">
@@ -394,57 +381,31 @@
                                         </div>
                                     </div>
                                     
-                                    {/* VERIFICATION DISPLAY */}
-                                    <div className="glass-panel p-6 rounded-xl border-l-4 border-orange-500 mb-6">
-                                        <h3 className="text-orange-400 font-bold uppercase text-sm mb-4">Auditee Closure Response</h3>
-                                        <div className="space-y-4 text-sm text-slate-300">
-                                            
-                                            {/* 1. Root Cause */}
-                                            <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
-                                                <div className="text-xs text-slate-500 uppercase font-bold mb-1">1. Root Cause</div>
-                                                <div>{currentTask.findingRecord.rootCause || 'Pending...'}</div>
-                                            </div>
-
-                                            {/* 2. Correction */}
-                                            <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
-                                                <div className="text-xs text-slate-500 uppercase font-bold mb-1">2. Correction (Immediate)</div>
-                                                <div>{currentTask.findingRecord.correction || 'Pending...'}</div>
-                                            </div>
-
-                                            {/* 3. CAPA Table */}
-                                            <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
-                                                <div className="text-xs text-slate-500 uppercase font-bold mb-2">3. Corrective Action Plan (CAPA)</div>
-                                                {currentTask.findingRecord.actions && currentTask.findingRecord.actions.length > 0 ? (
-                                                    <table className="w-full text-xs text-left text-slate-300">
-                                                        <thead className="bg-slate-800 text-slate-500 uppercase">
-                                                            <tr><th className="p-2">Action</th><th className="p-2">Responsibility</th><th className="p-2">Target Date</th></tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-slate-700">
-                                                            {currentTask.findingRecord.actions.map((act, idx) => (
-                                                                <tr key={idx}>
-                                                                    <td className="p-2">{act.action}</td>
-                                                                    <td className="p-2">{act.resp}</td>
-                                                                    <td className="p-2">{act.target}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                ) : <div className="text-xs text-slate-500 italic">No actions listed.</div>}
-                                            </div>
-
-                                            {/* 4. Evidence */}
-                                            <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 flex items-center justify-between">
-                                                <div>
-                                                    <div className="text-xs text-slate-500 uppercase font-bold mb-1">4. Evidence of Closure</div>
-                                                    <div className="text-emerald-400">{currentTask.findingRecord.evidenceFileName || 'No file attached'}</div>
+                                    {/* VERIFICATION DISPLAY: Iterate Findings */}
+                                    <div className="space-y-6">
+                                        {currentTask.findingRecord.findings.map((f, idx) => (
+                                            <div key={idx} className="glass-panel p-6 rounded-xl border-l-4 border-orange-500">
+                                                <div className="flex justify-between mb-2 pb-2 border-b border-slate-700">
+                                                    <span className="font-mono text-orange-400 font-bold">{f.id}</span>
+                                                    <span className="text-xs text-slate-400">{f.type}</span>
                                                 </div>
-                                                {currentTask.findingRecord.evidenceFile && (
-                                                    <a href={currentTask.findingRecord.evidenceFile} download={currentTask.findingRecord.evidenceFileName} className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded text-xs">
-                                                        Download Evidence
-                                                    </a>
-                                                )}
+                                                <div className="mb-4 text-sm text-slate-200">"{f.desc}"</div>
+                                                
+                                                {f.response && f.response.status === 'Completed' ? (
+                                                    <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 space-y-3">
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div><div className="text-[10px] text-slate-500 uppercase font-bold">Root Cause</div><div className="text-sm text-slate-300">{f.response.rootCause}</div></div>
+                                                            <div><div className="text-[10px] text-slate-500 uppercase font-bold">Correction</div><div className="text-sm text-slate-300">{f.response.correction}</div></div>
+                                                        </div>
+                                                        <div><div className="text-[10px] text-slate-500 uppercase font-bold">CAPA</div><div className="text-sm text-slate-300">{f.response.capa}</div></div>
+                                                        <div className="flex justify-between items-center">
+                                                            {f.response.evidenceFile ? <a href={f.response.evidenceFile} download={f.response.evidenceFileName} className="text-xs bg-emerald-900/30 text-emerald-400 px-2 py-1 rounded border border-emerald-900">View Evidence</a> : <span className="text-xs text-slate-500">No Evidence</span>}
+                                                            <span className="text-xs text-slate-500">Target: {f.response.targetDate}</span>
+                                                        </div>
+                                                    </div>
+                                                ) : <div className="text-xs text-slate-500 italic">No response for this finding yet.</div>}
                                             </div>
-                                        </div>
+                                        ))}
                                     </div>
 
                                     {renderPrintView(currentTask.findingRecord)}
