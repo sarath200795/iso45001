@@ -259,6 +259,7 @@
                             <div><label className="text-[10px] uppercase font-bold text-slate-500">Audit Date</label><input type="date" value={header.auditDate} onChange={e=>setHeader({...header, auditDate:e.target.value})} /></div>
                             <div><label className="text-[10px] uppercase font-bold text-slate-500">Department</label><input value={header.department} onChange={e=>setHeader({...header, department:e.target.value})} /></div>
                             <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditor</label><UserSelect users={users} value={header.auditor} onChange={v => setHeader({...header, auditor: v})} placeholder="Select..." /></div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Auditee</label><UserSelect users={users} value={header.auditee} onChange={v => setHeader({...header, auditee: v})} placeholder="Select..." /></div>
                         </div>
 
                         {/* Current Finding */}
@@ -342,85 +343,134 @@
             );
         };
 
-        // 3. AUDIT REPORTING (CLOSURE & DASHBOARD)
-        const AuditReporting = ({ audits, users, onUpdate, onBack }) => {
-            const [subTab, setSubTab] = useState('closure'); 
+        // 3. AUDIT CLOSURE (Revised)
+        const AuditClosure = ({ audits, onUpdate, onBack, session, users }) => {
             const [selected, setSelected] = useState(null);
+            const [remarks, setRemarks] = useState('');
+            const [file, setFile] = useState(null);
 
-            const handleClose = () => {
-                if(!selected) return;
-                const updated = { ...selected, status: selected.verificationStatus === 'Completely closed-out' ? 'Closed' : 'Open' };
+            const filteredAudits = audits.filter(a => {
+                if (session.role === 'Owner' || session.role === 'Lead Auditor') return true;
+                return a.siteId === session.assignedSite; // Basic site filter
+            });
+
+            const handleSubmitReview = async () => {
+                if(!remarks) return alert("Enter remarks");
+                let evidence = selected.evidenceFile; // Keep old if no new
+                let fName = selected.evidenceFileName;
+                if(file) {
+                    evidence = await fileToBase64(file);
+                    fName = file.name;
+                }
+                
+                const updated = {
+                    ...selected,
+                    closureRemarks: remarks,
+                    evidenceFile: evidence,
+                    evidenceFileName: fName,
+                    status: 'Submitted for Review',
+                    submissionDate: new Date().toISOString().split('T')[0]
+                };
+                onUpdate(updated);
+                setSelected(null);
+                setRemarks('');
+                setFile(null);
+            };
+
+            const handleApprove = () => {
+                const updated = {
+                    ...selected,
+                    status: 'Closed',
+                    closureDate: new Date().toISOString().split('T')[0]
+                };
                 onUpdate(updated);
                 setSelected(null);
             };
 
-            const stats = useMemo(() => {
-                const total = audits.length;
-                const open = audits.filter(a => a.status !== 'Closed').length;
-                const major = audits.filter(a => a.classification === 'Major').length;
-                return { total, open, closed: total - open, major };
-            }, [audits]);
-
             return (
-                <div className="animate-fade-in h-full flex flex-col audit-reporting">
+                <div className="animate-fade-in h-full flex flex-col audit-closure-ui">
                     <div className="flex justify-between items-center mb-4">
                          <button onClick={onBack} className="back-btn text-slate-400 hover:text-white flex items-center gap-2 text-sm"><i className="fas fa-arrow-left"></i> Back to Menu</button>
-                         <div className="flex bg-slate-800 p-1 rounded-lg no-print">
-                            <button onClick={()=>setSubTab('closure')} className={`px-4 py-1 text-xs font-bold rounded ${subTab==='closure'?'bg-purple-600 text-white':'text-slate-400'}`}>Closure</button>
-                            <button onClick={()=>setSubTab('dashboard')} className={`px-4 py-1 text-xs font-bold rounded ${subTab==='dashboard'?'bg-orange-600 text-white':'text-slate-400'}`}>Dashboard</button>
-                         </div>
                     </div>
-
-                    {subTab === 'dashboard' ? (
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-4 gap-4">
-                                <div className="bg-slate-800 p-4 rounded border-l-4 border-blue-500"><h3 className="text-slate-400 text-xs">Total Findings</h3><p className="text-2xl font-bold">{stats.total}</p></div>
-                                <div className="bg-slate-800 p-4 rounded border-l-4 border-red-500"><h3 className="text-slate-400 text-xs">Open NCs</h3><p className="text-2xl font-bold">{stats.open}</p></div>
-                                <div className="bg-slate-800 p-4 rounded border-l-4 border-green-500"><h3 className="text-slate-400 text-xs">Closed</h3><p className="text-2xl font-bold">{stats.closed}</p></div>
-                                <div className="bg-slate-800 p-4 rounded border-l-4 border-yellow-500"><h3 className="text-slate-400 text-xs">Major</h3><p className="text-2xl font-bold">{stats.major}</p></div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
-                            <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden flex flex-col h-[60vh]">
-                                <div className="p-3 bg-slate-800 font-bold text-sm border-b border-slate-700">Select Open Finding</div>
-                                <div className="overflow-y-auto flex-1 p-2">
-                                    {audits.filter(a => a.status !== 'Closed').map(a => (
-                                        <div key={a.id} onClick={()=>setSelected(a)} className={`p-3 mb-2 rounded cursor-pointer border hover:bg-slate-800 ${selected?.id===a.id ? 'border-purple-500 bg-slate-800' : 'border-slate-700 bg-slate-900'}`}>
-                                            <div className="flex justify-between mb-1"><span className="text-xs font-mono text-emerald-400">{a.ncRef}</span><span className="text-[10px] bg-red-900 text-red-300 px-1 rounded">{a.classification}</span></div>
-                                            <div className="text-xs text-slate-400 truncate">{a.ncStatement}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="col-span-2 glass-panel p-6 rounded-xl h-[60vh] overflow-y-auto">
-                                {selected ? (
-                                    <div className="space-y-4">
-                                        <div className="border-b border-slate-700 pb-2"><h3 className="font-bold text-white">Part B & C Closure</h3><p className="text-xs text-slate-400">{selected.ncStatement}</p></div>
-                                        <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
-                                            <div className="text-xs font-bold text-blue-400 mb-2">Auditee Action</div>
-                                            <div className="space-y-2">
-                                                <input placeholder="Root Cause" value={selected.rootCause || ''} onChange={e=>setSelected({...selected, rootCause:e.target.value})} />
-                                                <input placeholder="Correction" value={selected.correction || ''} onChange={e=>setSelected({...selected, correction:e.target.value})} />
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <input placeholder="CAPA" value={selected.capa || ''} onChange={e=>setSelected({...selected, capa:e.target.value})} />
-                                                    <input type="date" value={selected.targetDate || ''} onChange={e=>setSelected({...selected, targetDate:e.target.value})} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
-                                            <div className="text-xs font-bold text-emerald-400 mb-2">Verification</div>
-                                            <div className="space-y-2">
-                                                <select value={selected.verificationStatus || 'No action initiated'} onChange={e=>setSelected({...selected, verificationStatus:e.target.value})} className="w-full"><option>No action initiated</option><option>Initiated & In-progress</option><option>Completely closed-out</option></select>
-                                                <UserSelect users={users} value={selected.verifiedBy || ''} onChange={v => setSelected({...selected, verifiedBy: v})} placeholder="Verified By..." />
-                                            </div>
-                                        </div>
-                                        <button onClick={handleClose} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Update & Close</button>
+                    
+                    <div className="flex-1 flex gap-6 overflow-hidden">
+                        {/* LEFT: LIST */}
+                        <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-xl overflow-y-auto p-4">
+                            <h3 className="text-white font-bold mb-4">Findings ({filteredAudits.length})</h3>
+                            {filteredAudits.map(a => (
+                                <div key={a.id} onClick={()=>setSelected(a)} className={`p-4 rounded-lg border mb-3 cursor-pointer hover:bg-slate-800 transition ${a.status==='Open'?'border-red-500':a.status==='Submitted for Review'?'border-yellow-500':'border-green-500'}`}>
+                                    <div className="flex justify-between mb-1">
+                                        <span className="text-xs font-mono text-emerald-400 bg-emerald-900/30 px-2 rounded border border-emerald-900">{a.refNo}</span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${a.status==='Closed' ? 'bg-green-500/20 text-green-300' : 'bg-slate-700 text-slate-300'}`}>{a.status}</span>
                                     </div>
-                                ) : <div className="h-full flex items-center justify-center text-slate-500">Select a finding</div>}
-                            </div>
+                                    <p className="text-sm text-slate-300 line-clamp-2">{a.ncStatement}</p>
+                                    <div className="text-xs text-slate-400 flex justify-between mt-2">
+                                        <span>{a.department}</span>
+                                        <span>{a.auditDate}</span>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    )}
+
+                        {/* RIGHT: ACTION PANEL */}
+                        <div className="w-2/3 glass-panel rounded-xl p-6 overflow-y-auto">
+                            {!selected ? (
+                                <div className="h-full flex items-center justify-center text-slate-500">Select a finding to take action</div>
+                            ) : (
+                                <div>
+                                    <div className="border-b border-slate-700 pb-4 mb-4">
+                                        <h2 className="text-xl font-bold text-white mb-2">Finding: {selected.refNo}</h2>
+                                        <p className="text-slate-300 bg-slate-800 p-3 rounded text-sm">{selected.ncStatement}</p>
+                                        <div className="grid grid-cols-2 gap-4 mt-2 text-xs text-slate-400">
+                                            <div>Auditor: {selected.auditor}</div>
+                                            <div>Dept: {selected.department}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Areas based on Status */}
+                                    {selected.status === 'Open' && (
+                                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                                            <h3 className="text-blue-400 font-bold uppercase text-xs mb-3">Auditee Action (Closure)</h3>
+                                            <textarea className="w-full bg-slate-900 border border-slate-700 p-3 rounded mb-3 text-sm" placeholder="Root cause & corrective action details..." value={remarks} onChange={e=>setRemarks(e.target.value)}></textarea>
+                                            <div className="mb-4">
+                                                <label className="text-xs text-slate-500 block mb-1">Upload Evidence</label>
+                                                <input type="file" onChange={e=>setFile(e.target.files[0])} className="text-xs text-slate-300"/>
+                                            </div>
+                                            <button onClick={handleSubmitReview} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded font-bold text-sm">Submit for Review</button>
+                                        </div>
+                                    )}
+
+                                    {selected.status === 'Submitted for Review' && (
+                                        <div className="bg-slate-800/50 p-4 rounded border border-slate-700">
+                                            <h3 className="text-yellow-400 font-bold uppercase text-xs mb-3">Auditor Verification</h3>
+                                            <div className="mb-4 bg-slate-900 p-3 rounded">
+                                                <p className="text-xs text-slate-500 uppercase mb-1">Auditee Remarks</p>
+                                                <p className="text-sm text-white">{selected.closureRemarks}</p>
+                                            </div>
+                                            {selected.evidenceFile ? (
+                                                <a href={selected.evidenceFile} download={selected.evidenceFileName} className="text-blue-400 underline text-sm block mb-4">Download Evidence</a>
+                                            ) : (
+                                                <span className="text-xs text-red-400 block mb-4">No Evidence Attached</span>
+                                            )}
+                                            
+                                            {/* Verify Current User is Auditor */}
+                                            {session.user === selected.auditor || session.role === 'Owner' ? (
+                                                <button onClick={handleApprove} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded font-bold text-sm">Approve Closure</button>
+                                            ) : (
+                                                <p className="text-xs text-center text-red-400">Only the assigned Auditor ({selected.auditor}) can approve.</p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {selected.status === 'Closed' && (
+                                        <div className="p-4 bg-green-500/10 border border-green-500/30 rounded text-center text-green-400 font-bold">
+                                            This finding is Closed.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             );
         };
@@ -468,6 +518,9 @@
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/audits`), data);
                 // Simple reload to fetch updates
                 // In production, we'd append to local state
+                // alert("Saved"); window.location.reload(); 
+                // Better UX: Don't reload, just alert
+                alert("Saved Successfully");
             };
 
             const handleUpdateAudit = async (data) => {
@@ -479,15 +532,34 @@
                 alert("Audit Updated");
                 window.location.reload();
             };
+            
+            // FIX FETCH LOGIC TO KEEP KEYS
+            useEffect(() => {
+                if(!session) return;
+                const orgRef = window.fb.ref(window.db, `organizations/${session.orgId}`);
+                window.fb.get(orgRef).then(snap => {
+                    if(snap.exists()) {
+                        const val = snap.val();
+                        setSites(val.sites ? Object.values(val.sites) : []);
+                        setUsers(val.users ? Object.values(val.users) : []);
+                        setAudits(val.audits ? Object.entries(val.audits).map(([k,v])=>({id:k,...v})) : []); // Keep Key as ID
+                    }
+                });
+            }, [session]); // Re-run when session is set
+
+            const handleUpdateAuditReal = async (data) => {
+                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/audits/${data.id}`), data);
+                setAudits(audits.map(a => a.id === data.id ? data : a)); // Optimistic update
+            };
 
             if(!session) return null;
 
-            // Permissions logic
+            // Permissions
             const canSchedule = ['Owner', 'Lead Auditor', 'Site Leader', 'EHS Manager'].includes(session.role);
             const canAudit = ['Owner', 'Lead Auditor', 'Auditor'].includes(session.role);
             
             return (
-                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans">
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
                         <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Internal Audit</h1></div>
                         <span className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900">{siteId}</span>
@@ -500,25 +572,25 @@
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full content-center audit-menu">
                                 <div onClick={() => canSchedule ? setView('scheduler') : alert('Access Denied')} className={`glass-panel p-8 rounded-2xl nav-card border-t-4 border-blue-500 ${!canSchedule && 'opacity-50 cursor-not-allowed'}`}>
                                     <div className="text-5xl text-blue-400 mb-4"><i className="fas fa-calendar-alt"></i></div>
-                                    <div><h3 className="text-2xl font-bold mb-2">Audit Scheduler</h3><p className="text-slate-400 text-sm">Create and print annual audit plans, assign auditors to areas, and define scope.</p></div>
+                                    <div><h3 className="text-2xl font-bold mb-2">Audit Scheduler</h3><p className="text-slate-400 text-sm">Create and print annual audit plans.</p></div>
                                 </div>
 
                                 <div onClick={() => canAudit ? setView('auditing') : alert('Access Denied')} className={`glass-panel p-8 rounded-2xl nav-card border-t-4 border-emerald-500 ${!canAudit && 'opacity-50 cursor-not-allowed'}`}>
                                     <div className="text-5xl text-emerald-400 mb-4"><i className="fas fa-clipboard-list"></i></div>
-                                    <div><h3 className="text-2xl font-bold mb-2">Auditing</h3><p className="text-slate-400 text-sm">Execute audits, record findings (multiple observations), and attach evidence.</p></div>
+                                    <div><h3 className="text-2xl font-bold mb-2">Auditing</h3><p className="text-slate-400 text-sm">Execute audits and record multiple findings.</p></div>
                                 </div>
 
                                 <div onClick={() => setView('reporting')} className="glass-panel p-8 rounded-2xl nav-card border-t-4 border-purple-500">
-                                    <div className="text-5xl text-purple-400 mb-4"><i className="fas fa-chart-pie"></i></div>
-                                    <div><h3 className="text-2xl font-bold mb-2">Audit Reporting</h3><p className="text-slate-400 text-sm">Close findings (Part B & C), verify actions, and view audit performance statistics.</p></div>
+                                    <div className="text-5xl text-purple-400 mb-4"><i className="fas fa-check-circle"></i></div>
+                                    <div><h3 className="text-2xl font-bold mb-2">Audit Closure</h3><p className="text-slate-400 text-sm">Submit evidence and approve closure of findings.</p></div>
                                 </div>
                             </div>
                         )}
 
                         {/* SUB VIEWS */}
-                        {view === 'scheduler' && <AuditScheduler siteId={siteId} sites={sites} users={users} permissions={{viewOnly: false}} onGenerate={handleSaveAudit} onBack={()=>setView('menu')} session={session} />}
+                        {view === 'scheduler' && <AuditScheduler siteId={siteId} sites={sites} users={users} onBack={()=>setView('menu')} session={session} />}
                         {view === 'auditing' && <AuditExecution siteId={siteId} sites={sites} users={users} onSave={handleSaveAudit} onBack={()=>setView('menu')} session={session} />}
-                        {view === 'reporting' && <AuditReporting audits={audits} users={users} onUpdate={handleUpdateAudit} onBack={()=>setView('menu')} siteId={siteId} />}
+                        {view === 'reporting' && <AuditClosure audits={audits} users={users} onUpdate={handleUpdateAuditReal} onBack={()=>setView('menu')} session={session} />}
 
                     </div>
                 </div>
