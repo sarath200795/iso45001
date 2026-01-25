@@ -28,6 +28,12 @@
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
         
+        /* Finding Type Badges */
+        .badge-Major { background: #7f1d1d; color: #fca5a5; border: 1px solid #f87171; }
+        .badge-Minor { background: #7c2d12; color: #fdba74; border: 1px solid #fb923c; }
+        .badge-OFI { background: #713f12; color: #fde047; border: 1px solid #facc15; }
+        .badge-Observation { background: #1e3a8a; color: #93c5fd; border: 1px solid #60a5fa; }
+
         /* PRINT STYLES */
         @media print {
             @page { size: A4 landscape; margin: 10mm; }
@@ -69,13 +75,11 @@
 
         // --- HELPER: COLOR CODING ---
         const getTypeStyle = (type) => {
-            switch(type) {
-                case 'Major NC': return 'bg-red-900/50 text-red-200 border-red-500';
-                case 'Minor NC': return 'bg-orange-900/50 text-orange-200 border-orange-500';
-                case 'OFI': return 'bg-yellow-900/50 text-yellow-200 border-yellow-500';
-                case 'Observation': return 'bg-blue-900/50 text-blue-200 border-blue-500';
-                default: return 'bg-slate-800 text-slate-300 border-slate-600';
-            }
+            const t = type || '';
+            if (t.includes('Major')) return 'bg-red-900/50 text-red-200 border-red-500';
+            if (t.includes('Minor')) return 'bg-orange-900/50 text-orange-200 border-orange-500';
+            if (t.includes('OFI')) return 'bg-yellow-900/50 text-yellow-200 border-yellow-500';
+            return 'bg-blue-900/50 text-blue-200 border-blue-500'; // Observation
         };
 
         const AuditorWorkplace = () => {
@@ -99,17 +103,26 @@
                     if(snap.exists()) {
                         const plans = Object.entries(snap.val()).map(([k, v]) => ({...v, firebaseId: k}));
                         const tasks = [];
+                        
                         plans.forEach(plan => {
                             if(plan.matrix && Array.isArray(plan.matrix)) {
                                 plan.matrix.forEach(row => {
                                     if(row.auditor === sess.user || sess.role === 'Owner') {
+                                        // --- CRITICAL FIX: SAFEGUARD AGAINST UNDEFINED ---
                                         tasks.push({
-                                            ...row,
-                                            planId: plan.docId,
-                                            siteId: plan.siteId,
-                                            leadAuditor: plan.leadAuditor,
-                                            standard: plan.standard,
-                                            scope: plan.scope
+                                            auditor: row.auditor || '',
+                                            auditee: row.auditee || '',
+                                            dept: row.dept || '',
+                                            area: row.area || '',
+                                            date: row.date || '',
+                                            time: row.time || '',
+                                            aspect: row.aspect || '', // Ensure this exists
+                                            
+                                            planId: plan.docId || '',
+                                            siteId: plan.siteId || '',
+                                            leadAuditor: plan.leadAuditor || '',
+                                            standard: plan.standard || '',
+                                            scope: plan.scope || 'OH&S Management System' // Default if undefined
                                         });
                                     }
                                 });
@@ -164,14 +177,36 @@
             const handleSave = async () => {
                 if(findings.some(f => !f.desc)) return alert("Please fill description for all findings.");
                 
+                // Construct clean payload to avoid 'undefined' errors
+                const cleanTask = {
+                    siteId: currentTask.siteId || '',
+                    leadAuditor: currentTask.leadAuditor || '',
+                    auditor: currentTask.auditor || '',
+                    auditee: currentTask.auditee || '',
+                    dept: currentTask.dept || '',
+                    area: currentTask.area || '',
+                    date: currentTask.date || '',
+                    standard: currentTask.standard || '',
+                    scope: currentTask.scope || ''
+                };
+
+                const cleanFindings = findings.map(f => ({
+                    id: f.id || '',
+                    type: f.type || 'Observation',
+                    clause: f.clause || '',
+                    desc: f.desc || '',
+                    evidence: f.evidence || '',
+                    fileName: f.fileName || ''
+                }));
+
                 const payload = {
-                    docId: docId,
-                    taskDetails: currentTask, // IMPORTANT: Contains 'auditee' for next step
-                    findings: findings,
-                    status: 'Reported', // Initial status for Auditee to see
+                    docId: docId || '',
+                    taskDetails: cleanTask,
+                    findings: cleanFindings,
+                    status: 'Reported',
                     auditDate: new Date().toISOString(),
-                    auditor: session.user,
-                    siteId: currentTask.siteId
+                    auditor: session.user || '',
+                    siteId: cleanTask.siteId
                 };
 
                 try {
@@ -179,6 +214,7 @@
                     alert("Success! Findings saved and sent to Auditee.");
                     setView('list');
                 } catch (e) {
+                    console.error(e);
                     alert("Error saving: " + e.message);
                 }
             };
@@ -240,6 +276,7 @@
                             {/* VIEW 2: EXECUTION FORM */}
                             {view === 'perform' && currentTask && (
                                 <div className="animate-fade-in">
+                                    
                                     {/* SECTION 1: HEADER */}
                                     <div className="glass-panel p-6 rounded-2xl border-l-4 border-emerald-500 mb-6 screen-ui">
                                         <h3 className="text-emerald-400 font-bold uppercase text-sm mb-4">Section 1: Audit Context</h3>
@@ -271,10 +308,10 @@
                                                         <div className="col-span-2">
                                                             <label className="text-[10px] text-slate-500 uppercase block mb-1">Type</label>
                                                             <select value={f.type} onChange={e=>updateRow(i, 'type', e.target.value)} className={`w-full text-xs font-bold border rounded p-2 outline-none ${getTypeStyle(f.type)}`}>
-                                                                <option value="Observation">Observation</option>
-                                                                <option value="OFI">Opp. for Improv.</option>
-                                                                <option value="Minor NC">Minor NC</option>
-                                                                <option value="Major NC">Major NC</option>
+                                                                <option value="Observation" className="text-black">Observation</option>
+                                                                <option value="OFI" className="text-black">Opp. for Improv.</option>
+                                                                <option value="Minor NC" className="text-black">Minor NC</option>
+                                                                <option value="Major NC" className="text-black">Major NC</option>
                                                             </select>
                                                         </div>
 
