@@ -75,7 +75,7 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
         // --- HELPER: COLOR CODING ---
         const getTypeClass = (type) => {
@@ -92,6 +92,9 @@
             const [myTasks, setMyTasks] = useState([]);
             const [loading, setLoading] = useState(true);
             
+            // Filters
+            const [filters, setFilters] = useState({ date: '', auditor: '', auditee: '', id: '' });
+
             const [currentTask, setCurrentTask] = useState(null);
             const [findings, setFindings] = useState([]);
             const [docId, setDocId] = useState('');
@@ -149,6 +152,22 @@
                 });
             }, []);
 
+            // FILTER LOGIC
+            const filteredTasks = useMemo(() => {
+                return myTasks.filter(t => {
+                    const matchDate = !filters.date || t.date.includes(filters.date);
+                    const matchAuditor = !filters.auditor || t.auditor.toLowerCase().includes(filters.auditor.toLowerCase());
+                    const matchAuditee = !filters.auditee || t.auditee.toLowerCase().includes(filters.auditee.toLowerCase());
+                    
+                    // Search ID in main doc ID OR inside findings array
+                    const matchId = !filters.id || 
+                        (t.findingRecord && t.findingRecord.docId.toLowerCase().includes(filters.id.toLowerCase())) ||
+                        (t.findingRecord && t.findingRecord.findings && t.findingRecord.findings.some(f => f.id.toLowerCase().includes(filters.id.toLowerCase())));
+
+                    return matchDate && matchAuditor && matchAuditee && matchId;
+                });
+            }, [myTasks, filters]);
+
             // GENERATE ID
             useEffect(() => {
                 if(currentTask && !currentTask.findingRecord) {
@@ -170,7 +189,6 @@
                     setFindings([{ id: generateID(), type: 'Observation', desc: '', clause: '', evidence: '', fileName: '' }]); 
                     setView('perform');
                 } else {
-                    // Load existing data
                     setFindings(task.findingRecord.findings || []);
                     setCriteria(task.findingRecord.taskDetails.criteria || task.standard || '');
                     
@@ -290,12 +308,25 @@
                     <div className="flex-1 overflow-y-auto p-8">
                         <div className="max-w-7xl mx-auto">
                             
-                            {/* VIEW 1: TASK LIST */}
+                            {/* VIEW 1: TASK LIST + FILTER */}
                             {view === 'list' && (
                                 <div className="screen-ui">
-                                    <h2 className="text-xl font-bold mb-6 text-white flex items-center gap-2"><i className="fas fa-tasks text-blue-400"></i> Assigned Audits</h2>
+                                    <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+                                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><i className="fas fa-tasks text-blue-400"></i> Assigned Audits</h2>
+                                        
+                                        {/* FILTER BAR */}
+                                        <div className="flex gap-2 bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                            <input type="date" className="bg-slate-800 text-xs w-32 border-none" value={filters.date} onChange={e=>setFilters({...filters, date:e.target.value})} />
+                                            <input type="text" placeholder="Auditor Name" className="bg-slate-800 text-xs w-32 border-none" value={filters.auditor} onChange={e=>setFilters({...filters, auditor:e.target.value})} />
+                                            <input type="text" placeholder="Auditee Name" className="bg-slate-800 text-xs w-32 border-none" value={filters.auditee} onChange={e=>setFilters({...filters, auditee:e.target.value})} />
+                                            <input type="text" placeholder="ID (AF-xxx)" className="bg-slate-800 text-xs w-24 border-none" value={filters.id} onChange={e=>setFilters({...filters, id:e.target.value})} />
+                                            <button onClick={()=>setFilters({date:'',auditor:'',auditee:'',id:''})} className="text-xs text-red-400 hover:text-white px-2"><i className="fas fa-times"></i></button>
+                                        </div>
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {myTasks.map((task, i) => {
+                                        {filteredTasks.length === 0 ? <div className="col-span-3 text-center text-slate-500 py-10">No audits match filters.</div> : 
+                                        filteredTasks.map((task, i) => {
                                             const isEnabled = task.status === 'Planned' || task.status === 'Submitted for Verification' || task.status === 'Reported' || task.status === 'Closed';
                                             const statusClass = 
                                                 task.status === 'Planned' ? 'status-red' : 
