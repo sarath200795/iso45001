@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internal Audit System</title>
+    <title>Internal Audit Hub</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -25,416 +25,115 @@
     <style>
         body { background-color: #0f172a; color: #f8fafc; }
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s ease; }
-        .glass-panel:hover { transform: translateY(-4px); border-color: rgba(59, 130, 246, 0.4); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); }
-        .nav-card { height: 100%; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; }
-        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 8px; outline: none; width: 100%; transition: border-color 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
-
-        /* PRINT ENGINE */
-        @media print {
-            @page { size: A4 landscape; margin: 10mm; }
-            body, html, #root { width: 100%; height: auto; background: white !important; color: black !important; overflow: visible !important; display: block !important; }
-            .no-print, header, .back-btn, button, .menu-grid { display: none !important; }
-            
-            .print-container { display: block !important; }
-            
-            /* Hide other views during print */
-            .view-section { display: none !important; }
-            
-            /* Table Styling */
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10pt; }
-            th, td { border: 1px solid black !important; padding: 8px; text-align: left; color: black !important; }
-            th { background-color: #f0f0f0 !important; font-weight: bold; }
-            
-            .doc-header { text-align: center; border-bottom: 2px solid black; padding-bottom: 15px; margin-bottom: 20px; }
-            .doc-id { font-family: monospace; font-weight: bold; float: right; font-size: 9pt; }
-            
-            input, textarea, select { border: none !important; background: transparent !important; color: black !important; padding: 0; resize: none; }
-            .text-emerald-400, .text-slate-500, .text-slate-400 { color: black !important; }
-            .bg-slate-900, .bg-slate-800 { background: transparent !important; border: none !important; }
-        }
-        .print-container { display: none; }
+        .nav-card { height: 200px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; text-align: center; position: relative; overflow: hidden; }
+        .nav-card:hover { transform: translateY(-5px); border-color: rgba(59, 130, 246, 0.5); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); background: rgba(30, 41, 59, 0.8); }
+        .nav-card i { transition: transform 0.3s; }
+        .nav-card:hover i { transform: scale(1.2); }
+        
+        /* Specific Border Colors for Visual Distinction */
+        .card-scheduler { border-top: 4px solid #3b82f6; } /* Blue */
+        .card-auditor { border-top: 4px solid #10b981; }   /* Emerald */
+        .card-auditee { border-top: 4px solid #f59e0b; }   /* Amber */
+        .card-reports { border-top: 4px solid #8b5cf6; }   /* Purple */
+        .card-dashboard { border-top: 4px solid #f97316; } /* Orange */
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
     <div id="root" class="h-full flex flex-col"></div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, push, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
-        const app = initializeApp(firebaseConfig);
-        window.db = getDatabase(app);
-        window.fb = { ref, get, push, update, remove };
-    </script>
-
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect } = React;
 
-        // --- COMPONENTS ---
-        const UserSelect = ({ users, value, onChange, placeholder }) => (
-            <select value={value} onChange={e => onChange(e.target.value)} className="w-full">
-                <option value="">{placeholder || 'Select...'}</option>
-                {users.map(u => <option key={u.id} value={u.name}>{u.name} ({u.role})</option>)}
-            </select>
-        );
-
-        const SiteSelect = ({ sites, value, onChange, disabled }) => (
-            <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} className="w-full">
-                <option value="">Select Site...</option>
-                {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
-            </select>
-        );
-
-        const fileToBase64 = (file) => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
-        });
-
-        // 1. AUDIT SCHEDULER
-        const AuditScheduler = ({ siteId, sites, users, onBack, session }) => {
-            const [plan, setPlan] = useState({
-                siteId: siteId === 'GLOBAL' ? '' : siteId,
-                leadAuditor: '', standard: 'ISO 45001:2018',
-                startDate: '', endDate: '', scope: 'OH&S Management System',
-                id: '' // Auto-gen
-            });
-            const [rows, setRows] = useState([{ auditor: '', auditee: '', dept: '', date: '', time: '', aspects: '' }]);
-
-            useEffect(() => {
-                const seq = Math.floor(1000 + Math.random() * 9000);
-                setPlan(p => ({...p, id: `${session.orgId}-${plan.siteId || 'GEN'}-IAC-${seq}`}));
-            }, [plan.siteId]);
-
-            const addRow = () => setRows([...rows, { auditor: '', auditee: '', dept: '', date: '', time: '', aspects: '' }]);
-            const updateRow = (i, f, v) => { const n = [...rows]; n[i][f] = v; setRows(n); };
-            
-            return (
-                <div className="animate-fade-in view-section">
-                    <div className="flex justify-between items-center mb-6 no-print">
-                        <button onClick={onBack} className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Main Menu</button>
-                        <button onClick={()=>window.print()} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><i className="fas fa-print"></i> Print Plan</button>
-                    </div>
-
-                    <div className="glass-panel p-8 rounded-2xl border-t-4 border-blue-500">
-                        {/* INPUT SECTION */}
-                        <div className="no-print">
-                            <h2 className="text-2xl font-bold text-white mb-6">Create Audit Plan</h2>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                <div><label className="text-[10px] text-slate-500 uppercase font-bold">Site</label><SiteSelect sites={sites} value={plan.siteId} onChange={v=>setPlan({...plan, siteId:v})} disabled={siteId!=='GLOBAL'} /></div>
-                                <div><label className="text-[10px] text-slate-500 uppercase font-bold">Lead Auditor</label><UserSelect users={users} value={plan.leadAuditor} onChange={v=>setPlan({...plan, leadAuditor:v})} /></div>
-                                <div><label className="text-[10px] text-slate-500 uppercase font-bold">Standard</label><input value={plan.standard} onChange={e=>setPlan({...plan, standard:e.target.value})} /></div>
-                                <div><label className="text-[10px] text-slate-500 uppercase font-bold">Dates</label><div className="flex gap-2"><input type="date" value={plan.startDate} onChange={e=>setPlan({...plan, startDate:e.target.value})} /><input type="date" value={plan.endDate} onChange={e=>setPlan({...plan, endDate:e.target.value})} /></div></div>
-                            </div>
-                            <div className="bg-slate-800/50 p-4 rounded-xl">
-                                <div className="flex justify-between mb-2"><h3 className="font-bold text-blue-400">Audit Matrix</h3><button onClick={addRow} className="text-xs bg-blue-600 px-2 py-1 rounded text-white">+ Add Area</button></div>
-                                {rows.map((r,i)=>(<div key={i} className="flex gap-2 mb-2"><input className="w-1/4" placeholder="Dept/Area" value={r.dept} onChange={e=>updateRow(i,'dept',e.target.value)} /><UserSelect users={users} value={r.auditor} onChange={v=>updateRow(i,'auditor',v)} placeholder="Auditor" /><UserSelect users={users} value={r.auditee} onChange={v=>updateRow(i,'auditee',v)} placeholder="Auditee" /><input type="date" value={r.date} onChange={e=>updateRow(i,'date',e.target.value)} /><input type="time" value={r.time} onChange={e=>updateRow(i,'time',e.target.value)} /></div>))}
-                            </div>
-                        </div>
-
-                        {/* PRINT VIEW */}
-                        <div className="print-container">
-                            <div className="doc-header"><span className="doc-id">{plan.id}</span><h1 className="text-2xl font-bold uppercase">Internal Audit Plan</h1><p>Plan Period: {plan.startDate} to {plan.endDate}</p></div>
-                            <div className="mb-6"><table className="w-full"><tbody><tr><td className="font-bold w-1/4">Site:</td><td>{plan.siteId}</td><td className="font-bold w-1/4">Lead Auditor:</td><td>{plan.leadAuditor}</td></tr><tr><td className="font-bold">Standard:</td><td>{plan.standard}</td><td className="font-bold">Scope:</td><td>{plan.scope}</td></tr></tbody></table></div>
-                            <h3>Audit Schedule</h3>
-                            <table>
-                                <thead><tr><th>Date</th><th>Time</th><th>Department / Area</th><th>Auditor</th><th>Auditee</th><th>Aspects</th></tr></thead>
-                                <tbody>{rows.map((r,i)=>(<tr key={i}><td>{r.date}</td><td>{r.time}</td><td>{r.dept}</td><td>{r.auditor}</td><td>{r.auditee}</td><td>{r.aspects}</td></tr>))}</tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // 2. AUDITOR WORKPLACE
-        const AuditorWorkplace = ({ siteId, sites, users, onSave, onBack, session }) => {
-            const [meta, setMeta] = useState({ siteId: siteId==='GLOBAL'?'':siteId, date: new Date().toISOString().split('T')[0], dept: '', auditor: '' });
-            const [finding, setFinding] = useState({ ref: '', type: 'Minor', clause: '', stmt: '', evidence: '' });
-            const [list, setList] = useState([]);
-
-            const addToList = () => {
-                if(!finding.stmt) return alert("Statement Required");
-                const ref = `NC-${Math.floor(1000+Math.random()*9000)}`;
-                setList([...list, { ...finding, ref }]);
-                setFinding({...finding, stmt:'', evidence:''}); // Reset inputs
-            };
-
-            const saveAll = () => {
-                if(list.length===0) return alert("No findings");
-                list.forEach(f => onSave({ ...meta, ...f, status: 'Open', timestamp: Date.now() }));
-                alert("Findings Saved to Database"); setList([]);
-            };
-
-            return (
-                <div className="animate-fade-in view-section">
-                    <div className="flex justify-between items-center mb-6"><button onClick={onBack} className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Main Menu</button></div>
-                    <div className="glass-panel p-8 rounded-2xl border-t-4 border-emerald-500">
-                        <h2 className="text-2xl font-bold text-white mb-6">Auditor Workplace</h2>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 pb-6 border-b border-slate-700">
-                            <div><label className="text-[10px] text-slate-500 uppercase font-bold">Site</label><SiteSelect sites={sites} value={meta.siteId} onChange={v=>setMeta({...meta, siteId:v})} disabled={siteId!=='GLOBAL'} /></div>
-                            <div><label className="text-[10px] text-slate-500 uppercase font-bold">Date</label><input type="date" value={meta.date} onChange={e=>setMeta({...meta, date:e.target.value})} /></div>
-                            <div><label className="text-[10px] text-slate-500 uppercase font-bold">Department</label><input value={meta.dept} onChange={e=>setMeta({...meta, dept:e.target.value})} /></div>
-                            <div><label className="text-[10px] text-slate-500 uppercase font-bold">Auditor</label><UserSelect users={users} value={meta.auditor} onChange={v=>setMeta({...meta, auditor:v})} placeholder="Me" /></div>
-                        </div>
-
-                        <div className="bg-slate-800/50 p-6 rounded-xl mb-6">
-                            <h3 className="text-emerald-400 font-bold mb-4">Record New Finding</h3>
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                                <div><label className="text-[10px] text-slate-500 uppercase">Type</label><select value={finding.type} onChange={e=>setFinding({...finding, type:e.target.value})}><option>Minor</option><option>Major</option><option>OFI</option></select></div>
-                                <div><label className="text-[10px] text-slate-500 uppercase">Clause</label><input value={finding.clause} onChange={e=>setFinding({...finding, clause:e.target.value})} placeholder="e.g. 9.2" /></div>
-                            </div>
-                            <div className="mb-4"><label className="text-[10px] text-slate-500 uppercase">NC Statement</label><textarea className="bg-slate-900" rows="2" value={finding.stmt} onChange={e=>setFinding({...finding, stmt:e.target.value})}></textarea></div>
-                            <button onClick={addToList} className="w-full bg-slate-700 hover:bg-slate-600 py-3 rounded-xl font-bold text-white text-sm">+ Add to Queue</button>
-                        </div>
-
-                        {list.length > 0 && (
-                            <div>
-                                <h3 className="text-white font-bold mb-2">Findings Queue ({list.length})</h3>
-                                <div className="space-y-2 mb-4">{list.map((f,i)=>(<div key={i} className="bg-slate-900 p-3 rounded flex justify-between text-sm"><span>{f.stmt}</span><span className="text-emerald-400">{f.type}</span></div>))}</div>
-                                <button onClick={saveAll} className="w-full bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-bold text-white text-sm shadow-lg">Commit to Database</button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        // 3. AUDITEE WORKPLACE
-        const AuditeeWorkplace = ({ audits, onUpdate, onBack, session }) => {
-            const [selected, setSelected] = useState(null);
-            const [response, setResponse] = useState({ rootCause: '', correction: '', capa: '', targetDate: '' });
-
-            // Filter: Show OPEN findings for current user's site
-            const myOpenFindings = audits.filter(a => a.status === 'Open' && (session.role === 'Owner' || a.siteId === session.assignedSite));
-
-            const submitResponse = () => {
-                if(!response.rootCause) return alert("Root Cause required");
-                onUpdate({ ...selected, ...response, status: 'Responded', responseDate: new Date().toISOString().split('T')[0] });
-                setSelected(null);
-            };
-
-            return (
-                <div className="animate-fade-in view-section h-full flex flex-col">
-                    <div className="flex justify-between items-center mb-6"><button onClick={onBack} className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Main Menu</button></div>
-                    
-                    <div className="flex gap-6 h-full overflow-hidden">
-                        <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-2xl p-4 overflow-y-auto">
-                            <h3 className="text-amber-400 font-bold mb-4 uppercase text-sm tracking-widest">Open Findings ({myOpenFindings.length})</h3>
-                            {myOpenFindings.map(a => (
-                                <div key={a.id} onClick={()=>setSelected(a)} className={`p-4 mb-3 rounded-xl border border-slate-800 cursor-pointer transition hover:bg-slate-800 ${selected?.id===a.id ? 'border-amber-500 bg-slate-800' : ''}`}>
-                                    <div className="flex justify-between mb-1"><span className="text-xs font-mono text-slate-500">{a.ref}</span><span className="text-[10px] bg-red-900/50 text-red-200 px-2 rounded">{a.type}</span></div>
-                                    <p className="text-sm text-slate-200 line-clamp-2">{a.ncStatement || a.stmt}</p>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="w-2/3 glass-panel rounded-2xl p-8 overflow-y-auto">
-                            {!selected ? <div className="h-full flex items-center justify-center text-slate-500">Select an open finding to respond</div> : (
-                                <div>
-                                    <h2 className="text-xl font-bold text-white mb-1">Respond to Finding</h2>
-                                    <p className="text-sm text-slate-400 mb-6 font-mono">{selected.ref}</p>
-                                    <div className="bg-slate-950 p-4 rounded-xl mb-6 border border-slate-800"><p className="text-slate-300 italic">"{selected.ncStatement || selected.stmt}"</p></div>
-                                    
-                                    <div className="space-y-4">
-                                        <div><label className="text-[10px] text-slate-500 uppercase font-bold">Root Cause Analysis</label><textarea rows="3" className="bg-slate-900" value={response.rootCause} onChange={e=>setResponse({...response, rootCause:e.target.value})}></textarea></div>
-                                        <div><label className="text-[10px] text-slate-500 uppercase font-bold">Correction (Immediate)</label><input className="bg-slate-900" value={response.correction} onChange={e=>setResponse({...response, correction:e.target.value})} /></div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div><label className="text-[10px] text-slate-500 uppercase font-bold">CAPA Plan</label><input className="bg-slate-900" value={response.capa} onChange={e=>setResponse({...response, capa:e.target.value})} /></div>
-                                            <div><label className="text-[10px] text-slate-500 uppercase font-bold">Target Date</label><input type="date" className="bg-slate-900" value={response.targetDate} onChange={e=>setResponse({...response, targetDate:e.target.value})} /></div>
-                                        </div>
-                                        <button onClick={submitResponse} className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl mt-4 shadow-lg">Submit Response</button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // 4. AUDIT REPORTS (CLOSURE & PDF)
-        const AuditReports = ({ audits, onUpdate, onBack, session }) => {
-            const [selected, setSelected] = useState(null);
-            
-            // Filter: Show Responded (for closure) OR Closed (for printing)
-            const reviewable = audits.filter(a => a.status === 'Responded' || a.status === 'Closed');
-
-            const closeFinding = () => {
-                onUpdate({ ...selected, status: 'Closed', closureDate: new Date().toISOString().split('T')[0] });
-                setSelected(null);
-            };
-
-            const printReport = (audit) => {
-                setSelected(audit);
-                setTimeout(() => window.print(), 500);
-            };
-
-            return (
-                <div className="animate-fade-in view-section h-full flex flex-col">
-                    <div className="flex justify-between items-center mb-6"><button onClick={onBack} className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Main Menu</button></div>
-                    
-                    <div className="flex gap-6 h-full overflow-hidden">
-                        <div className="w-1/3 bg-slate-900 border border-slate-700 rounded-2xl p-4 overflow-y-auto">
-                            <h3 className="text-purple-400 font-bold mb-4 uppercase text-sm tracking-widest">Findings for Review ({reviewable.length})</h3>
-                            {reviewable.map(a => (
-                                <div key={a.id} onClick={()=>setSelected(a)} className={`p-4 mb-3 rounded-xl border border-slate-800 cursor-pointer transition hover:bg-slate-800 ${selected?.id===a.id ? 'border-purple-500 bg-slate-800' : ''}`}>
-                                    <div className="flex justify-between mb-1"><span className="text-xs font-mono text-slate-500">{a.ref}</span><span className={`text-[10px] px-2 rounded ${a.status==='Closed'?'bg-green-900 text-green-200':'bg-yellow-900 text-yellow-200'}`}>{a.status}</span></div>
-                                    <p className="text-sm text-slate-200 line-clamp-2">{a.ncStatement || a.stmt}</p>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="w-2/3 glass-panel rounded-2xl p-8 overflow-y-auto relative">
-                            {!selected ? <div className="h-full flex items-center justify-center text-slate-500">Select a finding to verify or print</div> : (
-                                <div>
-                                    <div className="flex justify-between items-start mb-6 no-print">
-                                        <h2 className="text-xl font-bold text-white">Verification & Closure</h2>
-                                        <button onClick={()=>printReport(selected)} className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded text-xs"><i className="fas fa-print mr-2"></i> Print Report</button>
-                                    </div>
-
-                                    {/* ON SCREEN & PRINT CONTENT */}
-                                    <div className="print-container">
-                                        <div className="doc-header hidden print:block"><span className="doc-id">Rep ID: {selected.id}</span><h1 className="text-2xl font-bold uppercase">Audit Non-Conformity Report</h1></div>
-                                        
-                                        <div className="mb-6 border border-slate-700 rounded p-4 print:border-black">
-                                            <h3 className="font-bold text-emerald-400 mb-2 print:text-black">Part A: Finding</h3>
-                                            <table className="w-full text-sm"><tbody><tr><td className="w-32 text-slate-500">Ref No:</td><td>{selected.ref}</td></tr><tr><td className="text-slate-500">Statement:</td><td>{selected.ncStatement || selected.stmt}</td></tr></tbody></table>
-                                        </div>
-
-                                        <div className="mb-6 border border-slate-700 rounded p-4 print:border-black">
-                                            <h3 className="font-bold text-amber-400 mb-2 print:text-black">Part B: Auditee Response</h3>
-                                            <table className="w-full text-sm"><tbody><tr><td className="w-32 text-slate-500">Root Cause:</td><td>{selected.rootCause}</td></tr><tr><td className="text-slate-500">Correction:</td><td>{selected.correction}</td></tr><tr><td className="text-slate-500">CAPA:</td><td>{selected.capa}</td></tr></tbody></table>
-                                        </div>
-
-                                        {selected.status === 'Responded' && (
-                                            <div className="no-print mt-6">
-                                                <button onClick={closeFinding} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl shadow-lg">Verify Effectiveness & Close NC</button>
-                                            </div>
-                                        )}
-                                        
-                                        {selected.status === 'Closed' && (
-                                            <div className="p-4 bg-green-500/10 border border-green-500/20 rounded text-center text-green-400 font-bold print:border-black print:text-black">Finding Closed on {selected.closureDate}</div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // 5. DASHBOARD
-        const Dashboard = ({ audits, onBack }) => {
-            const stats = useMemo(() => {
-                const total = audits.length;
-                const open = audits.filter(a => a.status === 'Open').length;
-                const closed = audits.filter(a => a.status === 'Closed').length;
-                return { total, open, closed };
-            }, [audits]);
-
-            return (
-                <div className="animate-fade-in view-section">
-                    <button onClick={onBack} className="back-btn mb-6 text-slate-400 hover:text-white flex items-center gap-2 text-sm"><i className="fas fa-arrow-left"></i> Back to Menu</button>
-                    <div className="grid grid-cols-3 gap-6">
-                        <div className="glass-panel p-6 rounded-2xl border-t-4 border-blue-500"><h3 className="text-slate-400 uppercase text-xs font-bold">Total Findings</h3><p className="text-4xl font-bold text-white mt-2">{stats.total}</p></div>
-                        <div className="glass-panel p-6 rounded-2xl border-t-4 border-red-500"><h3 className="text-slate-400 uppercase text-xs font-bold">Open NCs</h3><p className="text-4xl font-bold text-white mt-2">{stats.open}</p></div>
-                        <div className="glass-panel p-6 rounded-2xl border-t-4 border-emerald-500"><h3 className="text-slate-400 uppercase text-xs font-bold">Closed</h3><p className="text-4xl font-bold text-white mt-2">{stats.closed}</p></div>
-                    </div>
-                </div>
-            );
-        };
-
-        // --- MAIN APP ---
-        const App = () => {
-            const [view, setView] = useState('menu');
+        const AuditHub = () => {
             const [session, setSession] = useState(null);
-            const [data, setData] = useState({ sites: [], users: [], audits: [] });
 
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
-                const sess = JSON.parse(s);
-                setSession(sess);
-
-                const orgRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
-                window.fb.get(orgRef).then(snap => {
-                    if(snap.exists()) {
-                        const val = snap.val();
-                        setData({
-                            sites: val.sites ? Object.values(val.sites) : [],
-                            users: val.users ? Object.values(val.users) : [],
-                            audits: val.audits ? Object.entries(val.audits).map(([k,v])=>({id:k,...v})) : []
-                        });
-                    }
-                });
+                setSession(JSON.parse(s));
             }, []);
 
-            const handleSave = async (record) => {
-                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/audits`), record);
-                alert("Saved"); window.location.reload();
-            };
-
-            const handleUpdate = async (record) => {
-                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/audits/${record.id}`), record);
-                alert("Updated"); window.location.reload();
+            // Navigation Handler
+            const navigateTo = (page) => {
+                // You will create these files later
+                window.location.href = page;
             };
 
             if(!session) return null;
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
-                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
-                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Internal Audit</h1></div>
-                        <span className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900">{session.orgId}</span>
+                    {/* Header */}
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
+                        <div className="flex items-center gap-4">
+                            <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition">
+                                <i className="fas fa-arrow-left"></i> Back to Home
+                            </a>
+                            <div className="h-6 w-px bg-slate-700 mx-2"></div>
+                            <h1 className="font-bold text-lg tracking-wide">Internal Audit Hub</h1>
+                        </div>
+                        <span className="text-xs bg-slate-800 px-3 py-1 rounded text-emerald-400 border border-emerald-900 font-mono">
+                            {session.orgId}
+                        </span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-8 max-w-7xl mx-auto w-full">
-                        
-                        {/* MAIN MENU GRID */}
-                        {view === 'menu' && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 h-64 content-center menu-grid">
-                                <div onClick={()=>setView('schedule')} className="glass-panel p-6 rounded-2xl nav-card border-t-4 border-blue-500">
-                                    <div className="text-4xl text-blue-400 mb-4"><i className="fas fa-calendar-alt"></i></div>
-                                    <h3 className="text-lg font-bold">1. Audit Scheduler</h3>
-                                </div>
-                                <div onClick={()=>setView('auditor')} className="glass-panel p-6 rounded-2xl nav-card border-t-4 border-emerald-500">
-                                    <div className="text-4xl text-emerald-400 mb-4"><i className="fas fa-clipboard-list"></i></div>
-                                    <h3 className="text-lg font-bold">2. Auditor Workplace</h3>
-                                </div>
-                                <div onClick={()=>setView('auditee')} className="glass-panel p-6 rounded-2xl nav-card border-t-4 border-amber-500">
-                                    <div className="text-4xl text-amber-400 mb-4"><i className="fas fa-user-edit"></i></div>
-                                    <h3 className="text-lg font-bold">3. Auditee Workplace</h3>
-                                </div>
-                                <div onClick={()=>setView('reports')} className="glass-panel p-6 rounded-2xl nav-card border-t-4 border-purple-500">
-                                    <div className="text-4xl text-purple-400 mb-4"><i className="fas fa-file-contract"></i></div>
-                                    <h3 className="text-lg font-bold">4. Audit Reports</h3>
-                                </div>
-                                <div onClick={()=>setView('dashboard')} className="glass-panel p-6 rounded-2xl nav-card border-t-4 border-orange-500">
-                                    <div className="text-4xl text-orange-400 mb-4"><i className="fas fa-chart-pie"></i></div>
-                                    <h3 className="text-lg font-bold">5. Dashboard</h3>
+                    {/* Main Content Grid */}
+                    <div className="flex-1 p-8 flex items-center justify-center">
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 w-full max-w-7xl">
+                            
+                            {/* 1. Audit Scheduler */}
+                            <div onClick={() => navigateTo('audit-scheduler.html')} className="glass-panel rounded-2xl nav-card card-scheduler">
+                                <div className="text-5xl text-blue-400 mb-4"><i className="fas fa-calendar-alt"></i></div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Audit Scheduler</h3>
+                                    <p className="text-xs text-slate-400 mt-2 px-4">Plan annual audits & assign auditors</p>
                                 </div>
                             </div>
-                        )}
 
-                        {/* VIEWS */}
-                        {view === 'schedule' && <AuditScheduler siteId={session.assignedSite || 'GLOBAL'} sites={data.sites} users={data.users} session={session} onBack={()=>setView('menu')} />}
-                        {view === 'auditor' && <AuditExecution siteId={session.assignedSite || 'GLOBAL'} sites={data.sites} users={data.users} session={session} onBack={()=>setView('menu')} onSave={handleSave} />}
-                        {view === 'auditee' && <AuditeeWorkplace audits={data.audits} session={session} onBack={()=>setView('menu')} onUpdate={handleUpdate} />}
-                        {view === 'reports' && <AuditReports audits={data.audits} session={session} onBack={()=>setView('menu')} onUpdate={handleUpdate} />}
-                        {view === 'dashboard' && <Dashboard audits={data.audits} onBack={()=>setView('menu')} />}
+                            {/* 2. Auditor Workplace */}
+                            <div onClick={() => navigateTo('audit-auditor.html')} className="glass-panel rounded-2xl nav-card card-auditor">
+                                <div className="text-5xl text-emerald-400 mb-4"><i className="fas fa-clipboard-list"></i></div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Auditor Workplace</h3>
+                                    <p className="text-xs text-slate-400 mt-2 px-4">Execute audits & record findings</p>
+                                </div>
+                            </div>
 
+                            {/* 3. Auditee Workplace */}
+                            <div onClick={() => navigateTo('audit-auditee.html')} className="glass-panel rounded-2xl nav-card card-auditee">
+                                <div className="text-5xl text-amber-400 mb-4"><i className="fas fa-user-edit"></i></div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Auditee Workplace</h3>
+                                    <p className="text-xs text-slate-400 mt-2 px-4">Submit corrections & evidence</p>
+                                </div>
+                            </div>
+
+                            {/* 4. Audit Reports */}
+                            <div onClick={() => navigateTo('audit-reports.html')} className="glass-panel rounded-2xl nav-card card-reports">
+                                <div className="text-5xl text-purple-400 mb-4"><i className="fas fa-file-contract"></i></div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Audit Reports</h3>
+                                    <p className="text-xs text-slate-400 mt-2 px-4">Verify closure & generate PDFs</p>
+                                </div>
+                            </div>
+
+                            {/* 5. Dashboard */}
+                            <div onClick={() => navigateTo('audit-dashboard.html')} className="glass-panel rounded-2xl nav-card card-dashboard">
+                                <div className="text-5xl text-orange-400 mb-4"><i className="fas fa-chart-pie"></i></div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Dashboard</h3>
+                                    <p className="text-xs text-slate-400 mt-2 px-4">Analytics & Trends</p>
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
                 </div>
             );
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        root.render(<AuditHub />);
     </script>
 </body>
 </html>
