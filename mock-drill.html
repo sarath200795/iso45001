@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Drill Coordinator | ERP</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
+                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s; }
+        .glass-panel:hover { transform: translateY(-2px); border-color: rgba(59, 130, 246, 0.4); }
+        
+        .card-fire { border-bottom: 4px solid #ef4444; }
+        .card-spill { border-bottom: 4px solid #eab308; }
+        .card-electric { border-bottom: 4px solid #f59e0b; }
+        .card-weather { border-bottom: 4px solid #3b82f6; }
+        .card-armed { border-bottom: 4px solid #7f1d1d; }
+        .card-quake { border-bottom: 4px solid #8b5cf6; }
+        .card-medical { border-bottom: 4px solid #10b981; }
+        .card-civil { border-bottom: 4px solid #6366f1; }
+
+        input, select { background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 8px; width: 100%; outline: none; }
+        input:focus, select:focus { border-color: #3b82f6; }
+        
+        /* Checkbox custom style */
+        .custom-checkbox input:checked + div { background-color: #10b981; border-color: #10b981; }
+        .custom-checkbox input:checked + div:after { content: '✔'; display: block; text-align: center; color: white; font-size: 10px; }
+        
+        /* Modal Animation */
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-content { animation: slideUp 0.3s ease-out; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- MOCK DATA FROM ERP ---
+        const SCENARIOS = [
+            { id: 1, title: 'Fire Emergency', icon: 'fa-fire', color: 'text-red-500', border: 'card-fire', 
+              checklist: [
+                  "Activate manual call point / sound alarm immediately.",
+                  "Evacuate via nearest safe exit. Walk, do not run.",
+                  "Do not use elevators.",
+                  "Check doors for heat before opening (using back of hand).",
+                  "If smoke is present, stay low to the ground.",
+                  "Proceed to designated Assembly Point.",
+                  "IC: Establish Emergency Control Center.",
+                  "Security: Contact Fire Brigade (101) & Police (100).",
+                  "Perform head count/roll call at Assembly Point."
+              ]
+            },
+            { id: 2, title: 'Chemical Spill', icon: 'fa-bottle-droplet', color: 'text-yellow-500', border: 'card-spill',
+              checklist: [
+                  "Isolate the area immediately.",
+                  "Identify the chemical (if safe) and consult MSDS.",
+                  "Notify Facilities Manager and Incident Commander.",
+                  "Evacuate area if fumes are present.",
+                  "Don appropriate PPE (Personal Protective Equipment).",
+                  "Use Spill Kit to contain spread (dykes/absorbents).",
+                  "Dispose of waste in hazardous waste containers.",
+                  "Ventilate the area if possible."
+              ]
+            },
+            { id: 3, title: 'Electrical Outage', icon: 'fa-bolt', color: 'text-amber-500', border: 'card-electric',
+              checklist: [
+                  "Remain calm and stay in your work area if safe.",
+                  "Lower all MHE/Forklifts to floor level and turn off.",
+                  "Facilities: Check status of DG (Diesel Generator) sets.",
+                  "Security: Ensure access control systems are functional on battery.",
+                  "IC: Determine if evacuation is necessary due to lighting/ventilation loss.",
+                  "Facilities: Contact Power Utility Provider."
+              ]
+            },
+            { id: 4, title: 'Severe Weather', icon: 'fa-cloud-bolt', color: 'text-blue-500', border: 'card-weather',
+              checklist: [
+                  "Monitor weather reports/alerts.",
+                  "Secure loose outdoor items (trash cans, signs).",
+                  "Close all doors and windows securely.",
+                  "Move personnel away from glass windows.",
+                  "If severe (Cyclone), move to designated shelter areas.",
+                  "IC: Determine if shift cancellation/early release is needed."
+              ]
+            },
+            { id: 5, title: 'Armed Aggressor', icon: 'fa-person-rifle', color: 'text-red-900', border: 'card-armed',
+              checklist: [
+                  "Run: Evacuate if a safe path is available.",
+                  "Hide: Lock/blockade door, turn off lights, silence phones.",
+                  "Fight: As a last resort, incapacitate the aggressor.",
+                  "Do not trigger fire alarm (unless fire is present).",
+                  "Keep hands visible when Law Enforcement arrives.",
+                  "IC: Lockdown site access points immediately."
+              ]
+            },
+            { id: 6, title: 'Earthquake', icon: 'fa-house-crack', color: 'text-purple-500', border: 'card-quake',
+              checklist: [
+                  "DROP to the ground immediately.",
+                  "Take COVER under a sturdy table/desk.",
+                  "HOLD ON until shaking stops.",
+                  "Stay away from glass, windows, and shelving.",
+                  "Evacuate to Assembly Point AFTER shaking stops.",
+                  "Facilities: Inspect building for structural damage before re-entry."
+              ]
+            },
+            { id: 7, title: 'Medical Emergency', icon: 'fa-briefcase-medical', color: 'text-emerald-500', border: 'card-medical',
+              checklist: [
+                  "Assess the scene for safety.",
+                  "Do not move patient unless in immediate danger.",
+                  "Call for First Aider / Amcare specialist.",
+                  "Call Ambulance (108) if life-threatening.",
+                  "Security: Guide Ambulance to nearest entrance.",
+                  "Protect patient privacy/dignity."
+              ]
+            },
+            { id: 8, title: 'Civil Threat', icon: 'fa-user-secret', color: 'text-indigo-500', border: 'card-civil',
+              checklist: [
+                  "Do not touch or move suspicious packages.",
+                  "Isolate the area (cordon off).",
+                  "Notify Security and Incident Commander.",
+                  "Call Police (100) / Bomb Squad if necessary.",
+                  "Do not use radios/mobiles near the suspicious item.",
+                  "Evacuate immediate area or whole site as per IC decision."
+              ]
+            }
+        ];
+
+        const USERS = [
+            "Rakesh Rao (Site Lead)", 
+            "Pradeep Reddy (Security)", 
+            "Shashank Gupta (WHS)", 
+            "Mohd Fayyaz (SLP)",
+            "Naresh Kumar (Ops)",
+            "Hemant Mishra (SLP)",
+            "Sahil Vaish (HR)",
+            "Narendra Kumar (RME)"
+        ];
+
+        const MockDrillApp = () => {
+            const [selectedDrill, setSelectedDrill] = useState(null);
+            const [history, setHistory] = useState([]);
+            
+            // Form State
+            const [form, setForm] = useState({
+                date: new Date().toISOString().split('T')[0],
+                time: '',
+                shift: 'Day',
+                commander: ''
+            });
+            const [checks, setChecks] = useState({});
+
+            const openDrill = (scenario) => {
+                setSelectedDrill(scenario);
+                setForm({ ...form, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+                setChecks({});
+            };
+
+            const toggleCheck = (index) => {
+                setChecks(prev => ({...prev, [index]: !prev[index]}));
+            };
+
+            const handleSubmit = () => {
+                if(!form.commander) return alert("Please select an Incident Commander");
+                const completedCount = Object.values(checks).filter(Boolean).length;
+                const totalCount = selectedDrill.checklist.length;
+                const score = Math.round((completedCount / totalCount) * 100);
+
+                const newRecord = {
+                    ...form,
+                    scenario: selectedDrill.title,
+                    score: score,
+                    timestamp: new Date().toLocaleString()
+                };
+
+                setHistory([newRecord, ...history]);
+                setSelectedDrill(null); // Close modal
+                // In a real app, this would save to Firebase
+            };
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    
+                    {/* HEADER */}
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center"><i className="fas fa-person-running"></i></div>
+                            <h1 className="font-bold text-lg">Mock Drill Coordinator</h1>
+                        </div>
+                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-slate-400 border border-slate-700">
+                            ERP v2.0 | HYD3
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-8">
+                        <div className="max-w-6xl mx-auto">
+                            
+                            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                                <i className="fas fa-clipboard-list text-blue-400"></i> Select Emergency Scenario
+                            </h2>
+
+                            {/* CARD GRID */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                                {SCENARIOS.map(s => (
+                                    <div key={s.id} onClick={() => openDrill(s)} className={`glass-panel p-6 rounded-xl cursor-pointer relative group ${s.border}`}>
+                                        <div className={`w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-xl mb-4 ${s.color} group-hover:scale-110 transition-transform`}>
+                                            <i className={`fas ${s.icon}`}></i>
+                                        </div>
+                                        <h3 className="font-bold text-lg mb-1">{s.title}</h3>
+                                        <p className="text-xs text-slate-400">Tap to start drill checklist</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* RECENT HISTORY */}
+                            <div className="border-t border-slate-800 pt-8">
+                                <h3 className="font-bold text-slate-400 uppercase text-xs mb-4">Recent Drills</h3>
+                                {history.length === 0 ? (
+                                    <div className="text-slate-600 text-sm italic">No drills conducted this session.</div>
+                                ) : (
+                                    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                                        <table className="w-full text-left text-sm">
+                                            <thead className="bg-slate-950 text-slate-500 uppercase text-xs">
+                                                <tr>
+                                                    <th className="p-4">Scenario</th>
+                                                    <th className="p-4">Date/Time</th>
+                                                    <th className="p-4">Commander</th>
+                                                    <th className="p-4">Completion</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-800">
+                                                {history.map((h, i) => (
+                                                    <tr key={i} className="hover:bg-slate-800/50">
+                                                        <td className="p-4 font-bold">{h.scenario}</td>
+                                                        <td className="p-4 text-slate-400">{h.timestamp}</td>
+                                                        <td className="p-4">{h.commander}</td>
+                                                        <td className="p-4">
+                                                            <span className={`px-2 py-1 rounded text-xs font-bold ${h.score === 100 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                                                {h.score}%
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* MODAL */}
+                    {selectedDrill && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-4 md:p-6">
+                            <div className="bg-slate-900 w-full max-w-2xl rounded-2xl border border-slate-700 shadow-2xl flex flex-col max-h-[90vh] modal-content">
+                                
+                                {/* Modal Header */}
+                                <div className={`p-6 border-b border-slate-800 flex justify-between items-center ${selectedDrill.border}`}>
+                                    <div className="flex items-center gap-3">
+                                        <i className={`fas ${selectedDrill.icon} text-2xl ${selectedDrill.color}`}></i>
+                                        <div>
+                                            <h2 className="text-xl font-bold">{selectedDrill.title} Drill</h2>
+                                            <p className="text-xs text-slate-400">ERP Checklist Protocol</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setSelectedDrill(null)} className="text-slate-400 hover:text-white"><i className="fas fa-times text-xl"></i></button>
+                                </div>
+
+                                {/* Modal Body */}
+                                <div className="p-6 overflow-y-auto custom-scroll">
+                                    
+                                    {/* Drill Details Form */}
+                                    <div className="grid grid-cols-2 gap-4 mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                        <div>
+                                            <label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Date</label>
+                                            <input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Time</label>
+                                            <input type="time" value={form.time} onChange={e=>setForm({...form, time:e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Shift</label>
+                                            <select value={form.shift} onChange={e=>setForm({...form, shift:e.target.value})}>
+                                                <option>Day</option>
+                                                <option>Night</option>
+                                                <option>Swing</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Incident Commander</label>
+                                            <select value={form.commander} onChange={e=>setForm({...form, commander:e.target.value})}>
+                                                <option value="">Select Commander...</option>
+                                                {USERS.map(u => <option key={u}>{u}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Checklist */}
+                                    <h3 className="font-bold text-slate-300 mb-3 border-b border-slate-800 pb-2">Response Checklist</h3>
+                                    <div className="space-y-3">
+                                        {selectedDrill.checklist.map((item, idx) => (
+                                            <label key={idx} className="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-800 cursor-pointer transition custom-checkbox group">
+                                                <div className="relative flex items-center">
+                                                    <input type="checkbox" className="hidden" checked={!!checks[idx]} onChange={() => toggleCheck(idx)} />
+                                                    <div className="w-5 h-5 rounded border border-slate-600 bg-slate-900 group-hover:border-blue-500 transition"></div>
+                                                </div>
+                                                <span className={`text-sm ${checks[idx] ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{item}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+
+                                </div>
+
+                                {/* Modal Footer */}
+                                <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-b-2xl">
+                                    <div className="text-xs text-slate-500">
+                                        {Object.values(checks).filter(Boolean).length} / {selectedDrill.checklist.length} Completed
+                                    </div>
+                                    <button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg transition-all transform active:scale-95">
+                                        Complete Drill
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MockDrillApp />);
+    </script>
+</body>
+</html>
