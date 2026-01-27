@@ -45,6 +45,26 @@
         
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .modal-content { animation: slideUp 0.3s ease-out; }
+
+        /* PRINT STYLES */
+        @media print {
+            @page { size: A4; margin: 10mm; }
+            body * { visibility: hidden; }
+            .print-overlay, .print-overlay * { visibility: visible !important; color: black !important; }
+            .print-overlay { 
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+                background: white; z-index: 9999; display: block !important; 
+            }
+            .no-print { display: none !important; }
+            
+            /* Print Specifics */
+            h1 { font-size: 24pt; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            h2 { font-size: 14pt; background: #eee; padding: 5px; margin-top: 20px; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
+            th, td { border: 1px solid black !important; padding: 5px; text-align: left; }
+            .check-icon { font-weight: bold; }
+        }
+        .print-overlay { display: none; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -52,12 +72,12 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, push, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, get, push, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
         const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
-        window.fb = { get, ref, push, update };
+        window.fb = { get, ref, push, update, remove };
     </script>
 
     <script type="text/babel">
@@ -91,6 +111,7 @@
             const [sites, setSites] = useState([]);
             const [users, setUsers] = useState([]);
             const [loading, setLoading] = useState(true);
+            const [printData, setPrintData] = useState(null);
 
             // Form State
             const [form, setForm] = useState({
@@ -105,7 +126,6 @@
             const [checks, setChecks] = useState({});
             const [teamChecks, setTeamChecks] = useState({});
 
-            // 1. INITIALIZE & FETCH DATA
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
@@ -117,48 +137,31 @@
                     const snap = await window.fb.get(dbRef);
                     if(snap.exists()) {
                         const val = snap.val();
-                        // Sites
                         if(val.sites) setSites(Object.values(val.sites));
-                        // Users
                         if(val.users) setUsers(Object.values(val.users));
-                        // History
-                        if(val.mockDrills) setHistory(Object.values(val.mockDrills).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)));
+                        if(val.mockDrills) setHistory(Object.entries(val.mockDrills).map(([k,v]) => ({...v, firebaseKey: k})).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)));
                     }
                     setLoading(false);
                 };
                 fetchData();
             }, []);
 
-            // 2. FILTER COMMANDERS BASED ON SITE
             const availableCommanders = useMemo(() => {
                 if (!form.siteId) return [];
-                return users.filter(u => 
-                    u.role === 'Owner' || // Owners can run any site
-                    u.assignedSite === form.siteId || // Direct assignment
-                    (u.accessibleSites && u.accessibleSites.includes(form.siteId)) // Multi-site access
-                );
+                return users.filter(u => u.role === 'Owner' || u.assignedSite === form.siteId || (u.accessibleSites && u.accessibleSites.includes(form.siteId)));
             }, [users, form.siteId]);
 
-            // 3. OPEN MODAL
             const openDrill = (scenario) => {
                 setSelectedDrill(scenario);
-                setForm({ 
-                    ...form, 
-                    siteId: session.assignedSite || '', // Default to user's site
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                    headCount: '',
-                    debrief: ''
-                });
+                setForm({ ...form, siteId: session.assignedSite || '', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), headCount: '', debrief: '' });
                 setChecks({});
                 setTeamChecks({});
             };
 
-            // 4. SUBMIT
             const handleSubmit = async () => {
                 if(!form.siteId) return alert("Please select a Site ID.");
                 if(!form.commander) return alert("Please select an Incident Commander.");
                 
-                // Verify all teams alerted (Soft check)
                 const teamsAlertedCount = Object.values(teamChecks).filter(Boolean).length;
                 if(teamsAlertedCount < EMERGENCY_TEAMS.length) {
                     if(!confirm("Not all Emergency Teams have been marked as alerted. Proceed anyway?")) return;
@@ -167,9 +170,14 @@
                 const completedCount = Object.values(checks).filter(Boolean).length;
                 const totalCount = selectedDrill.checklist.length;
                 const score = Math.round((completedCount / totalCount) * 100);
+                
+                // GENERATE DOC ID: ORG-SITE-MD-SRNO
+                const srNo = Math.floor(10000 + Math.random() * 90000);
+                const docId = `${session.orgId}-${form.siteId}-MD-${srNo}`;
 
                 const newRecord = {
                     ...form,
+                    docId: docId,
                     scenario: selectedDrill.title,
                     score: score,
                     teamsAlerted: teamChecks,
@@ -178,13 +186,32 @@
                     loggedBy: session.user
                 };
 
-                // Save to Firebase
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/mockDrills`), newRecord);
                 
-                // Update Local State
+                // Reload history locally roughly
                 setHistory([newRecord, ...history]);
                 setSelectedDrill(null); 
-                alert("Drill Report Submitted Successfully!");
+                alert("Drill Report Submitted! ID: " + docId);
+            };
+
+            const deleteRecord = async (record, index) => {
+                if(confirm("Are you sure you want to delete this drill record?")) {
+                    if(record.firebaseKey) {
+                        await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/mockDrills/${record.firebaseKey}`));
+                    }
+                    const newHistory = history.filter((_, i) => i !== index);
+                    setHistory(newHistory);
+                }
+            };
+
+            // --- PDF GENERATION LOGIC ---
+            const generatePDF = (record) => {
+                // We need to re-attach the scenario definition to get the full text checklist items
+                // because the record only stores boolean states (checks)
+                const scenarioDef = SCENARIOS.find(s => s.title === record.scenario);
+                const fullRecord = { ...record, scenarioDef: scenarioDef };
+                setPrintData(fullRecord);
+                setTimeout(() => window.print(), 500);
             };
 
             const toggleCheck = (id, setFn) => setFn(prev => ({...prev, [id]: !prev[id]}));
@@ -195,60 +222,53 @@
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
                     
                     {/* HEADER */}
-                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
                         <div className="flex items-center gap-4">
                             <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
                             <h1 className="font-bold text-lg">Mock Drill Coordinator</h1>
                         </div>
-                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-slate-400 border border-slate-700">
-                            User: {session.user}
-                        </div>
+                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-slate-400 border border-slate-700">User: {session.user}</div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-8">
+                    <div className="flex-1 overflow-y-auto p-8 no-print">
                         <div className="max-w-6xl mx-auto">
-                            
-                            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                                <i className="fas fa-clipboard-list text-blue-400"></i> Select Emergency Scenario
-                            </h2>
-
-                            {/* SCENARIO CARDS */}
+                            <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><i className="fas fa-clipboard-list text-blue-400"></i> Select Emergency Scenario</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                                 {SCENARIOS.map(s => (
                                     <div key={s.id} onClick={() => openDrill(s)} className={`glass-panel p-6 rounded-xl cursor-pointer relative group ${s.border}`}>
-                                        <div className={`w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-xl mb-4 ${s.color} group-hover:scale-110 transition-transform`}>
-                                            <i className={`fas ${s.icon}`}></i>
-                                        </div>
+                                        <div className={`w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-xl mb-4 ${s.color} group-hover:scale-110 transition-transform`}><i className={`fas ${s.icon}`}></i></div>
                                         <h3 className="font-bold text-lg mb-1">{s.title}</h3>
                                         <p className="text-xs text-slate-400">Initiate Protocol</p>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* HISTORY TABLE */}
                             <div className="border-t border-slate-800 pt-8">
                                 <h3 className="font-bold text-slate-400 uppercase text-xs mb-4">Recent Drill Logs</h3>
                                 <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
                                     <table className="w-full text-left text-sm text-slate-300">
                                         <thead className="bg-slate-950 text-slate-500 uppercase text-xs">
                                             <tr>
-                                                <th className="p-4">Site</th>
+                                                <th className="p-4">Doc ID</th>
                                                 <th className="p-4">Scenario</th>
                                                 <th className="p-4">Date</th>
                                                 <th className="p-4">Commander</th>
-                                                <th className="p-4">Head Count</th>
                                                 <th className="p-4">Score</th>
+                                                <th className="p-4 text-right">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
                                             {history.map((h, i) => (
                                                 <tr key={i} className="hover:bg-slate-800/50">
-                                                    <td className="p-4 font-mono text-xs text-blue-300">{h.siteId}</td>
+                                                    <td className="p-4 font-mono text-xs text-blue-300">{h.docId || 'PENDING'}</td>
                                                     <td className="p-4 font-bold text-white">{h.scenario}</td>
-                                                    <td className="p-4 text-xs">{h.date} {h.time}</td>
+                                                    <td className="p-4 text-xs">{h.date}</td>
                                                     <td className="p-4">{h.commander}</td>
-                                                    <td className="p-4">{h.headCount || '-'}</td>
                                                     <td className="p-4"><span className={`px-2 py-1 rounded text-xs font-bold ${h.score===100?'bg-emerald-500/20 text-emerald-400':'bg-yellow-500/20 text-yellow-400'}`}>{h.score}%</span></td>
+                                                    <td className="p-4 text-right flex justify-end gap-2">
+                                                        <button onClick={() => generatePDF(h)} className="text-blue-400 hover:text-blue-300 p-2 rounded hover:bg-blue-500/10" title="Download Report"><i className="fas fa-file-pdf"></i></button>
+                                                        <button onClick={() => deleteRecord(h, i)} className="text-slate-500 hover:text-red-400 p-2 rounded hover:bg-red-500/10" title="Delete"><i className="fas fa-trash"></i></button>
+                                                    </td>
                                                 </tr>
                                             ))}
                                             {history.length === 0 && <tr><td colSpan="6" className="p-6 text-center italic text-slate-600">No records found.</td></tr>}
@@ -261,104 +281,104 @@
 
                     {/* DRILL MODAL */}
                     {selectedDrill && (
-                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
                             <div className="bg-slate-900 w-full max-w-3xl rounded-2xl border border-slate-700 shadow-2xl flex flex-col max-h-[90vh] modal-content">
-                                
-                                {/* Header */}
                                 <div className={`p-6 border-b border-slate-800 flex justify-between items-center ${selectedDrill.border}`}>
-                                    <div className="flex items-center gap-3">
-                                        <i className={`fas ${selectedDrill.icon} text-2xl ${selectedDrill.color}`}></i>
-                                        <div>
-                                            <h2 className="text-xl font-bold">{selectedDrill.title} Drill</h2>
-                                            <p className="text-xs text-slate-400">Emergency Response Procedure</p>
-                                        </div>
-                                    </div>
+                                    <div className="flex items-center gap-3"><i className={`fas ${selectedDrill.icon} text-2xl ${selectedDrill.color}`}></i><div><h2 className="text-xl font-bold">{selectedDrill.title} Drill</h2><p className="text-xs text-slate-400">Emergency Response Procedure</p></div></div>
                                     <button onClick={() => setSelectedDrill(null)} className="text-slate-400 hover:text-white"><i className="fas fa-times text-xl"></i></button>
                                 </div>
-
-                                {/* Content */}
                                 <div className="p-6 overflow-y-auto custom-scroll space-y-6">
-                                    
-                                    {/* 1. Context */}
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
-                                        <div>
-                                            <label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Site ID</label>
-                                            <select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}>
-                                                <option value="">Select Site...</option>
-                                                {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Incident Commander</label>
-                                            <select value={form.commander} onChange={e=>setForm({...form, commander:e.target.value})} disabled={!form.siteId}>
-                                                <option value="">{form.siteId ? 'Select Commander...' : 'Select Site First'}</option>
-                                                {availableCommanders.map(u => <option key={u.id} value={u.name}>{u.name} ({u.role})</option>)}
-                                            </select>
-                                        </div>
+                                        <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Site ID</label><select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}><option value="">Select Site...</option>{sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}</select></div>
+                                        <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Incident Commander</label><select value={form.commander} onChange={e=>setForm({...form, commander:e.target.value})} disabled={!form.siteId}><option value="">{form.siteId ? 'Select Commander...' : 'Select Site First'}</option>{availableCommanders.map(u => <option key={u.id} value={u.name}>{u.name} ({u.role})</option>)}</select></div>
                                         <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Date</label><input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} /></div>
                                         <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Time Start</label><input type="time" value={form.time} onChange={e=>setForm({...form, time:e.target.value})} /></div>
-                                        <div>
-                                            <label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Shift</label>
-                                            <select value={form.shift} onChange={e=>setForm({...form, shift:e.target.value})}><option>Day</option><option>Night</option><option>Swing</option></select>
-                                        </div>
+                                        <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Shift</label><select value={form.shift} onChange={e=>setForm({...form, shift:e.target.value})}><option>Day</option><option>Night</option><option>Swing</option></select></div>
                                     </div>
-
-                                    {/* 2. Teams Alerted */}
-                                    <div>
-                                        <h3 className="font-bold text-orange-400 text-sm mb-3 uppercase tracking-wider border-b border-orange-500/20 pb-2">Emergency Teams Alerted</h3>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {EMERGENCY_TEAMS.map((team, idx) => (
-                                                <label key={idx} className="flex items-center gap-3 p-3 rounded bg-slate-800/50 hover:bg-slate-800 cursor-pointer border border-slate-700 custom-checkbox">
-                                                    <div className="relative flex items-center">
-                                                        <input type="checkbox" className="hidden" checked={!!teamChecks[idx]} onChange={() => toggleCheck(idx, setTeamChecks)} />
-                                                        <div className="w-4 h-4 rounded border border-slate-500 bg-slate-900 transition"></div>
-                                                    </div>
-                                                    <span className={`text-xs font-bold ${teamChecks[idx] ? 'text-white' : 'text-slate-400'}`}>{team}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* 3. Checklist */}
-                                    <div>
-                                        <h3 className="font-bold text-blue-400 text-sm mb-3 uppercase tracking-wider border-b border-blue-500/20 pb-2">Procedural Checklist</h3>
-                                        <div className="space-y-2">
-                                            {selectedDrill.checklist.map((item, idx) => (
-                                                <label key={idx} className="flex items-start gap-3 p-3 rounded hover:bg-slate-800 cursor-pointer custom-checkbox group transition">
-                                                    <div className="relative flex items-center mt-0.5">
-                                                        <input type="checkbox" className="hidden" checked={!!checks[idx]} onChange={() => toggleCheck(idx, setChecks)} />
-                                                        <div className="w-5 h-5 rounded border border-slate-500 bg-slate-900 group-hover:border-blue-400 transition"></div>
-                                                    </div>
-                                                    <span className={`text-sm ${checks[idx] ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{item}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* 4. Post Drill Data */}
-                                    <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700">
-                                        <h3 className="font-bold text-emerald-400 text-sm mb-3 uppercase tracking-wider">Post-Drill Debrief</h3>
-                                        <div className="mb-4">
-                                            <label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Total Head Count (Safe at Assembly Point)</label>
-                                            <input type="number" placeholder="Enter number of evacuees..." value={form.headCount} onChange={e=>setForm({...form, headCount:e.target.value})} className="bg-slate-900 border-slate-600 w-1/3" />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Debrief Notes / Observations</label>
-                                            <textarea rows="3" placeholder="What went well? What needs improvement?" value={form.debrief} onChange={e=>setForm({...form, debrief:e.target.value})} className="bg-slate-900 border-slate-600 w-full"></textarea>
-                                        </div>
-                                    </div>
-
+                                    <div><h3 className="font-bold text-orange-400 text-sm mb-3 uppercase tracking-wider border-b border-orange-500/20 pb-2">Emergency Teams Alerted</h3><div className="grid grid-cols-2 gap-3">{EMERGENCY_TEAMS.map((team, idx) => (<label key={idx} className="flex items-center gap-3 p-3 rounded bg-slate-800/50 hover:bg-slate-800 cursor-pointer border border-slate-700 custom-checkbox"><div className="relative flex items-center"><input type="checkbox" className="hidden" checked={!!teamChecks[idx]} onChange={() => toggleCheck(idx, setTeamChecks)} /><div className="w-4 h-4 rounded border border-slate-500 bg-slate-900 transition"></div></div><span className={`text-xs font-bold ${teamChecks[idx] ? 'text-white' : 'text-slate-400'}`}>{team}</span></label>))}</div></div>
+                                    <div><h3 className="font-bold text-blue-400 text-sm mb-3 uppercase tracking-wider border-b border-blue-500/20 pb-2">Procedural Checklist</h3><div className="space-y-2">{selectedDrill.checklist.map((item, idx) => (<label key={idx} className="flex items-start gap-3 p-3 rounded hover:bg-slate-800 cursor-pointer custom-checkbox group transition"><div className="relative flex items-center mt-0.5"><input type="checkbox" className="hidden" checked={!!checks[idx]} onChange={() => toggleCheck(idx, setChecks)} /><div className="w-5 h-5 rounded border border-slate-500 bg-slate-900 group-hover:border-blue-400 transition"></div></div><span className={`text-sm ${checks[idx] ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{item}</span></label>))}</div></div>
+                                    <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700"><h3 className="font-bold text-emerald-400 text-sm mb-3 uppercase tracking-wider">Post-Drill Debrief</h3><div className="mb-4"><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Total Head Count</label><input type="number" value={form.headCount} onChange={e=>setForm({...form, headCount:e.target.value})} className="bg-slate-900 border-slate-600 w-1/3" /></div><div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Debrief Notes</label><textarea rows="3" value={form.debrief} onChange={e=>setForm({...form, debrief:e.target.value})} className="bg-slate-900 border-slate-600 w-full"></textarea></div></div>
                                 </div>
+                                <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-b-2xl"><div className="text-xs text-slate-500">Checklist: {Object.values(checks).filter(Boolean).length} / {selectedDrill.checklist.length}</div><button onClick={handleSubmit} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 px-8 rounded-xl shadow-lg transition-all transform hover:-translate-y-1">Submit Drill Report</button></div>
+                            </div>
+                        </div>
+                    )}
 
-                                {/* Footer */}
-                                <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-b-2xl">
-                                    <div className="text-xs text-slate-500">
-                                        Checklist: {Object.values(checks).filter(Boolean).length} / {selectedDrill.checklist.length}
-                                    </div>
-                                    <button onClick={handleSubmit} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 px-8 rounded-xl shadow-lg transition-all transform hover:-translate-y-1">
-                                        Submit Drill Report
-                                    </button>
+                    {/* PRINT OVERLAY */}
+                    {printData && (
+                        <div className="print-overlay p-10">
+                            <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
+                                <div>
+                                    <h1 className="text-2xl font-bold uppercase mb-1">Mock Drill Report</h1>
+                                    <p className="text-sm font-bold">Document ID: {printData.docId}</p>
                                 </div>
+                                <div className="text-right">
+                                    <p className="text-sm">Date: {printData.date}</p>
+                                    <p className="text-sm">Organization: {session.orgId}</p>
+                                </div>
+                            </div>
+
+                            {/* Section 1: Context */}
+                            <div className="mb-6 border border-black p-4">
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">1. Drill Information</h2>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div><strong>Site ID:</strong> {printData.siteId}</div>
+                                    <div><strong>Scenario:</strong> {printData.scenario}</div>
+                                    <div><strong>Incident Commander:</strong> {printData.commander}</div>
+                                    <div><strong>Shift:</strong> {printData.shift}</div>
+                                    <div><strong>Time Start:</strong> {printData.time}</div>
+                                    <div><strong>Logged By:</strong> {printData.loggedBy}</div>
+                                </div>
+                            </div>
+
+                            {/* Section 2: Teams */}
+                            <div className="mb-6 border border-black p-4">
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">2. Emergency Teams Activation</h2>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    {EMERGENCY_TEAMS.map((team, idx) => (
+                                        <div key={idx} className="flex items-center gap-2">
+                                            <span className="check-icon">{printData.teamsAlerted && printData.teamsAlerted[idx] ? '[☑]' : '[☐]'}</span>
+                                            <span>{team}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Section 3: Checklist */}
+                            <div className="mb-6 border border-black p-4">
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">3. Procedural Checklist Audit</h2>
+                                <table className="w-full text-sm border-collapse border border-black">
+                                    <thead>
+                                        <tr className="bg-gray-100">
+                                            <th className="border border-black p-2 w-10 text-center">Status</th>
+                                            <th className="border border-black p-2">Action Item</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {printData.scenarioDef ? printData.scenarioDef.checklist.map((item, idx) => (
+                                            <tr key={idx}>
+                                                <td className="border border-black p-2 text-center font-bold">
+                                                    {printData.checklistStatus && printData.checklistStatus[idx] ? 'PASS' : 'FAIL'}
+                                                </td>
+                                                <td className="border border-black p-2">{item}</td>
+                                            </tr>
+                                        )) : <tr><td colSpan="2" className="p-2">Scenario definition not found.</td></tr>}
+                                    </tbody>
+                                </table>
+                                <div className="mt-2 text-right font-bold text-sm">Score: {printData.score}%</div>
+                            </div>
+
+                            {/* Section 4: Debrief */}
+                            <div className="mb-6 border border-black p-4">
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">4. Post-Drill Debrief</h2>
+                                <div className="mb-4 text-sm"><strong>Total Head Count:</strong> {printData.headCount || 'Not Recorded'}</div>
+                                <div className="text-sm"><strong>Observations / Debrief Notes:</strong><br/>{printData.debrief || 'None provided.'}</div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="flex justify-between mt-12 pt-12">
+                                <div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Incident Commander Signature</div>
+                                <div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">HSE Officer Signature</div>
                             </div>
                         </div>
                     )}
