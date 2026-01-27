@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mock Drill Coordinator | ERP</title>
+    <title>Emergency Response Coordinator | ERP</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -57,7 +57,6 @@
             }
             .no-print { display: none !important; }
             
-            /* Print Specifics */
             h1 { font-size: 24pt; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
             h2 { font-size: 14pt; background: #eee; padding: 5px; margin-top: 20px; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact; }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
@@ -102,15 +101,9 @@
               checklist: ["Do not touch suspicious items.", "Cordon off area.", "Notify Security/Police.", "Do not use radios near item.", "Evacuate immediate area."] }
         ];
 
-        // UPDATED TEAM LIST
         const EMERGENCY_TEAMS = [
-            "Transportation Team",
-            "Spill Response Team",
-            "Fire Fighting Team",
-            "Evacuation Team",
-            "Medical Emergency Team",
-            "Security",
-            "Public Relation"
+            "Transportation Team", "Spill Response Team", "Fire Fighting Team", "Evacuation Team", 
+            "Medical Emergency Team", "Security", "Public Relation"
         ];
 
         const MockDrillApp = () => {
@@ -125,6 +118,7 @@
             // Form State
             const [form, setForm] = useState({
                 siteId: '',
+                eventType: 'Mock Drill', // NEW FIELD
                 date: new Date().toISOString().split('T')[0],
                 time: '',
                 shift: 'Day',
@@ -134,8 +128,6 @@
             });
             const [checks, setChecks] = useState({});
             const [teamChecks, setTeamChecks] = useState({});
-            
-            // New Action Log State
             const [actionLog, setActionLog] = useState([]);
 
             useEffect(() => {
@@ -165,10 +157,16 @@
 
             const openDrill = (scenario) => {
                 setSelectedDrill(scenario);
-                setForm({ ...form, siteId: session.assignedSite || '', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), headCount: '', debrief: '' });
+                setForm({ 
+                    ...form, 
+                    siteId: session.assignedSite || '', 
+                    eventType: 'Mock Drill', // Default
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
+                    headCount: '', debrief: '' 
+                });
                 setChecks({});
                 setTeamChecks({});
-                setActionLog([{ time: '', action: '', observation: '' }]); // Start with one row
+                setActionLog([{ time: '', action: '', observation: '' }]);
             };
 
             // ACTION LOG FUNCTIONS
@@ -193,8 +191,10 @@
                 const totalCount = selectedDrill.checklist.length;
                 const score = Math.round((completedCount / totalCount) * 100);
                 
+                // GENERATE DOC ID: ORG-SITE-MD-SRNO (MD stands for Mock Drill, we can keep MD for ID or change to ER for real)
+                const prefix = form.eventType === 'Mock Drill' ? 'MD' : 'ER';
                 const srNo = Math.floor(10000 + Math.random() * 90000);
-                const docId = `${session.orgId}-${form.siteId}-MD-${srNo}`;
+                const docId = `${session.orgId}-${form.siteId}-${prefix}-${srNo}`;
 
                 const newRecord = {
                     ...form,
@@ -203,7 +203,7 @@
                     score: score,
                     teamsAlerted: teamChecks,
                     checklistStatus: checks,
-                    actionLog: actionLog.filter(l => l.action), // Only save rows with content
+                    actionLog: actionLog.filter(l => l.action),
                     timestamp: new Date().toISOString(),
                     loggedBy: session.user
                 };
@@ -212,11 +212,11 @@
                 
                 setHistory([newRecord, ...history]);
                 setSelectedDrill(null); 
-                alert("Drill Report Submitted! ID: " + docId);
+                alert(`${form.eventType} Report Submitted! ID: ${docId}`);
             };
 
             const deleteRecord = async (record, index) => {
-                if(confirm("Are you sure you want to delete this drill record?")) {
+                if(confirm("Are you sure you want to delete this record?")) {
                     if(record.firebaseKey) {
                         await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/mockDrills/${record.firebaseKey}`));
                     }
@@ -243,14 +243,14 @@
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
                         <div className="flex items-center gap-4">
                             <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
-                            <h1 className="font-bold text-lg">Mock Drill Coordinator</h1>
+                            <h1 className="font-bold text-lg">Record Emergency / Drill</h1>
                         </div>
                         <div className="text-xs bg-slate-800 px-3 py-1 rounded text-slate-400 border border-slate-700">User: {session.user}</div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-8 no-print">
                         <div className="max-w-6xl mx-auto">
-                            <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><i className="fas fa-clipboard-list text-blue-400"></i> Select Emergency Scenario</h2>
+                            <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><i className="fas fa-clipboard-list text-blue-400"></i> Select Scenario</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                                 {SCENARIOS.map(s => (
                                     <div key={s.id} onClick={() => openDrill(s)} className={`glass-panel p-6 rounded-xl cursor-pointer relative group ${s.border}`}>
@@ -262,11 +262,12 @@
                             </div>
 
                             <div className="border-t border-slate-800 pt-8">
-                                <h3 className="font-bold text-slate-400 uppercase text-xs mb-4">Recent Drill Logs</h3>
+                                <h3 className="font-bold text-slate-400 uppercase text-xs mb-4">Recent Logs</h3>
                                 <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
                                     <table className="w-full text-left text-sm text-slate-300">
                                         <thead className="bg-slate-950 text-slate-500 uppercase text-xs">
                                             <tr>
+                                                <th className="p-4">Type</th>
                                                 <th className="p-4">Doc ID</th>
                                                 <th className="p-4">Scenario</th>
                                                 <th className="p-4">Date</th>
@@ -278,6 +279,11 @@
                                         <tbody className="divide-y divide-slate-800">
                                             {history.map((h, i) => (
                                                 <tr key={i} className="hover:bg-slate-800/50">
+                                                    <td className="p-4">
+                                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${h.eventType === 'Real Emergency' ? 'bg-red-500 text-white' : 'bg-blue-500/20 text-blue-400'}`}>
+                                                            {h.eventType || 'Mock Drill'}
+                                                        </span>
+                                                    </td>
                                                     <td className="p-4 font-mono text-xs text-blue-300">{h.docId || 'PENDING'}</td>
                                                     <td className="p-4 font-bold text-white">{h.scenario}</td>
                                                     <td className="p-4 text-xs">{h.date}</td>
@@ -289,7 +295,7 @@
                                                     </td>
                                                 </tr>
                                             ))}
-                                            {history.length === 0 && <tr><td colSpan="6" className="p-6 text-center italic text-slate-600">No records found.</td></tr>}
+                                            {history.length === 0 && <tr><td colSpan="7" className="p-6 text-center italic text-slate-600">No records found.</td></tr>}
                                         </tbody>
                                     </table>
                                 </div>
@@ -297,17 +303,26 @@
                         </div>
                     </div>
 
-                    {/* DRILL MODAL */}
+                    {/* MODAL */}
                     {selectedDrill && (
                         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
-                            <div className="bg-slate-900 w-full max-w-3xl rounded-2xl border border-slate-700 shadow-2xl flex flex-col max-h-[90vh] modal-content">
+                            <div className={`bg-slate-900 w-full max-w-3xl rounded-2xl border shadow-2xl flex flex-col max-h-[90vh] modal-content ${form.eventType === 'Real Emergency' ? 'border-red-500 ring-2 ring-red-900' : 'border-slate-700'}`}>
                                 <div className={`p-6 border-b border-slate-800 flex justify-between items-center ${selectedDrill.border}`}>
-                                    <div className="flex items-center gap-3"><i className={`fas ${selectedDrill.icon} text-2xl ${selectedDrill.color}`}></i><div><h2 className="text-xl font-bold">{selectedDrill.title} Drill</h2><p className="text-xs text-slate-400">Emergency Response Procedure</p></div></div>
+                                    <div className="flex items-center gap-3"><i className={`fas ${selectedDrill.icon} text-2xl ${selectedDrill.color}`}></i><div><h2 className="text-xl font-bold">{selectedDrill.title}</h2><p className="text-xs text-slate-400">Protocol Initiation</p></div></div>
                                     <button onClick={() => setSelectedDrill(null)} className="text-slate-400 hover:text-white"><i className="fas fa-times text-xl"></i></button>
                                 </div>
                                 <div className="p-6 overflow-y-auto custom-scroll space-y-6">
+                                    
+                                    {/* Event Type Toggle */}
+                                    <div className="flex justify-center mb-4">
+                                        <div className="bg-slate-950 p-1 rounded-lg flex border border-slate-700">
+                                            <button onClick={()=>setForm({...form, eventType: 'Mock Drill'})} className={`px-4 py-2 rounded text-xs font-bold uppercase transition ${form.eventType === 'Mock Drill' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Mock Drill</button>
+                                            <button onClick={()=>setForm({...form, eventType: 'Real Emergency'})} className={`px-4 py-2 rounded text-xs font-bold uppercase transition ${form.eventType === 'Real Emergency' ? 'bg-red-600 text-white animate-pulse' : 'text-slate-400 hover:text-white'}`}>Real Emergency</button>
+                                        </div>
+                                    </div>
+
                                     {/* Context */}
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                    <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-950 p-4 rounded-xl border ${form.eventType === 'Real Emergency' ? 'border-red-900/50' : 'border-slate-800'}`}>
                                         <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Site ID</label><select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}><option value="">Select Site...</option>{sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}</select></div>
                                         <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Incident Commander</label><select value={form.commander} onChange={e=>setForm({...form, commander:e.target.value})} disabled={!form.siteId}><option value="">{form.siteId ? 'Select Commander...' : 'Select Site First'}</option>{availableCommanders.map(u => <option key={u.id} value={u.name}>{u.name} ({u.role})</option>)}</select></div>
                                         <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Date</label><input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} /></div>
@@ -323,12 +338,11 @@
                                     
                                     {/* Debrief & Action Log */}
                                     <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700">
-                                        <h3 className="font-bold text-emerald-400 text-sm mb-3 uppercase tracking-wider">Post-Drill Debrief</h3>
+                                        <h3 className="font-bold text-emerald-400 text-sm mb-3 uppercase tracking-wider">Post-Event Debrief</h3>
                                         <div className="mb-4"><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Total Head Count</label><input type="number" value={form.headCount} onChange={e=>setForm({...form, headCount:e.target.value})} className="bg-slate-900 border-slate-600 w-1/3" /></div>
                                         <div className="mb-6"><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Debrief Notes</label><textarea rows="2" value={form.debrief} onChange={e=>setForm({...form, debrief:e.target.value})} className="bg-slate-900 border-slate-600 w-full"></textarea></div>
                                         
-                                        {/* Dynamic Action Log Table */}
-                                        <h4 className="text-xs font-bold text-slate-400 mb-2 border-b border-slate-700 pb-1">Drill Action Log</h4>
+                                        <h4 className="text-xs font-bold text-slate-400 mb-2 border-b border-slate-700 pb-1">Action Log Timeline</h4>
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-xs text-left mb-2">
                                                 <thead><tr className="text-slate-500"><th className="p-2 w-20">Time</th><th className="p-2">Action Done</th><th className="p-2">Observation</th><th className="w-8"></th></tr></thead>
@@ -347,7 +361,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-b-2xl"><div className="text-xs text-slate-500">Checklist: {Object.values(checks).filter(Boolean).length} / {selectedDrill.checklist.length}</div><button onClick={handleSubmit} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 px-8 rounded-xl shadow-lg transition-all transform hover:-translate-y-1">Submit Drill Report</button></div>
+                                <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-b-2xl"><div className="text-xs text-slate-500">Checklist: {Object.values(checks).filter(Boolean).length} / {selectedDrill.checklist.length}</div><button onClick={handleSubmit} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 px-8 rounded-xl shadow-lg transition-all transform hover:-translate-y-1">Submit Report</button></div>
                             </div>
                         </div>
                     )}
@@ -357,7 +371,7 @@
                         <div className="print-overlay p-10">
                             <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
                                 <div>
-                                    <h1 className="text-2xl font-bold uppercase mb-1">Mock Drill Report</h1>
+                                    <h1 className="text-2xl font-bold uppercase mb-1">{printData.eventType || 'Mock Drill'} Report</h1>
                                     <p className="text-sm font-bold">Document ID: {printData.docId}</p>
                                 </div>
                                 <div className="text-right">
@@ -368,8 +382,9 @@
 
                             {/* Section 1: Context */}
                             <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">1. Drill Information</h2>
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">1. Event Information</h2>
                                 <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div><strong>Type:</strong> {printData.eventType || 'Mock Drill'}</div>
                                     <div><strong>Site ID:</strong> {printData.siteId}</div>
                                     <div><strong>Scenario:</strong> {printData.scenario}</div>
                                     <div><strong>Incident Commander:</strong> {printData.commander}</div>
@@ -418,7 +433,7 @@
 
                             {/* Section 4: Debrief & Action Log */}
                             <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">4. Post-Drill Debrief</h2>
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">4. Post-Event Debrief</h2>
                                 <div className="mb-4 text-sm"><strong>Total Head Count:</strong> {printData.headCount || 'Not Recorded'}</div>
                                 <div className="mb-4 text-sm"><strong>Observations / Debrief Notes:</strong><br/>{printData.debrief || 'None provided.'}</div>
                                 
