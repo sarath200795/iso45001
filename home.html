@@ -64,6 +64,9 @@
                 const sevenDays = new Date(today);
                 sevenDays.setDate(today.getDate() + 7);
 
+                // Filter content based on current view context
+                const filterSite = (item) => selectedSite === 'GLOBAL' ? true : item.siteId === selectedSite;
+
                 // 1. Pending Users (Owner Only)
                 if(session.role === 'Owner') {
                     const pendingUsers = Object.values(data.users || {}).filter(u => u.status === 'Pending');
@@ -72,33 +75,64 @@
                     }
                 }
 
-                // Filter content based on current view context
-                const filterSite = (item) => selectedSite === 'GLOBAL' ? true : item.siteId === selectedSite;
-
-                // 2. Incomplete Records & 3. Due Dates
-                // Incidents
+                // 2. INCIDENTS (Open / Overdue)
                 Object.values(data.incidents || {}).filter(filterSite).forEach(inc => {
                     if(inc.status !== 'Closed') {
-                        newAlerts.push({ type: 'warn', msg: `Incident ${inc.id} is still Open.`, link: `incidents.html?site=${inc.siteId}` });
+                        // Priority for safety officer or generic warning
+                        newAlerts.push({ type: 'warn', msg: `Incident ${inc.id} is Open (${inc.severity})`, link: `incidents.html?site=${inc.siteId}` });
                     }
                     (inc.capa || []).forEach(c => {
                         if(c.status === 'Open' && c.due) {
                             const due = new Date(c.due);
-                            if(due < today) newAlerts.push({ type: 'danger', msg: `Overdue Action in ${inc.id}: ${c.act}`, link: `incidents.html?site=${inc.siteId}` });
-                            else if(due <= sevenDays) newAlerts.push({ type: 'warn', msg: `Action due soon in ${inc.id}: ${c.act}`, link: `incidents.html?site=${inc.siteId}` });
+                            if(due < today) newAlerts.push({ type: 'danger', msg: `Overdue Action in ${inc.id}`, link: `incidents.html?site=${inc.siteId}` });
                         }
                     });
                 });
 
-                // Audits
+                // 3. AUDITS & AUDIT ACTIONS (ASSIGNED TO ME)
                 Object.values(data.audits || {}).filter(filterSite).forEach(aud => {
-                    if(aud.status === 'Open') {
-                        newAlerts.push({ type: 'warn', msg: `Audit Finding ${aud.ncRef} is Open.`, link: `audit.html?site=${aud.siteId}` });
+                    const isMyAudit = aud.auditor === session.user;
+                    const isMyAuditee = aud.taskDetails?.auditee === session.user;
+                    
+                    // A. Assigned as Auditor
+                    if (isMyAudit && aud.status !== 'Closed') {
+                        if (aud.status === 'Planned') {
+                            newAlerts.push({ type: 'personal', msg: `Perform Audit: ${aud.docId}`, link: `audit.html?site=${aud.siteId}` });
+                        } else if (aud.status === 'Submitted for Verification') {
+                            newAlerts.push({ type: 'personal', msg: `Verify Closure: ${aud.docId}`, link: `audit.html?site=${aud.siteId}` });
+                        }
                     }
-                    if(aud.targetDate && aud.status === 'Open') {
-                        const due = new Date(aud.targetDate);
-                        if(due < today) newAlerts.push({ type: 'danger', msg: `Audit CAPA Overdue: ${aud.ncRef}`, link: `audit.html?site=${aud.siteId}` });
-                        else if(due <= sevenDays) newAlerts.push({ type: 'warn', msg: `Audit CAPA Due Soon: ${aud.ncRef}`, link: `audit.html?site=${aud.siteId}` });
+
+                    // B. Assigned as Auditee (Action Required)
+                    if (isMyAuditee && aud.status === 'Reported') {
+                        newAlerts.push({ type: 'personal', msg: `Audit Findings Pending Response: ${aud.docId}`, link: `audit.html?site=${aud.siteId}` });
+                    }
+
+                    // C. Specific CAPA Actions Assigned to User
+                    if (aud.findings) {
+                        aud.findings.forEach(finding => {
+                            // Check explicit actions inside findings (if structure supports detailed actions list)
+                            if (finding.actions) {
+                                finding.actions.forEach(action => {
+                                    if (action.resp === session.user && action.status !== 'Closed') {
+                                        const due = action.target ? new Date(action.target) : null;
+                                        const isOverdue = due && due < today;
+                                        
+                                        if (isOverdue) {
+                                            newAlerts.push({ type: 'danger', msg: `OVERDUE Audit Action: ${action.action}`, link: `audit.html?site=${aud.siteId}` });
+                                        } else {
+                                            newAlerts.push({ type: 'personal', msg: `Action Assigned: ${action.action}`, link: `audit.html?site=${aud.siteId}` });
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            // Fallback: If finding doesn't have granular actions yet, but is assigned to auditee
+                            if (isMyAuditee && (!finding.response || finding.response.status !== 'Completed') && aud.status === 'Reported') {
+                                // Prevent duplicate alerts if we already flagged the whole report
+                                // We can list specific finding count instead
+                            }
+                        });
                     }
                 });
 
@@ -113,11 +147,17 @@
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {alerts.map((a, i) => (
                             <div key={i} onClick={() => window.location.href = a.link} className={`p-3 rounded-lg border cursor-pointer transition-transform hover:-translate-y-1 flex items-center gap-3 ${
-                                a.type === 'admin' ? 'bg-blue-900/30 border-blue-500/50 text-blue-200' :
+                                a.type === 'admin' ? 'bg-purple-900/30 border-purple-500/50 text-purple-200' :
                                 a.type === 'danger' ? 'bg-red-900/30 border-red-500/50 text-red-200' :
+                                a.type === 'personal' ? 'bg-blue-600/30 border-blue-400/50 text-blue-100' :
                                 'bg-yellow-900/30 border-yellow-500/50 text-yellow-200'
                             }`}>
-                                <i className={`fas ${a.type === 'admin' ? 'fa-user-shield' : a.type === 'danger' ? 'fa-exclamation-circle' : 'fa-clock'}`}></i>
+                                <i className={`fas ${
+                                    a.type === 'admin' ? 'fa-user-shield' : 
+                                    a.type === 'danger' ? 'fa-triangle-exclamation' : 
+                                    a.type === 'personal' ? 'fa-user-tag' : 
+                                    'fa-circle-exclamation'
+                                }`}></i>
                                 <span className="text-xs font-medium">{a.msg}</span>
                             </div>
                         ))}
@@ -160,11 +200,14 @@
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}`)).then((snap) => {
                     if (snap.exists()) {
                         const val = snap.val();
+                        // Flatten Audits incase they are structured weirdly, or ensure valid object
+                        const auditsData = val.auditFindings || val.audits || {}; 
+                        
                         setData({ 
                             sites: val.sites ? Object.values(val.sites) : [],
                             users: val.users || {},
                             incidents: val.incidents || {},
-                            audits: val.audits || {}
+                            audits: auditsData // Ensure we are pulling from the correct node
                         });
                     }
                 });
