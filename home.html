@@ -43,7 +43,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Added 'mock-drill' to the modules list
         const MODULES = [
             { id: 'dashboard', label: 'Dashboard', desc: 'KPIs & Stats', icon: 'fa-chart-pie', color: 'text-purple-400', allowGlobal: true },
             { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
@@ -51,7 +50,7 @@
             { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' },
             { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' }, 
             { id: 'improvement', label: 'Improvement', desc: 'CAPA Tracking', icon: 'fa-chart-line', color: 'text-blue-400' },
-            { id: 'mock-drill', label: 'Mock Drills', desc: 'Emergency Prep', icon: 'fa-person-running', color: 'text-pink-400' },
+            { id: 'mock-drill', label: 'Record Emergency', desc: 'Drills & Real Events', icon: 'fa-person-running', color: 'text-pink-400' },
             { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true },
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
         ];
