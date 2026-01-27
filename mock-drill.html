@@ -102,7 +102,16 @@
               checklist: ["Do not touch suspicious items.", "Cordon off area.", "Notify Security/Police.", "Do not use radios near item.", "Evacuate immediate area."] }
         ];
 
-        const EMERGENCY_TEAMS = ["ERT (Emergency Response Team)", "Security Team", "Medical / First Aiders", "Facilities / Maintenance", "Management / Leadership"];
+        // UPDATED TEAM LIST
+        const EMERGENCY_TEAMS = [
+            "Transportation Team",
+            "Spill Response Team",
+            "Fire Fighting Team",
+            "Evacuation Team",
+            "Medical Emergency Team",
+            "Security",
+            "Public Relation"
+        ];
 
         const MockDrillApp = () => {
             const [session, setSession] = useState(null);
@@ -125,6 +134,9 @@
             });
             const [checks, setChecks] = useState({});
             const [teamChecks, setTeamChecks] = useState({});
+            
+            // New Action Log State
+            const [actionLog, setActionLog] = useState([]);
 
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
@@ -156,6 +168,16 @@
                 setForm({ ...form, siteId: session.assignedSite || '', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), headCount: '', debrief: '' });
                 setChecks({});
                 setTeamChecks({});
+                setActionLog([{ time: '', action: '', observation: '' }]); // Start with one row
+            };
+
+            // ACTION LOG FUNCTIONS
+            const addActionRow = () => setActionLog([...actionLog, { time: '', action: '', observation: '' }]);
+            const removeActionRow = (i) => setActionLog(actionLog.filter((_, idx) => idx !== i));
+            const updateActionRow = (i, field, value) => {
+                const newLog = [...actionLog];
+                newLog[i][field] = value;
+                setActionLog(newLog);
             };
 
             const handleSubmit = async () => {
@@ -171,7 +193,6 @@
                 const totalCount = selectedDrill.checklist.length;
                 const score = Math.round((completedCount / totalCount) * 100);
                 
-                // GENERATE DOC ID: ORG-SITE-MD-SRNO
                 const srNo = Math.floor(10000 + Math.random() * 90000);
                 const docId = `${session.orgId}-${form.siteId}-MD-${srNo}`;
 
@@ -182,13 +203,13 @@
                     score: score,
                     teamsAlerted: teamChecks,
                     checklistStatus: checks,
+                    actionLog: actionLog.filter(l => l.action), // Only save rows with content
                     timestamp: new Date().toISOString(),
                     loggedBy: session.user
                 };
 
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/mockDrills`), newRecord);
                 
-                // Reload history locally roughly
                 setHistory([newRecord, ...history]);
                 setSelectedDrill(null); 
                 alert("Drill Report Submitted! ID: " + docId);
@@ -204,10 +225,7 @@
                 }
             };
 
-            // --- PDF GENERATION LOGIC ---
             const generatePDF = (record) => {
-                // We need to re-attach the scenario definition to get the full text checklist items
-                // because the record only stores boolean states (checks)
                 const scenarioDef = SCENARIOS.find(s => s.title === record.scenario);
                 const fullRecord = { ...record, scenarioDef: scenarioDef };
                 setPrintData(fullRecord);
@@ -288,6 +306,7 @@
                                     <button onClick={() => setSelectedDrill(null)} className="text-slate-400 hover:text-white"><i className="fas fa-times text-xl"></i></button>
                                 </div>
                                 <div className="p-6 overflow-y-auto custom-scroll space-y-6">
+                                    {/* Context */}
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
                                         <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Site ID</label><select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}><option value="">Select Site...</option>{sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}</select></div>
                                         <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Incident Commander</label><select value={form.commander} onChange={e=>setForm({...form, commander:e.target.value})} disabled={!form.siteId}><option value="">{form.siteId ? 'Select Commander...' : 'Select Site First'}</option>{availableCommanders.map(u => <option key={u.id} value={u.name}>{u.name} ({u.role})</option>)}</select></div>
@@ -295,9 +314,38 @@
                                         <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Time Start</label><input type="time" value={form.time} onChange={e=>setForm({...form, time:e.target.value})} /></div>
                                         <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Shift</label><select value={form.shift} onChange={e=>setForm({...form, shift:e.target.value})}><option>Day</option><option>Night</option><option>Swing</option></select></div>
                                     </div>
+                                    
+                                    {/* Teams */}
                                     <div><h3 className="font-bold text-orange-400 text-sm mb-3 uppercase tracking-wider border-b border-orange-500/20 pb-2">Emergency Teams Alerted</h3><div className="grid grid-cols-2 gap-3">{EMERGENCY_TEAMS.map((team, idx) => (<label key={idx} className="flex items-center gap-3 p-3 rounded bg-slate-800/50 hover:bg-slate-800 cursor-pointer border border-slate-700 custom-checkbox"><div className="relative flex items-center"><input type="checkbox" className="hidden" checked={!!teamChecks[idx]} onChange={() => toggleCheck(idx, setTeamChecks)} /><div className="w-4 h-4 rounded border border-slate-500 bg-slate-900 transition"></div></div><span className={`text-xs font-bold ${teamChecks[idx] ? 'text-white' : 'text-slate-400'}`}>{team}</span></label>))}</div></div>
+                                    
+                                    {/* Checklist */}
                                     <div><h3 className="font-bold text-blue-400 text-sm mb-3 uppercase tracking-wider border-b border-blue-500/20 pb-2">Procedural Checklist</h3><div className="space-y-2">{selectedDrill.checklist.map((item, idx) => (<label key={idx} className="flex items-start gap-3 p-3 rounded hover:bg-slate-800 cursor-pointer custom-checkbox group transition"><div className="relative flex items-center mt-0.5"><input type="checkbox" className="hidden" checked={!!checks[idx]} onChange={() => toggleCheck(idx, setChecks)} /><div className="w-5 h-5 rounded border border-slate-500 bg-slate-900 group-hover:border-blue-400 transition"></div></div><span className={`text-sm ${checks[idx] ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{item}</span></label>))}</div></div>
-                                    <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700"><h3 className="font-bold text-emerald-400 text-sm mb-3 uppercase tracking-wider">Post-Drill Debrief</h3><div className="mb-4"><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Total Head Count</label><input type="number" value={form.headCount} onChange={e=>setForm({...form, headCount:e.target.value})} className="bg-slate-900 border-slate-600 w-1/3" /></div><div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Debrief Notes</label><textarea rows="3" value={form.debrief} onChange={e=>setForm({...form, debrief:e.target.value})} className="bg-slate-900 border-slate-600 w-full"></textarea></div></div>
+                                    
+                                    {/* Debrief & Action Log */}
+                                    <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700">
+                                        <h3 className="font-bold text-emerald-400 text-sm mb-3 uppercase tracking-wider">Post-Drill Debrief</h3>
+                                        <div className="mb-4"><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Total Head Count</label><input type="number" value={form.headCount} onChange={e=>setForm({...form, headCount:e.target.value})} className="bg-slate-900 border-slate-600 w-1/3" /></div>
+                                        <div className="mb-6"><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Debrief Notes</label><textarea rows="2" value={form.debrief} onChange={e=>setForm({...form, debrief:e.target.value})} className="bg-slate-900 border-slate-600 w-full"></textarea></div>
+                                        
+                                        {/* Dynamic Action Log Table */}
+                                        <h4 className="text-xs font-bold text-slate-400 mb-2 border-b border-slate-700 pb-1">Drill Action Log</h4>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-xs text-left mb-2">
+                                                <thead><tr className="text-slate-500"><th className="p-2 w-20">Time</th><th className="p-2">Action Done</th><th className="p-2">Observation</th><th className="w-8"></th></tr></thead>
+                                                <tbody>
+                                                    {actionLog.map((row, i) => (
+                                                        <tr key={i} className="border-b border-slate-800">
+                                                            <td className="p-1"><input type="time" value={row.time} onChange={e=>updateActionRow(i, 'time', e.target.value)} className="bg-slate-950 border-none rounded p-1 w-full" /></td>
+                                                            <td className="p-1"><input type="text" value={row.action} onChange={e=>updateActionRow(i, 'action', e.target.value)} className="bg-slate-950 border-none rounded p-1 w-full" placeholder="Action..." /></td>
+                                                            <td className="p-1"><input type="text" value={row.observation} onChange={e=>updateActionRow(i, 'observation', e.target.value)} className="bg-slate-950 border-none rounded p-1 w-full" placeholder="Obs..." /></td>
+                                                            <td className="p-1 text-center"><button onClick={()=>removeActionRow(i)} className="text-red-400 hover:text-red-300"><i className="fas fa-times"></i></button></td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                            <button onClick={addActionRow} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i className="fas fa-plus-circle"></i> Add Log Entry</button>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-b-2xl"><div className="text-xs text-slate-500">Checklist: {Object.values(checks).filter(Boolean).length} / {selectedDrill.checklist.length}</div><button onClick={handleSubmit} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 px-8 rounded-xl shadow-lg transition-all transform hover:-translate-y-1">Submit Drill Report</button></div>
                             </div>
@@ -368,11 +416,25 @@
                                 <div className="mt-2 text-right font-bold text-sm">Score: {printData.score}%</div>
                             </div>
 
-                            {/* Section 4: Debrief */}
+                            {/* Section 4: Debrief & Action Log */}
                             <div className="mb-6 border border-black p-4">
                                 <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">4. Post-Drill Debrief</h2>
                                 <div className="mb-4 text-sm"><strong>Total Head Count:</strong> {printData.headCount || 'Not Recorded'}</div>
-                                <div className="text-sm"><strong>Observations / Debrief Notes:</strong><br/>{printData.debrief || 'None provided.'}</div>
+                                <div className="mb-4 text-sm"><strong>Observations / Debrief Notes:</strong><br/>{printData.debrief || 'None provided.'}</div>
+                                
+                                <h3 className="font-bold border-b border-black mb-2 mt-4">Action Log Timeline</h3>
+                                <table className="w-full text-sm border-collapse border border-black">
+                                    <thead><tr className="bg-gray-100"><th className="border border-black p-1">Time</th><th className="border border-black p-1">Action</th><th className="border border-black p-1">Observation</th></tr></thead>
+                                    <tbody>
+                                        {printData.actionLog && printData.actionLog.length > 0 ? printData.actionLog.map((row, i) => (
+                                            <tr key={i}>
+                                                <td className="border border-black p-1 w-20">{row.time}</td>
+                                                <td className="border border-black p-1">{row.action}</td>
+                                                <td className="border border-black p-1">{row.observation}</td>
+                                            </tr>
+                                        )) : <tr><td colSpan="3" className="border border-black p-1 italic">No actions logged.</td></tr>}
+                                    </tbody>
+                                </table>
                             </div>
 
                             {/* Footer */}
