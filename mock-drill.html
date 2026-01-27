@@ -191,8 +191,15 @@
                 };
 
                 setHistory([newRecord, ...history]);
-                setSelectedDrill(null); // Close modal
-                // In a real app, this would save to Firebase
+                setSelectedDrill(null); 
+            };
+
+            // --- DELETE FUNCTIONALITY ---
+            const deleteRecord = (index) => {
+                if(confirm("Are you sure you want to delete this drill record?")) {
+                    const newHistory = history.filter((_, i) => i !== index);
+                    setHistory(newHistory);
+                }
             };
 
             return (
@@ -201,7 +208,7 @@
                     {/* HEADER */}
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
                         <div className="flex items-center gap-4">
-                            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center"><i className="fas fa-person-running"></i></div>
+                            <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
                             <h1 className="font-bold text-lg">Mock Drill Coordinator</h1>
                         </div>
                         <div className="text-xs bg-slate-800 px-3 py-1 rounded text-slate-400 border border-slate-700">
@@ -243,6 +250,7 @@
                                                     <th className="p-4">Date/Time</th>
                                                     <th className="p-4">Commander</th>
                                                     <th className="p-4">Completion</th>
+                                                    <th className="p-4 text-right">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-800">
@@ -255,6 +263,11 @@
                                                             <span className={`px-2 py-1 rounded text-xs font-bold ${h.score === 100 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
                                                                 {h.score}%
                                                             </span>
+                                                        </td>
+                                                        <td className="p-4 text-right">
+                                                            <button onClick={() => deleteRecord(i)} className="text-slate-500 hover:text-red-400 transition-colors p-2 rounded hover:bg-red-500/10" title="Delete Record">
+                                                                <i className="fas fa-trash"></i>
+                                                            </button>
                                                         </td>
                                                     </tr>
                                                 ))}
