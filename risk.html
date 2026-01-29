@@ -28,40 +28,49 @@
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; outline: none; transition: border-color 0.2s; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
         
-        /* Risk Matrix Colors */
-        .risk-low { background-color: #10b981; color: white; } /* 1-4 */
-        .risk-med { background-color: #eab308; color: black; } /* 5-9 */
-        .risk-high { background-color: #ef4444; color: white; } /* 10-16 */
-        .risk-ext { background-color: #7f1d1d; color: white; } /* 17-25 */
+        /* RISK MATRIX COLORS */
+        .risk-low { background-color: #10b981; color: white; } 
+        .risk-med { background-color: #eab308; color: black; } 
+        .risk-high { background-color: #ef4444; color: white; } 
+        .risk-ext { background-color: #7f1d1d; color: white; } 
 
-        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
 
+        /* A4 PAPER PREVIEW */
+        .a4-paper {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 0 auto;
+            background: white;
+            color: black;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            font-size: 10pt;
+            transform-origin: top center;
+        }
+        .a4-paper table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+        .a4-paper th, .a4-paper td { border: 1px solid black; padding: 4px; text-align: left; vertical-align: top; color: black; }
+        .a4-paper th { background-color: #eee; font-weight: bold; }
+        .a4-paper .risk-cell { text-align: center; font-weight: bold; }
+
         /* PRINT STYLES */
         @media print {
-            @page { size: A4 landscape; margin: 5mm; }
+            @page { size: A4 landscape; margin: 0; }
             body * { visibility: hidden; }
-            .print-overlay, .print-overlay * { visibility: visible !important; color: black !important; }
-            .print-overlay { 
-                position: absolute; top: 0; left: 0; width: 100%; min-height: 100%; 
-                background: white; z-index: 9999; display: block !important; 
+            .a4-paper, .a4-paper * { visibility: visible !important; }
+            .a4-paper { 
+                position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 10mm; 
+                box-shadow: none; min-height: auto; transform: none !important;
             }
             .no-print { display: none !important; }
             
-            table { width: 100%; border-collapse: collapse; font-size: 8pt; }
-            th, td { border: 1px solid black !important; padding: 4px; text-align: left; vertical-align: top; }
-            th { background-color: #eee !important; font-weight: bold; }
-            
-            .risk-cell { text-align: center; font-weight: bold; border: 1px solid black; }
-            
-            /* Print Color Adjust */
             .risk-low { background-color: #10b981 !important; color: white !important; -webkit-print-color-adjust: exact; }
             .risk-med { background-color: #eab308 !important; color: black !important; -webkit-print-color-adjust: exact; }
             .risk-high { background-color: #ef4444 !important; color: white !important; -webkit-print-color-adjust: exact; }
             .risk-ext { background-color: #7f1d1d !important; color: white !important; -webkit-print-color-adjust: exact; }
         }
-        .print-overlay { display: none; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -78,9 +87,9 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect } = React;
 
-        // --- EXTENSIVE HAZARD KNOWLEDGE BASE ---
+        // --- HAZARD KNOWLEDGE BASE ---
         const HAZARD_KB = {
             "Work at Height": {
                 "Falls from Elevation": { controls: ["Guardrails (1100mm)", "Safety Nets", "Toe Boards"], p_reduce: 2, add_controls: ["Full Body Harness (Double Lanyard)", "Lifeline System", "PTW - Height"] },
@@ -141,14 +150,85 @@
             return 'risk-low';
         };
 
+        // --- REPORT COMPONENT ---
+        const ReportContent = ({ data }) => (
+            <div className="a4-paper">
+                <div className="mb-6 border-b-2 border-black pb-2">
+                    <div className="flex justify-between items-center">
+                        <h1 className="text-2xl font-bold uppercase">HIRA Report</h1>
+                        <div className="text-right text-xs">
+                            <div><strong>Doc ID:</strong> {data.docId}</div>
+                            <div><strong>Date:</strong> {data.date}</div>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mt-4 text-sm border-t border-black pt-2">
+                        <div><strong>Site:</strong> {data.siteId}</div>
+                        <div><strong>Location:</strong> {data.location}</div>
+                    </div>
+                </div>
+
+                {data.activities.map((act, i) => (
+                    <div key={i} className="mb-6">
+                        <h3 className="font-bold text-lg bg-gray-200 p-2 border border-black mb-2">{i+1}. Activity: {act.name}</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style={{width:'15%'}}>Hazard</th>
+                                    <th style={{width:'5%'}}>Prob</th>
+                                    <th style={{width:'5%'}}>Sev</th>
+                                    <th style={{width:'5%'}}>Risk</th>
+                                    <th style={{width:'20%'}}>Existing Controls</th>
+                                    <th style={{width:'5%'}}>R-Prob</th>
+                                    <th style={{width:'5%'}}>R-Sev</th>
+                                    <th style={{width:'5%'}}>Res Risk</th>
+                                    <th style={{width:'30%'}}>Additional Controls / ALARP</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {act.hazards.map((h, j) => (
+                                    <tr key={j}>
+                                        <td><strong>{h.category} - {h.type}</strong><br/>{h.desc}</td>
+                                        <td className="text-center">{h.p1}</td>
+                                        <td className="text-center">{h.s1}</td>
+                                        <td className={`risk-cell ${getRiskClass(h.r1)}`}>{h.r1}</td>
+                                        <td>{Array.isArray(h.existingControls) ? h.existingControls.join(', ') : h.existingControls}</td>
+                                        <td className="text-center">{h.p2}</td>
+                                        <td className="text-center">{h.s2}</td>
+                                        <td className={`risk-cell ${getRiskClass(h.r2)}`}>{h.r2}</td>
+                                        <td>
+                                            {h.alarp ? 
+                                                <div><strong>ALARP:</strong> {h.alarpJustification}</div> : 
+                                                <ul>
+                                                    {(h.additionalControls || []).map((ac, k) => (
+                                                        <li key={k}>[{ac.category}] {ac.desc} ({ac.owner})</li>
+                                                    ))}
+                                                </ul>
+                                            }
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ))}
+
+                <div className="mt-12 flex justify-between">
+                    <div className="border-t border-black w-1/3 pt-2 text-center font-bold">Assessor Signature</div>
+                    <div className="border-t border-black w-1/3 pt-2 text-center font-bold">Reviewer Signature</div>
+                    <div className="border-t border-black w-1/3 pt-2 text-center font-bold">Approver Signature</div>
+                </div>
+            </div>
+        );
+
         const RiskModule = () => {
             const [session, setSession] = useState(null);
-            const [view, setView] = useState('list');
+            const [view, setView] = useState('list'); // list | form | report | external
             const [sites, setSites] = useState([]);
             const [users, setUsers] = useState([]);
             const [assessments, setAssessments] = useState([]);
             const [loading, setLoading] = useState(true);
             const [printData, setPrintData] = useState(null);
+            const [selectedReport, setSelectedReport] = useState(null);
 
             const [formData, setFormData] = useState({
                 id: '', siteId: '', location: '', date: new Date().toISOString().split('T')[0],
@@ -168,7 +248,7 @@
                         const val = snap.val();
                         if(val.sites) setSites(Object.values(val.sites));
                         if(val.users) setUsers(Object.values(val.users));
-                        if(val.riskAssessments) setAssessments(Object.entries(val.riskAssessments).map(([k,v]) => ({...v, firebaseKey: k})));
+                        if(val.riskAssessments) setAssessments(Object.entries(val.riskAssessments).map(([k,v]) => ({...v, firebaseKey: k})).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)));
                     }
                     setLoading(false);
                 };
@@ -203,23 +283,8 @@
                 setFormData({ ...formData, activities: newActivities });
             };
 
-            // --- CRUD OPERATIONS ---
-            const deleteAssessment = async (firebaseKey) => {
-                if(confirm("Are you sure you want to delete this Risk Assessment? This cannot be undone.")) {
-                    await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/riskAssessments/${firebaseKey}`));
-                    setAssessments(assessments.filter(a => a.firebaseKey !== firebaseKey));
-                }
-            };
-
             const handleAddActivity = () => {
                 setFormData({ ...formData, activities: [...formData.activities, { id: Date.now(), name: '', hazards: [] }] });
-            };
-
-            const removeActivity = (index) => {
-                if(confirm("Delete this activity and all its hazards?")) {
-                    const newActivities = formData.activities.filter((_, i) => i !== index);
-                    setFormData({ ...formData, activities: newActivities });
-                }
             };
 
             const handleAddHazard = (actIdx) => {
@@ -232,18 +297,6 @@
                     additionalControls: [],
                     alarp: false, alarpJustification: ''
                 });
-                setFormData({ ...formData, activities: newActivities });
-            };
-
-            const removeHazard = (actIdx, hazIdx) => {
-                const newActivities = [...formData.activities];
-                newActivities[actIdx].hazards = newActivities[actIdx].hazards.filter((_, i) => i !== hazIdx);
-                setFormData({ ...formData, activities: newActivities });
-            };
-
-            const removeControl = (actIdx, hazIdx, ctrlIdx) => {
-                const newActivities = [...formData.activities];
-                newActivities[actIdx].hazards[hazIdx].additionalControls = newActivities[actIdx].hazards[hazIdx].additionalControls.filter((_, i) => i !== ctrlIdx);
                 setFormData({ ...formData, activities: newActivities });
             };
 
@@ -260,7 +313,10 @@
 
             const saveAssessment = async () => {
                 if(!formData.siteId || !formData.location) return alert("Site and Location are required.");
-                const docId = formData.docId || `HIRA-${formData.siteId}-${Date.now().toString().slice(-6)}`;
+                
+                // GENERATE ID
+                const docId = `HIRA-${formData.siteId}-${Date.now().toString().slice(-6)}`;
+                
                 const payload = { ...formData, docId, createdBy: session.user, updatedAt: new Date().toISOString() };
                 
                 if(formData.firebaseKey) {
@@ -272,9 +328,11 @@
                 window.location.reload();
             };
 
-            const handlePrint = (assessment) => {
-                setPrintData(assessment);
-                setTimeout(() => window.print(), 500);
+            const deleteAssessment = async (firebaseKey) => {
+                if(confirm("Delete this assessment?")) {
+                    await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/riskAssessments/${firebaseKey}`));
+                    setAssessments(assessments.filter(a => a.firebaseKey !== firebaseKey));
+                }
             };
 
             if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Risks...</div>;
@@ -288,17 +346,16 @@
                             <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
                             <h1 className="font-bold text-lg">HIRA Risk Management</h1>
                         </div>
-                        <div className="flex bg-slate-800 p-1 rounded-lg">
-                            <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='list'?'bg-blue-600 text-white':'text-slate-400'}`}>Dashboard</button>
-                            <button onClick={()=>{
-                                setFormData({ id: '', siteId: '', location: '', date: new Date().toISOString().split('T')[0], activities: [] });
-                                setView('form');
-                            }} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='form'?'bg-blue-600 text-white':'text-slate-400'}`}>New Assessment</button>
+                        <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
+                            <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='list'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>Dashboard</button>
+                            <button onClick={()=>{setFormData({ id: '', siteId: '', location: '', date: new Date().toISOString().split('T')[0], activities: [] }); setView('form');}} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='form'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>New Assessment</button>
+                            <button onClick={()=>setView('report')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='report'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>Reports</button>
+                            <button onClick={()=>setView('external')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='external'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>External App</button>
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-8 custom-scroll no-print">
-                        <div className="max-w-7xl mx-auto">
+                        <div className="max-w-7xl mx-auto h-full">
                             
                             {/* DASHBOARD VIEW */}
                             {view === 'list' && (
@@ -307,12 +364,7 @@
                                         <table className="w-full text-left text-sm text-slate-300">
                                             <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
                                                 <tr>
-                                                    <th className="p-4">Doc ID</th>
-                                                    <th className="p-4">Site</th>
-                                                    <th className="p-4">Location</th>
-                                                    <th className="p-4">Date</th>
-                                                    <th className="p-4">Max Risk</th>
-                                                    <th className="p-4 text-right">Action</th>
+                                                    <th className="p-4">Doc ID</th><th className="p-4">Site</th><th className="p-4">Location</th><th className="p-4">Date</th><th className="p-4">Max Risk</th><th className="p-4 text-right">Action</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-800">
@@ -326,14 +378,13 @@
                                                             <td className="p-4">{a.date}</td>
                                                             <td className="p-4"><span className={`px-2 py-1 rounded font-bold text-xs ${getRiskClass(maxRisk)}`}>{maxRisk}</span></td>
                                                             <td className="p-4 text-right flex justify-end gap-2">
-                                                                <button onClick={()=>handlePrint(a)} className="text-blue-400 hover:text-white px-2 py-1"><i className="fas fa-file-pdf"></i></button>
-                                                                <button onClick={()=>{setFormData(a); setView('form');}} className="text-slate-400 hover:text-white px-2 py-1"><i className="fas fa-edit"></i></button>
+                                                                <button onClick={()=>{setSelectedReport(a); setView('report');}} className="bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white px-3 py-1 rounded transition"><i className="fas fa-file-invoice"></i> View</button>
+                                                                <button onClick={()=>{setFormData(a); setView('form');}} className="bg-slate-700 text-slate-400 hover:text-white px-3 py-1 rounded transition"><i className="fas fa-edit"></i> Edit</button>
                                                                 <button onClick={()=>deleteAssessment(a.firebaseKey)} className="text-red-400 hover:text-white px-2 py-1"><i className="fas fa-trash"></i></button>
                                                             </td>
                                                         </tr>
                                                     );
                                                 })}
-                                                {assessments.length === 0 && <tr><td colSpan="6" className="p-6 text-center italic text-slate-500">No assessments found.</td></tr>}
                                             </tbody>
                                         </table>
                                     </div>
@@ -351,16 +402,14 @@
 
                                     {formData.activities.map((act, actIdx) => (
                                         <div key={act.id} className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 relative">
-                                            <div className="mb-6 flex gap-4 items-end">
+                                            <div className="mb-6 flex gap-4">
                                                 <div className="flex-1"><label className="block text-[10px] uppercase font-bold text-blue-400 mb-1">Activity Description</label><input value={act.name} onChange={e=>{const n=[...formData.activities]; n[actIdx].name=e.target.value; setFormData({...formData, activities:n})}} placeholder="Describe activity..." className="bg-slate-900 border-blue-500/30 focus:border-blue-500" /></div>
-                                                <button onClick={()=>handleAddHazard(actIdx)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded text-xs font-bold">+ Add Hazard</button>
-                                                <button onClick={()=>removeActivity(actIdx)} className="bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white px-3 py-2.5 rounded text-xs font-bold transition"><i className="fas fa-trash"></i></button>
+                                                <button onClick={()=>handleAddHazard(actIdx)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 rounded text-xs font-bold mt-5">+ Add Hazard</button>
                                             </div>
 
                                             <div className="space-y-4">
                                                 {act.hazards.map((haz, hazIdx) => (
-                                                    <div key={haz.id} className="bg-slate-900/50 p-4 rounded-lg border border-slate-700 relative">
-                                                        <button onClick={()=>removeHazard(actIdx, hazIdx)} className="absolute top-2 right-2 text-red-400 hover:text-white"><i className="fas fa-times"></i></button>
+                                                    <div key={haz.id} className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                                                         <div className="grid grid-cols-12 gap-4 mb-4">
                                                             <div className="col-span-2">
                                                                 <label className="lbl">Category</label>
@@ -368,16 +417,13 @@
                                                             </div>
                                                             <div className="col-span-2">
                                                                 <label className="lbl">Type (Auto-Suggest)</label>
-                                                                <div className="relative">
-                                                                    <input list={`haz-types-${haz.id}`} value={haz.type} onChange={e=>handleHazardTypeChange(actIdx, hazIdx, e.target.value)} placeholder="Select or type..." className="w-full" />
-                                                                    <datalist id={`haz-types-${haz.id}`}>
-                                                                        {HAZARD_KB[haz.category] && Object.keys(HAZARD_KB[haz.category]).map(t=><option key={t} value={t} />)}
-                                                                    </datalist>
-                                                                </div>
+                                                                <select value={haz.type} onChange={e=>handleHazardTypeChange(actIdx, hazIdx, e.target.value)}>
+                                                                    <option value="">Select Type...</option>
+                                                                    {HAZARD_KB[haz.category] && Object.keys(HAZARD_KB[haz.category]).map(t=><option key={t}>{t}</option>)}
+                                                                </select>
                                                             </div>
                                                             <div className="col-span-3"><label className="lbl">Hazard Description</label><textarea rows="1" value={haz.desc} onChange={e=>updateHazard(actIdx, hazIdx, 'desc', e.target.value)} placeholder="Specific details..." className="resize-none"></textarea></div>
                                                             
-                                                            {/* Initial Risk */}
                                                             <div className="col-span-3 grid grid-cols-3 gap-1 bg-slate-800 p-2 rounded text-center">
                                                                 <div><label className="lbl">Prob</label><select value={haz.p1} onChange={e=>updateHazard(actIdx, hazIdx, 'p1', parseInt(e.target.value))} className="text-xs p-1">{PROBABILITY.map(p=><option key={p.v} value={p.v}>{p.v}</option>)}</select></div>
                                                                 <div><label className="lbl">Sev</label><select value={haz.s1} onChange={e=>updateHazard(actIdx, hazIdx, 's1', parseInt(e.target.value))} className="text-xs p-1">{SEVERITY.map(s=><option key={s.v} value={s.v}>{s.v}</option>)}</select></div>
@@ -387,7 +433,6 @@
                                                             <div className="col-span-2"><label className="lbl">Existing Controls</label><textarea rows="2" className="resize-none border-l-2 border-emerald-500" value={Array.isArray(haz.existingControls) ? haz.existingControls.join(', ') : haz.existingControls} onChange={e=>updateHazard(actIdx, hazIdx, 'existingControls', e.target.value.split(', '))} placeholder="Auto-filled..."></textarea></div>
                                                         </div>
 
-                                                        {/* Residual Risk */}
                                                         <div className="grid grid-cols-12 gap-4 items-start border-t border-slate-700 pt-4">
                                                             <div className="col-span-3 grid grid-cols-3 gap-1 bg-slate-800 p-2 rounded text-center">
                                                                 <div><label className="lbl">Res Prob</label><select value={haz.p2} onChange={e=>updateHazard(actIdx, hazIdx, 'p2', parseInt(e.target.value))} className="text-xs p-1">{PROBABILITY.map(p=><option key={p.v} value={p.v}>{p.v}</option>)}</select></div>
@@ -402,7 +447,6 @@
                                                                             <h4 className="text-red-400 font-bold text-xs uppercase"><i className="fas fa-triangle-exclamation"></i> High Risk: Additional Controls Required</h4>
                                                                             <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={haz.alarp} onChange={e=>updateHazard(actIdx, hazIdx, 'alarp', e.target.checked)} /> Declare ALARP</label>
                                                                         </div>
-                                                                        
                                                                         {haz.alarp ? (
                                                                             <input placeholder="Justification for ALARP..." value={haz.alarpJustification} onChange={e=>updateHazard(actIdx, hazIdx, 'alarpJustification', e.target.value)} className="border-red-500 bg-slate-950" />
                                                                         ) : (
@@ -424,12 +468,10 @@
                                                                                 </div>
                                                                             </div>
                                                                         )}
-                                                                        
                                                                         <div className="mt-2 space-y-1">
                                                                             {(haz.additionalControls || []).map((ac, k) => (
-                                                                                <div key={k} className="text-xs bg-slate-950 p-1 px-2 rounded flex justify-between items-center group">
+                                                                                <div key={k} className="text-xs bg-slate-950 p-1 px-2 rounded flex justify-between">
                                                                                     <span><b className="text-blue-400">[{ac.category}]</b> {ac.desc} <span className="text-slate-500">({ac.owner || 'Auto'})</span></span>
-                                                                                    <button onClick={()=>removeControl(actIdx, hazIdx, k)} className="text-red-500 opacity-0 group-hover:opacity-100 hover:text-white px-2">x</button>
                                                                                 </div>
                                                                             ))}
                                                                         </div>
@@ -451,74 +493,43 @@
                                     </div>
                                 </div>
                             )}
+
+                            {/* REPORTS VIEW */}
+                            {view === 'report' && (
+                                <div className="flex h-full gap-6">
+                                    <div className="w-1/4 glass-panel rounded-xl overflow-hidden flex flex-col no-print">
+                                        <div className="p-4 bg-slate-900 border-b border-slate-700"><h3 className="font-bold">Select Report</h3></div>
+                                        <div className="flex-1 overflow-y-auto custom-scroll p-2 space-y-2">
+                                            {assessments.map(a => (
+                                                <div key={a.firebaseKey} onClick={()=>setSelectedReport(a)} className={`p-3 rounded cursor-pointer transition ${selectedReport?.firebaseKey === a.firebaseKey ? 'bg-blue-600 text-white' : 'bg-slate-800/50 hover:bg-slate-800'}`}>
+                                                    <div className="font-bold text-xs">{a.docId}</div>
+                                                    <div className="text-[10px] opacity-70">{a.location}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 glass-panel rounded-xl p-8 overflow-y-auto bg-slate-900/50 flex flex-col items-center custom-scroll">
+                                        {selectedReport ? (
+                                            <div className="w-full flex flex-col items-center">
+                                                <div className="flex gap-4 mb-6 no-print w-full max-w-[210mm] justify-end">
+                                                    <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded shadow-lg flex items-center gap-2"><i className="fas fa-print"></i> Print Document</button>
+                                                </div>
+                                                <ReportContent data={selectedReport} />
+                                            </div>
+                                        ) : <div className="flex flex-col items-center justify-center h-full text-slate-500"><i className="fas fa-file-invoice text-4xl mb-4 opacity-50"></i><p>Select a report to preview.</p></div>}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* EXTERNAL APP VIEW */}
+                            {view === 'external' && (
+                                <div className="w-full h-full bg-white rounded-xl overflow-hidden shadow-2xl">
+                                    <iframe src="https://opal.google/edit/1m0EK1F99GlUFY_dz1AuIyS1vhfce_4SY" className="w-full h-full border-none" title="External App"></iframe>
+                                </div>
+                            )}
+
                         </div>
                     </div>
-
-                    {/* PRINT OVERLAY */}
-                    {printData && (
-                        <div className="print-overlay p-8">
-                            <div className="mb-6 border-b-2 border-black pb-2">
-                                <h1 className="text-2xl font-bold uppercase">Hazard Identification & Risk Assessment (HIRA)</h1>
-                                <div className="flex justify-between mt-2 font-bold text-sm">
-                                    <div>Doc ID: {printData.docId}</div>
-                                    <div>Site: {printData.siteId}</div>
-                                    <div>Location: {printData.location}</div>
-                                    <div>Date: {printData.date}</div>
-                                </div>
-                            </div>
-
-                            {printData.activities.map((act, i) => (
-                                <div key={i} className="mb-6">
-                                    <h3 className="font-bold text-lg bg-gray-200 p-2 border border-black mb-2">{i+1}. Activity: {act.name}</h3>
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th style={{width:'15%'}}>Hazard</th>
-                                                <th style={{width:'5%'}}>Prob</th>
-                                                <th style={{width:'5%'}}>Sev</th>
-                                                <th style={{width:'5%'}}>Risk</th>
-                                                <th style={{width:'20%'}}>Existing Controls</th>
-                                                <th style={{width:'5%'}}>R-Prob</th>
-                                                <th style={{width:'5%'}}>R-Sev</th>
-                                                <th style={{width:'5%'}}>Res Risk</th>
-                                                <th style={{width:'30%'}}>Additional Controls / ALARP</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {act.hazards.map((h, j) => (
-                                                <tr key={j}>
-                                                    <td><strong>{h.category} - {h.type}</strong><br/>{h.desc}</td>
-                                                    <td className="text-center">{h.p1}</td>
-                                                    <td className="text-center">{h.s1}</td>
-                                                    <td className={`risk-cell ${getRiskClass(h.r1)}`}>{h.r1}</td>
-                                                    <td>{Array.isArray(h.existingControls) ? h.existingControls.join(', ') : h.existingControls}</td>
-                                                    <td className="text-center">{h.p2}</td>
-                                                    <td className="text-center">{h.s2}</td>
-                                                    <td className={`risk-cell ${getRiskClass(h.r2)}`}>{h.r2}</td>
-                                                    <td>
-                                                        {h.alarp ? 
-                                                            <div><strong>ALARP:</strong> {h.alarpJustification}</div> : 
-                                                            <ul>
-                                                                {(h.additionalControls || []).map((ac, k) => (
-                                                                    <li key={k}>[{ac.category}] {ac.desc} ({ac.owner})</li>
-                                                                ))}
-                                                            </ul>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ))}
-
-                            <div className="mt-12 flex justify-between">
-                                <div className="border-t border-black w-1/3 pt-2 text-center font-bold">Assessor Signature</div>
-                                <div className="border-t border-black w-1/3 pt-2 text-center font-bold">Reviewer Signature</div>
-                                <div className="border-t border-black w-1/3 pt-2 text-center font-bold">Approver Signature</div>
-                            </div>
-                        </div>
-                    )}
 
                     <style>{`.lbl { display:block; font-size:9px; font-weight:bold; color:#64748b; text-transform:uppercase; margin-bottom:2px; }`}</style>
                 </div>
