@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Incident Management</title>
+    <title>Smart Incident Management</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -58,33 +58,21 @@
         /* --- PDF GENERATION STYLES --- */
         @media print {
             @page { size: A4; margin: 10mm; }
-            
             body, html, #root, .app-container, .main-content { 
                 width: 100% !important; height: auto !important; overflow: visible !important; 
                 background: white !important; color: black !important; display: block !important; position: static !important;
                 -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
             }
-
             .no-print, header, .repo-view, .form-view-tabs, .action-buttons { display: none !important; }
-
-            .print-overlay { 
-                display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: white; z-index: 9999;
-            }
-
+            .print-overlay { display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: white; z-index: 9999; }
             .print-overlay * { visibility: visible !important; color: black !important; }
             .print-overlay h1 { font-size: 24pt; font-weight: bold; border-bottom: 2px solid black; margin-bottom: 20px; }
             .print-overlay h2 { font-size: 16pt; font-weight: bold; margin-top: 20px; border-bottom: 1px solid #ccc; background: #eee !important; padding: 5px; -webkit-print-color-adjust: exact; }
             .print-overlay p, .print-overlay li, .print-overlay td { font-size: 11pt; }
-            
-            /* FORCE DIAGRAMS TO PRINT */
             .rib-box, .tree-node { border: 1px solid black !important; background: white !important; color: black !important; }
-            .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, 
-            .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-color: black !important; }
+            .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-color: black !important; }
             .head { border: 2px solid black !important; background: white !important; color: black !important; }
-            
-            /* ATTACHMENT IMAGE */
             .incident-image { max-width: 300px; max-height: 200px; border: 1px solid black; margin-top: 10px; }
-
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th, td { border: 1px solid black !important; padding: 5px; }
         }
@@ -113,7 +101,58 @@
             reader.onerror = error => reject(error);
         });
 
-        // --- COMPONENTS ---
+        // --- SMART KNOWLEDGE BASE ---
+        const SMART_DB = {
+            "Fire": {
+                fishbone: {
+                    man: ["Lack of fire training", "Human error during hot work"],
+                    machine: ["Overheated equipment", "Faulty wiring"],
+                    material: ["Flammable liquids", "Combustible dust"],
+                    method: ["Hot work permit bypassed", "Poor housekeeping"],
+                    environment: ["High temperature", "Dry conditions"]
+                },
+                root_causes: ["Failure to follow hot work procedures", "Electrical short circuit due to lack of maintenance"],
+                capa: [
+                    "Conduct refresher Fire Safety Training for all staff",
+                    "Install automatic fire suppression system in critical areas",
+                    "Implement stricter Hot Work Permit audit process",
+                    "Conduct thermographic survey of all electrical panels"
+                ]
+            },
+            "Chemical Spill": {
+                fishbone: {
+                    man: ["Improper handling", "Lack of PPE"],
+                    machine: ["Valve failure", "Pump leak"],
+                    material: ["Corrosive chemical", "Defective container"],
+                    method: ["Incorrect storage", "Transfer procedure violation"],
+                    environment: ["Slippery floor", "Poor lighting"]
+                },
+                root_causes: ["Inadequate preventative maintenance of valves", "Operator training gap"],
+                capa: [
+                    "Install secondary containment (bunding) for all tanks",
+                    "Provide chemical handling training to operators",
+                    "Update Spill Response Plan and conduct mock drill",
+                    "Replace all manual valves with automated shut-off valves"
+                ]
+            },
+            "Work at Height": {
+                fishbone: {
+                    man: ["Failure to wear harness", "Fatigue"],
+                    machine: ["Scaffolding defect", "Ladder damage"],
+                    material: ["Loose tools", "Slippery surface"],
+                    method: ["No permit to work", "Unsafe climbing"],
+                    environment: ["Windy conditions", "Rain"]
+                },
+                root_causes: ["Lack of supervision", "Inadequate fall protection equipment"],
+                capa: [
+                    "Enforce 100% tie-off policy for heights above 1.8m",
+                    "Inspect and tag all scaffolding weekly",
+                    "Install permanent lifelines on rooftops",
+                    "Conduct 'Tool Box Talk' on gravity hazards daily"
+                ]
+            }
+        };
+
         const UserSelect = ({ users, value, onChange, disabled, placeholder }) => (
             <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} className="w-full">
                 <option value="">{placeholder || 'Select User...'}</option>
@@ -274,8 +313,10 @@
 
             const [data, setData] = useState({
                 id: '', siteId: '', date: new Date().toISOString().split('T')[0], time: '', 
-                type: 'Near Miss', severity: 'Level A', description: '',
-                imageEvidence: null, // New field for image
+                type: 'Near Miss', description: '', // Type can be open text but we match for smart suggestions
+                smartType: 'Fire', // For dropdown matching
+                severity: 'Level A', 
+                imageEvidence: null,
                 consultationSummary: '', 
                 investigation: { 
                     fiveWhys: [ { id: 1, name: 'Analysis Path 1', whys: ['','','','',''] } ], 
@@ -351,6 +392,37 @@
                 }
             }, [data.siteId, data.type, session, seq]);
 
+            // --- SMART SUGGESTIONS FUNCTION ---
+            const applySmartSuggestions = () => {
+                const suggestion = SMART_DB[data.smartType]; // Using a dropdown for smart type matching
+                if(suggestion) {
+                    setData(prev => ({
+                        ...prev,
+                        investigation: {
+                            ...prev.investigation,
+                            fishbone: suggestion.fishbone,
+                            rootCause: suggestion.root_causes.join('. ')
+                        }
+                    }));
+                    alert("Analysis Auto-Filled from Knowledge Base!");
+                } else {
+                    alert("No smart data available for this category yet.");
+                }
+            };
+
+            const getSmartCAPA = () => {
+                const suggestion = SMART_DB[data.smartType];
+                if(suggestion) return suggestion.capa;
+                return [];
+            };
+
+            const addSuggestedCAPA = (actionText) => {
+                setData({
+                    ...data, 
+                    capa: [...data.capa, {act: actionText, own: '', due: '', status: 'Open'}]
+                });
+            };
+
             const saveData = async () => {
                 if(!data.siteId) { alert("Please select a Site"); return; }
                 if(data.firebaseKey) {
@@ -386,7 +458,6 @@
                     updatedWhys = [{ id: Date.now(), name: 'Legacy Analysis', whys: updatedWhys }];
                 }
                 const formattedIncident = { ...incident, investigation: { ...incident.investigation, fiveWhys: updatedWhys } };
-                
                 setPrintData(formattedIncident);
                 setTimeout(() => window.print(), 500); 
             };
@@ -462,112 +533,135 @@
 
                                 {step === 1 && (
                                     <div className="report-section-edit">
-                                        <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-clipboard-list"></i> 1. Initial Report</h2>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><SiteSelect sites={sites} value={data.siteId} onChange={v => setData({...data, siteId: v})} disabled={!canEdit || !isGlobal} /></div>
-                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" value={data.date} onChange={e=>setData({...data, date:e.target.value})} disabled={!canEdit} /></div>
-                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" value={data.time} onChange={e=>setData({...data, time:e.target.value})} disabled={!canEdit} /></div>
-                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">ID</label><input value={data.id} className="font-mono bg-slate-800" disabled /></div>
-                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select value={data.type} onChange={e=>setData({...data, type:e.target.value})} disabled={!canEdit}><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
-                                            <div><label className="text-[10px] uppercase font-bold text-slate-500">Severity</label><select value={data.severity} onChange={e=>setData({...data, severity:e.target.value})} disabled={!canEdit}><option>Level A</option><option>Level B</option><option>Level C</option><option>Level D</option></select></div>
-                                        </div>
-                                        <div className="mb-4"><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={e=>setData({...data, description:e.target.value})} className="w-full mt-1" disabled={!canEdit}></textarea></div>
-                                        <div><label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Image Evidence</label>
-                                            {data.imageEvidence && <img src={data.imageEvidence} alt="Evidence" className="h-32 object-cover rounded mb-2 border border-slate-700" />}
-                                            <input type="file" onChange={handleImageUpload} disabled={!canEdit} className="text-xs" />
-                                        </div>
+                                            <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-clipboard-list"></i> 1. Initial Report</h2>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><SiteSelect sites={sites} value={data.siteId} onChange={v => setData({...data, siteId: v})} disabled={!canEdit || !isGlobal} /></div>
+                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" value={data.date} onChange={e=>setData({...data, date:e.target.value})} disabled={!canEdit} /></div>
+                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" value={data.time} onChange={e=>setData({...data, time:e.target.value})} disabled={!canEdit} /></div>
+                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">ID</label><input value={data.id} className="font-mono bg-slate-800" disabled /></div>
+                                                
+                                                {/* Smart Type Selector */}
+                                                <div><label className="text-[10px] uppercase font-bold text-blue-400">Smart Category (Auto-Suggest)</label><select value={data.smartType} onChange={e=>setData({...data, smartType:e.target.value})} disabled={!canEdit} className="border-blue-500 bg-blue-900/10"><option>Fire</option><option>Chemical Spill</option><option>Work at Height</option><option>Electrical</option><option>Machinery</option></select></div>
+                                                
+                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select value={data.type} onChange={e=>setData({...data, type:e.target.value})} disabled={!canEdit}><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
+                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Severity</label><select value={data.severity} onChange={e=>setData({...data, severity:e.target.value})} disabled={!canEdit}><option>Level A</option><option>Level B</option><option>Level C</option><option>Level D</option></select></div>
+                                            </div>
+                                            <div className="mb-4"><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={e=>setData({...data, description:e.target.value})} className="w-full mt-1" disabled={!canEdit}></textarea></div>
+                                            <div><label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Image Evidence</label>
+                                                {data.imageEvidence && <img src={data.imageEvidence} alt="Evidence" className="h-32 object-cover rounded mb-2 border border-slate-700" />}
+                                                <input type="file" onChange={handleImageUpload} disabled={!canEdit} className="text-xs" />
+                                            </div>
                                     </div>
                                 )}
 
                                 {step === 2 && data.severity !== 'Level D' && (
                                     <div className="report-section-edit">
-                                        <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4"><i className="fas fa-users"></i> 2. Team & Consultation</h2>
-                                        <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center text-center space-y-6 no-print">
-                                            <div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-3xl text-teal-400"><i className="fas fa-comments"></i></div>
-                                            <div><h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3><p className="text-slate-400 text-sm max-w-lg mx-auto">Open Consultation module to record minutes for "Incident Investigation".</p></div>
-                                            {canEdit && <button onClick={openInvestigationMeeting} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition transform hover:-translate-y-1 flex items-center gap-3">Launch Meeting <i className="fas fa-external-link-alt"></i></button>}
-                                        </div>
-                                        <div className="mt-6">
-                                            <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Consultation Key Outcomes & Team Inputs</label>
-                                            <textarea className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white h-32 focus:border-teal-500 outline-none resize-none" value={data.consultationSummary} onChange={e=>setData({...data, consultationSummary:e.target.value})} placeholder="Paste key points from the consultation meeting here for the report..." disabled={!canEdit}></textarea>
-                                        </div>
+                                            <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4"><i className="fas fa-users"></i> 2. Team & Consultation</h2>
+                                            <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center text-center space-y-6 no-print">
+                                                <div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-3xl text-teal-400"><i className="fas fa-comments"></i></div>
+                                                <div><h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3><p className="text-slate-400 text-sm max-w-lg mx-auto">Open Consultation module to record minutes for "Incident Investigation".</p></div>
+                                                {canEdit && <button onClick={openInvestigationMeeting} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition transform hover:-translate-y-1 flex items-center gap-3">Launch Meeting <i className="fas fa-external-link-alt"></i></button>}
+                                            </div>
+                                            <div className="mt-6">
+                                                <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Consultation Key Outcomes & Team Inputs</label>
+                                                <textarea className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white h-32 focus:border-teal-500 outline-none resize-none" value={data.consultationSummary} onChange={e=>setData({...data, consultationSummary:e.target.value})} placeholder="Paste key points from the consultation meeting here for the report..." disabled={!canEdit}></textarea>
+                                            </div>
                                     </div>
                                 )}
 
                                 {step === 3 && (
                                     <div className="report-section-edit">
-                                        <h2 className="section-heading text-xl font-bold text-purple-400 mb-6 flex items-center gap-3 border-b border-purple-500/20 pb-4"><i className="fas fa-search"></i> 3. Root Cause Analysis</h2>
-                                        <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
-                                            <div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500 text-black print:text-black">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} disabled={!canEdit} /></div>
-                                            <div className="border-t border-slate-700 pt-8 mt-8"><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500 text-black print:text-black">Fault Tree Analysis</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} disabled={!canEdit} /></ul></div></div>
-                                            <div className="border-t border-slate-700 pt-8 mt-8">
-                                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white pl-2 border-l-4 border-purple-500 text-black print:text-black">5 Whys Analysis</h3>{canEdit && <button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Analysis Path</button>}</div>
-                                                {data.investigation.fiveWhys.map((path, pIdx) => (
-                                                    <div key={path.id} className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative group">
-                                                        <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2"><input value={path.name || `Analysis Path ${pIdx+1}`} onChange={e => updatePathName(pIdx, e.target.value)} disabled={!canEdit} className="bg-transparent text-[10px] font-bold text-purple-300 uppercase tracking-wider outline-none border-b border-transparent focus:border-purple-500 w-64 transition-all" />{canEdit && data.investigation.fiveWhys.length > 1 && <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print hover:bg-red-900/20 px-2 py-1 rounded transition"><i className="fas fa-trash-alt mr-1"></i> Remove</button>}</div>
-                                                        {path.whys.map((w, i) => (<div key={i} className="flex gap-4 mb-3 items-center"><span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span><input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" value={w} onChange={e => updateFiveWhy(pIdx, i, e.target.value)} placeholder="Enter cause..." disabled={!canEdit} /></div>))}
-                                                    </div>
-                                                ))}
+                                            <div className="flex justify-between items-center mb-6 border-b border-purple-500/20 pb-4">
+                                                <h2 className="section-heading text-xl font-bold text-purple-400 flex items-center gap-3"><i className="fas fa-search"></i> 3. Root Cause Analysis</h2>
+                                                {canEdit && <button onClick={applySmartSuggestions} className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2"><i className="fas fa-magic"></i> Auto-Suggest Analysis</button>}
                                             </div>
-                                            <div className="border-t border-slate-700 pt-8"><label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Final Root Cause</label><textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-4 rounded-xl text-white h-24 focus:ring-1 focus:ring-emerald-500 outline-none" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})} disabled={!canEdit}></textarea></div>
-                                        </div>
+                                            
+                                            <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
+                                                <div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500 text-black print:text-black">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} disabled={!canEdit} /></div>
+                                                <div className="border-t border-slate-700 pt-8 mt-8"><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500 text-black print:text-black">Fault Tree Analysis</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} disabled={!canEdit} /></ul></div></div>
+                                                <div className="border-t border-slate-700 pt-8 mt-8">
+                                                    <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white pl-2 border-l-4 border-purple-500 text-black print:text-black">5 Whys Analysis</h3>{canEdit && <button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Analysis Path</button>}</div>
+                                                    {data.investigation.fiveWhys.map((path, pIdx) => (
+                                                        <div key={path.id} className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative group">
+                                                            <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2"><input value={path.name || `Analysis Path ${pIdx+1}`} onChange={e => updatePathName(pIdx, e.target.value)} disabled={!canEdit} className="bg-transparent text-[10px] font-bold text-purple-300 uppercase tracking-wider outline-none border-b border-transparent focus:border-purple-500 w-64 transition-all" />{canEdit && data.investigation.fiveWhys.length > 1 && <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print hover:bg-red-900/20 px-2 py-1 rounded transition"><i className="fas fa-trash-alt mr-1"></i> Remove</button>}</div>
+                                                            {path.whys.map((w, i) => (<div key={i} className="flex gap-4 mb-3 items-center"><span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span><input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" value={w} onChange={e => updateFiveWhy(pIdx, i, e.target.value)} placeholder="Enter cause..." disabled={!canEdit} /></div>))}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="border-t border-slate-700 pt-8"><label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Final Root Cause</label><textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-4 rounded-xl text-white h-24 focus:ring-1 focus:ring-emerald-500 outline-none" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})} disabled={!canEdit}></textarea></div>
+                                            </div>
                                     </div>
                                 )}
 
                                 {step === 4 && (
                                     <div className="report-section-edit">
-                                        <h2 className="section-heading text-xl font-bold text-orange-400 mb-6 flex items-center gap-3 border-b border-orange-500/20 pb-4"><i className="fas fa-clipboard-check"></i> 4. CAPA</h2>
-                                        <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
+                                            <h2 className="section-heading text-xl font-bold text-orange-400 mb-6 flex items-center gap-3 border-b border-orange-500/20 pb-4"><i className="fas fa-clipboard-check"></i> 4. CAPA</h2>
+                                            
+                                            {/* SMART CAPA SUGGESTIONS */}
                                             {canEdit && (
-                                                <div className="grid grid-cols-4 gap-4 mb-6 no-print">
-                                                    <input id="act" placeholder="Action Description" className="col-span-2 bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
-                                                    <div><UserSelect users={siteUsers} value="" onChange={() => {}} disabled={false} placeholder="Action Owner..." /></div>
-                                                    <input id="due" type="date" className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
+                                                <div className="mb-6">
+                                                    <h4 className="text-xs font-bold text-blue-400 uppercase mb-2">Smart Suggestions (Click to Add)</h4>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {getSmartCAPA().map((sugg, i) => (
+                                                            <button key={i} onClick={()=>addSuggestedCAPA(sugg)} className="bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-300 text-xs px-3 py-2 rounded-lg border border-slate-700 transition flex items-center gap-2">
+                                                                <i className="fas fa-plus-circle"></i> {sugg}
+                                                            </button>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
-                                            {canEdit && <button onClick={addCapa} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-bold w-full mb-8 no-print shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2"><i className="fas fa-plus"></i> Add Action Item</button>}
-                                            <div className="overflow-hidden rounded-xl border border-slate-700">
-                                                <table className="w-full text-left text-sm text-slate-300">
-                                                    <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Action</th><th className="p-4">Owner</th><th className="p-4">Due Date</th><th className="p-4">Status</th></tr></thead>
-                                                    <tbody className="divide-y divide-slate-700">
-                                                        {data.capa.map((c,i)=>(
-                                                            <tr key={i}>
-                                                                <td className="p-4">{c.act}</td>
-                                                                <td className="p-4 text-blue-400">{c.own}</td>
-                                                                <td className="p-4">{c.due}</td>
-                                                                <td className="p-4">
-                                                                    {canEditCapa(c) ? (
-                                                                        <select value={c.status} onChange={e => { const newCapa = [...data.capa]; newCapa[i].status = e.target.value; setData({...data, capa: newCapa}); }} className="bg-slate-800 text-xs px-2 py-1 rounded">
-                                                                            <option>Open</option><option>In Progress</option><option>Closed</option>
-                                                                        </select>
-                                                                    ) : <span className="bg-orange-500/10 text-orange-400 px-2 py-1 rounded text-[10px]">{c.status}</span>}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
+
+                                            <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
+                                                {canEdit && (
+                                                    <div className="grid grid-cols-4 gap-4 mb-6 no-print">
+                                                        <input id="act" placeholder="Action Description" className="col-span-2 bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
+                                                        <div><UserSelect users={siteUsers} value="" onChange={() => {}} disabled={false} placeholder="Action Owner..." /></div>
+                                                        <input id="due" type="date" className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
+                                                    </div>
+                                                )}
+                                                {canEdit && <button onClick={addCapa} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-bold w-full mb-8 no-print shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2"><i className="fas fa-plus"></i> Add Action Item</button>}
+                                                <div className="overflow-hidden rounded-xl border border-slate-700">
+                                                    <table className="w-full text-left text-sm text-slate-300">
+                                                        <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Action</th><th className="p-4">Owner</th><th className="p-4">Due Date</th><th className="p-4">Status</th></tr></thead>
+                                                        <tbody className="divide-y divide-slate-700">
+                                                            {data.capa.map((c,i)=>(
+                                                                <tr key={i}>
+                                                                    <td className="p-4">{c.act}</td>
+                                                                    <td className="p-4 text-blue-400">{c.own}</td>
+                                                                    <td className="p-4">{c.due}</td>
+                                                                    <td className="p-4">
+                                                                        {canEditCapa(c) ? (
+                                                                            <select value={c.status} onChange={e => { const newCapa = [...data.capa]; newCapa[i].status = e.target.value; setData({...data, capa: newCapa}); }} className="bg-slate-800 text-xs px-2 py-1 rounded">
+                                                                                <option>Open</option><option>In Progress</option><option>Closed</option>
+                                                                            </select>
+                                                                        ) : <span className="bg-orange-500/10 text-orange-400 px-2 py-1 rounded text-[10px]">{c.status}</span>}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             </div>
-                                        </div>
                                     </div>
                                 )}
 
                                 {step === 5 && (
                                     <div className="report-section-edit">
-                                        <h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4"><i className="fas fa-check-double"></i> 5. Review</h2>
-                                        <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
-                                            <div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner">
-                                                <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required for {data.siteId}?</p></div>
-                                                <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2">Open Risk Module <i className="fas fa-external-link-alt"></i></a>
+                                            <h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4"><i className="fas fa-check-double"></i> 5. Review</h2>
+                                            <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
+                                                <div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner">
+                                                    <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required for {data.siteId}?</p></div>
+                                                    <a href={`risk.html?site=${data.siteId}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2">Open Risk Module <i className="fas fa-external-link-alt"></i></a>
+                                                </div>
+                                                <div className="flex gap-4 items-start mb-10 p-6 border border-slate-700 rounded-xl bg-slate-900/30">
+                                                    <input type="checkbox" className="w-6 h-6 mt-0.5 accent-emerald-500 cursor-pointer" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} disabled={!canEdit} />
+                                                    <div><label className="text-base font-bold text-white block cursor-pointer" onClick={()=>canEdit && setData({...data, riskUpdated:!data.riskUpdated})}>I confirm that the Risk Assessment has been reviewed.</label></div>
+                                                </div>
+                                                <div className="flex justify-end no-print pt-6 border-t border-slate-700 action-buttons">
+                                                    <button onClick={handleFormPrint} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-6 py-4 rounded-xl mr-4"><i className="fas fa-print mr-2"></i>Print PDF</button>
+                                                    {canEdit && <button onClick={saveData} className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold px-10 py-4 rounded-xl shadow-lg transition-all transform hover:-translate-y-1 flex items-center gap-3"><i className="fas fa-save"></i> Submit Final Report</button>}
+                                                </div>
                                             </div>
-                                            <div className="flex gap-4 items-start mb-10 p-6 border border-slate-700 rounded-xl bg-slate-900/30">
-                                                <input type="checkbox" className="w-6 h-6 mt-0.5 accent-emerald-500 cursor-pointer" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} disabled={!canEdit} />
-                                                <div><label className="text-base font-bold text-white block cursor-pointer" onClick={()=>canEdit && setData({...data, riskUpdated:!data.riskUpdated})}>I confirm that the Risk Assessment has been reviewed.</label></div>
-                                            </div>
-                                            <div className="flex justify-end no-print pt-6 border-t border-slate-700 action-buttons">
-                                                <button onClick={handleFormPrint} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-6 py-4 rounded-xl mr-4"><i className="fas fa-print mr-2"></i>Print PDF</button>
-                                                {canEdit && <button onClick={saveData} className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold px-10 py-4 rounded-xl shadow-lg transition-all transform hover:-translate-y-1 flex items-center gap-3"><i className="fas fa-save"></i> Submit Final Report</button>}
-                                            </div>
-                                        </div>
                                     </div>
                                 )}
                             </div>
