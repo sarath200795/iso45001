@@ -222,7 +222,7 @@
 
         const RiskModule = () => {
             const [session, setSession] = useState(null);
-            const [view, setView] = useState('list'); // list | form | report | external
+            const [view, setView] = useState('list');
             const [sites, setSites] = useState([]);
             const [users, setUsers] = useState([]);
             const [assessments, setAssessments] = useState([]);
@@ -265,13 +265,10 @@
 
                 if (HAZARD_KB[cat] && HAZARD_KB[cat][type]) {
                     const knowledge = HAZARD_KB[cat][type];
-                    // 1. Suggest Existing Controls
                     hazard.existingControls = knowledge.controls;
-                    // 2. Auto-Calculate Residual Risk
                     hazard.p2 = Math.max(1, hazard.p1 - knowledge.p_reduce);
                     hazard.s2 = hazard.s1; // Severity stays same
                     hazard.r2 = hazard.p2 * hazard.s2;
-                    // 3. Suggest Additional Controls if Risk > 8
                     if (hazard.r2 > 8) {
                         hazard.additionalControls = knowledge.add_controls.map(desc => ({
                             category: 'Suggested', desc: desc, owner: session.user, status: 'Proposed'
@@ -315,7 +312,7 @@
                 if(!formData.siteId || !formData.location) return alert("Site and Location are required.");
                 
                 // GENERATE ID
-                const docId = `HIRA-${formData.siteId}-${Date.now().toString().slice(-6)}`;
+                const docId = formData.docId || `HIRA-${formData.siteId}-${Date.now().toString().slice(-6)}`;
                 
                 const payload = { ...formData, docId, createdBy: session.user, updatedAt: new Date().toISOString() };
                 
@@ -350,7 +347,6 @@
                             <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='list'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>Dashboard</button>
                             <button onClick={()=>{setFormData({ id: '', siteId: '', location: '', date: new Date().toISOString().split('T')[0], activities: [] }); setView('form');}} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='form'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>New Assessment</button>
                             <button onClick={()=>setView('report')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='report'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>Reports</button>
-                            <button onClick={()=>setView('external')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='external'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>External App</button>
                         </div>
                     </div>
 
@@ -404,7 +400,7 @@
                                         <div key={act.id} className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 relative">
                                             <div className="mb-6 flex gap-4">
                                                 <div className="flex-1"><label className="block text-[10px] uppercase font-bold text-blue-400 mb-1">Activity Description</label><input value={act.name} onChange={e=>{const n=[...formData.activities]; n[actIdx].name=e.target.value; setFormData({...formData, activities:n})}} placeholder="Describe activity..." className="bg-slate-900 border-blue-500/30 focus:border-blue-500" /></div>
-                                                <button onClick={()=>handleAddHazard(actIdx)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 rounded text-xs font-bold mt-5">+ Add Hazard</button>
+                                                <button onClick={()=>handleAddActivity()} className="bg-blue-600 hover:bg-blue-500 text-white px-4 rounded text-xs font-bold mt-5">+ Add Hazard</button>
                                             </div>
 
                                             <div className="space-y-4">
@@ -518,13 +514,6 @@
                                             </div>
                                         ) : <div className="flex flex-col items-center justify-center h-full text-slate-500"><i className="fas fa-file-invoice text-4xl mb-4 opacity-50"></i><p>Select a report to preview.</p></div>}
                                     </div>
-                                </div>
-                            )}
-
-                            {/* EXTERNAL APP VIEW */}
-                            {view === 'external' && (
-                                <div className="w-full h-full bg-white rounded-xl overflow-hidden shadow-2xl">
-                                    <iframe src="https://opal.google/edit/1m0EK1F99GlUFY_dz1AuIyS1vhfce_4SY" className="w-full h-full border-none" title="External App"></iframe>
                                 </div>
                             )}
 
