@@ -49,13 +49,13 @@
             }
             .no-print { display: none !important; }
             
-            table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+            table { width: 100%; border-collapse: collapse; font-size: 8pt; }
             th, td { border: 1px solid black !important; padding: 4px; text-align: left; vertical-align: top; }
             th { background-color: #eee !important; font-weight: bold; }
             
             .risk-cell { text-align: center; font-weight: bold; border: 1px solid black; }
             
-            /* Print Color Adjust for Risk Matrix cells */
+            /* Print Color Adjust */
             .risk-low { background-color: #10b981 !important; color: white !important; -webkit-print-color-adjust: exact; }
             .risk-med { background-color: #eab308 !important; color: black !important; -webkit-print-color-adjust: exact; }
             .risk-high { background-color: #ef4444 !important; color: white !important; -webkit-print-color-adjust: exact; }
@@ -80,24 +80,54 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- KNOWLEDGE BASE FOR AUTO-SUGGESTIONS ---
+        // --- EXTENSIVE HAZARD KNOWLEDGE BASE ---
         const HAZARD_KB = {
-            "Physical": {
-                "Work at Height": { controls: ["Guardrails installation", "Use of safety harness", "Safety nets", "Scaffolding inspection"], p_reduce: 2, add_controls: ["Permit to Work system", "Tool lanyards"] },
-                "Slip/Trip": { controls: ["Good housekeeping", "Anti-slip flooring", "Cable management", "Adequate lighting"], p_reduce: 2, add_controls: ["Safety footwear", "Signage"] },
-                "Moving Machinery": { controls: ["Machine guarding", "Emergency stops", "LOTO procedures"], p_reduce: 3, add_controls: ["Operator training", "Interlock switches"] },
-                "Noise": { controls: ["Enclosure of noise source", "Maintenance of equipment"], p_reduce: 1, add_controls: ["Ear protection (PPE)", "Job rotation"] }
+            "Work at Height": {
+                "Falls from Elevation": { controls: ["Guardrails (1100mm)", "Safety Nets", "Toe Boards"], p_reduce: 2, add_controls: ["Full Body Harness (Double Lanyard)", "Lifeline System", "PTW - Height"] },
+                "Dropped Objects": { controls: ["Tool Lanyards", "Debris Netting", "Hard Hats (Chin Strap)"], p_reduce: 2, add_controls: ["Exclusion Zone Barricading", "Signage"] },
+                "Fragile Roofs": { controls: ["Crawling Boards", "Signage"], p_reduce: 3, add_controls: ["Roof Ladder", "Fall Arrest System"] }
             },
-            "Chemical": {
-                "Toxic Fumes": { controls: ["Local Exhaust Ventilation", "Fume hoods", "Container lids closed"], p_reduce: 2, add_controls: ["Respirators (PPE)", "Gas monitoring system"] },
-                "Spills": { controls: ["Secondary containment (bunding)", "Spill kits available"], p_reduce: 2, add_controls: ["Chemical resistant gloves", "Emergency shower access"] }
+            "Lifting & Rigging": {
+                "Suspended Loads": { controls: ["SWL Marking", "Barricading Area", "Competent Rigger"], p_reduce: 2, add_controls: ["Tag lines", "Lifting Plan"] },
+                "Crane Failure": { controls: ["TPI Certificate", "Daily Inspection Checklist"], p_reduce: 3, add_controls: ["Load Moment Indicator (LMI)", "Ground Compactness Test"] },
+                "Wire Rope Snap": { controls: ["Visual Inspection", "Discard Criteria"], p_reduce: 2, add_controls: ["Preventive Maintenance", "Proof Load Test"] }
             },
             "Electrical": {
-                "Live Wires": { controls: ["Insulation", "Grounding/Earthing", "LOTO"], p_reduce: 3, add_controls: ["Rubber mats", "Insulated tools"] },
-                "Overloading": { controls: ["Circuit breakers", "Proper fuse rating"], p_reduce: 2, add_controls: ["Thermography inspection", "Regular PAT testing"] }
+                "Electric Shock": { controls: ["ELCB/RCCB (30mA)", "Double Insulation", "Earthing"], p_reduce: 3, add_controls: ["LOTO System", "Insulated Tools", "Rubber Mats"] },
+                "Arc Flash": { controls: ["Panel Doors Closed", "Remote Racking"], p_reduce: 2, add_controls: ["Arc Flash Suit (Cal rated)", "Face Shield", "PTW - Electrical"] },
+                "Static Electricity": { controls: ["Bonding & Grounding", "Anti-static Flooring"], p_reduce: 2, add_controls: ["Static Discharge Rods", "Humidity Control"] }
             },
-            "Fire": {
-                "Flammables": { controls: ["Proper storage cabinets", "Grounding against static"], p_reduce: 2, add_controls: ["Fire extinguishers", "Hot work permit"] }
+            "Chemical": {
+                "Toxic Inhalation": { controls: ["Local Exhaust Ventilation (LEV)", "Fume Hoods"], p_reduce: 2, add_controls: ["Respirator (Half/Full Face)", "Gas Detectors", "Wind Sock"] },
+                "Skin Contact (Corrosive)": { controls: ["Closed Handling System", "Safety Showers"], p_reduce: 2, add_controls: ["Chemical Suit", "Face Shield", "Nitrile/PVC Gloves"] },
+                "Flammable Storage": { controls: ["Flammable Cabinets", "Grounding"], p_reduce: 2, add_controls: ["Fire Extinguishers", "Explosion Proof Electricals"] }
+            },
+            "Fire & Explosion": {
+                "Hot Work (Welding/Cutting)": { controls: ["Remove Combustibles", "Fire Extinguisher"], p_reduce: 2, add_controls: ["Fire Watcher", "Fire Blanket", "Gas Test"] },
+                "Electrical Fire": { controls: ["Correct Fuse Rating", "No Overloading"], p_reduce: 2, add_controls: ["Thermal Imaging", "Auto-Suppression System"] },
+                "Combustible Dust": { controls: ["Dust Extraction", "Housekeeping"], p_reduce: 2, add_controls: ["Explosion Venting", "Anti-static Equipment"] }
+            },
+            "Mechanical / Machinery": {
+                "Rotating Parts": { controls: ["Fixed Guards", "Emergency Stop"], p_reduce: 3, add_controls: ["Interlock Switches", "LOTO"] },
+                "Ejection of Parts": { controls: ["Protective Screens", "Maintenance"], p_reduce: 2, add_controls: ["Eye Protection", "Face Shield"] },
+                "High Pressure Fluid": { controls: ["Hose Restraints (Whip check)", "Relief Valves"], p_reduce: 2, add_controls: ["Isolation Valves", "Pressure Gauge Monitoring"] }
+            },
+            "Excavation": {
+                "Soil Collapse": { controls: ["Sloping/Benching", "Shoring"], p_reduce: 3, add_controls: ["Trench Box", "Shielding"] },
+                "Underground Utilities": { controls: ["Cable Detector Scanning", "As-built Drawings"], p_reduce: 2, add_controls: ["Hand Digging (Trial Pits)", "Permit to Excavate"] },
+                "People Falling In": { controls: ["Hard Barricading", "Signage"], p_reduce: 2, add_controls: ["Blinker Lights", "Security Watch"] }
+            },
+            "Confined Space": {
+                "Oxygen Deficiency": { controls: ["Forced Ventilation", "Gas Testing"], p_reduce: 3, add_controls: ["BA Sets (SCBA/Airline)", "Confined Space Sentry"] },
+                "Toxic Gases (H2S/CO)": { controls: ["Gas Testing (Initial & Continuous)", "Purging"], p_reduce: 3, add_controls: ["Emergency Escape Set (ELSA)", "Rescue Tripod"] }
+            },
+            "Ergonomic": {
+                "Manual Handling": { controls: ["Team Lifting", "Trolleys"], p_reduce: 1, add_controls: ["Mechanical Aids (Forklift/Hoist)", "Training"] },
+                "Repetitive Motion": { controls: ["Job Rotation", "Rest Breaks"], p_reduce: 1, add_controls: ["Workstation Redesign", "Tools with better grip"] }
+            },
+            "Environmental": {
+                "Heat Stress": { controls: ["Drinking Water", "Shaded Rest Area"], p_reduce: 2, add_controls: ["Work-Rest Cycle", "Cooling Vests"] },
+                "Noise": { controls: ["Acoustic Enclosure", "Maintenance"], p_reduce: 2, add_controls: ["Ear Plugs/Muffs", "Audiometric Testing"] }
             }
         };
 
@@ -153,7 +183,6 @@
 
                 hazard.type = type;
 
-                // Auto-Suggest Logic
                 if (HAZARD_KB[cat] && HAZARD_KB[cat][type]) {
                     const knowledge = HAZARD_KB[cat][type];
                     
@@ -161,10 +190,8 @@
                     hazard.existingControls = knowledge.controls;
                     
                     // 2. Auto-Calculate Residual Risk
-                    // Assuming Severity stays same, Probability reduces based on controls
-                    // Ensure prob doesn't go below 1
                     hazard.p2 = Math.max(1, hazard.p1 - knowledge.p_reduce);
-                    hazard.s2 = hazard.s1; // Severity usually remains inherent unless engineered out
+                    hazard.s2 = hazard.s1; // Severity stays same
                     hazard.r2 = hazard.p2 * hazard.s2;
 
                     // 3. Suggest Additional Controls if Risk > 8
@@ -187,8 +214,8 @@
             const handleAddHazard = (actIdx) => {
                 const newActivities = [...formData.activities];
                 newActivities[actIdx].hazards.push({
-                    id: Date.now(), category: 'Physical', type: '', desc: '', who: '',
-                    p1: 5, s1: 3, r1: 15, // Default High Risk to trigger logic
+                    id: Date.now(), category: 'Work at Height', type: '', desc: '', who: '',
+                    p1: 5, s1: 3, r1: 15, // Default High Risk
                     existingControls: [],
                     p2: 1, s2: 1, r2: 1,
                     additionalControls: [],
@@ -211,7 +238,7 @@
             const saveAssessment = async () => {
                 if(!formData.siteId || !formData.location) return alert("Site and Location are required.");
                 
-                // GENERATE ID: HIRA-SITE-DATE
+                // GENERATE ID
                 const docId = `HIRA-${formData.siteId}-${Date.now().toString().slice(-6)}`;
                 
                 const payload = { ...formData, docId, createdBy: session.user, updatedAt: new Date().toISOString() };
@@ -327,7 +354,7 @@
                                                     <div key={haz.id} className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                                                         <div className="grid grid-cols-12 gap-4 mb-4">
                                                             <div className="col-span-2">
-                                                                <label className="lbl">Category</label>
+                                                                <label className="lbl">Hazard Category</label>
                                                                 <select value={haz.category} onChange={e=>updateHazard(actIdx, hazIdx, 'category', e.target.value)}>{Object.keys(HAZARD_KB).map(c=><option key={c}>{c}</option>)}</select>
                                                             </div>
                                                             <div className="col-span-2">
