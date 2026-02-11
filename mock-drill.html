@@ -3,467 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Emergency Response Coordinator | ERP</title>
-    
+    <title>Emergency Drills | Enterprise Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
     <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
-                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
-                }
-            }
-        }
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Space Grotesk', 'sans-serif'] }, colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' } } } }
     </script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; }
-        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s; }
-        .glass-panel:hover { transform: translateY(-2px); border-color: rgba(59, 130, 246, 0.4); }
-        
-        .card-fire { border-bottom: 4px solid #ef4444; }
-        .card-spill { border-bottom: 4px solid #eab308; }
-        .card-electric { border-bottom: 4px solid #f59e0b; }
-        .card-weather { border-bottom: 4px solid #3b82f6; }
-        .card-armed { border-bottom: 4px solid #7f1d1d; }
-        .card-quake { border-bottom: 4px solid #8b5cf6; }
-        .card-medical { border-bottom: 4px solid #10b981; }
-        .card-civil { border-bottom: 4px solid #6366f1; }
-
-        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 8px; width: 100%; outline: none; transition: border-color 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
-        input:disabled, select:disabled { opacity: 0.6; cursor: not-allowed; }
-        
-        .custom-checkbox input:checked + div { background-color: #10b981; border-color: #10b981; }
-        .custom-checkbox input:checked + div:after { content: '✔'; display: block; text-align: center; color: white; font-size: 10px; }
-        
-        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .modal-content { animation: slideUp 0.3s ease-out; }
-
-        /* PRINT STYLES */
-        @media print {
-            @page { size: A4; margin: 10mm; }
-            body * { visibility: hidden; }
-            .print-overlay, .print-overlay * { visibility: visible !important; color: black !important; }
-            .print-overlay { 
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-                background: white; z-index: 9999; display: block !important; 
-            }
-            .no-print { display: none !important; }
-            
-            h1 { font-size: 24pt; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
-            h2 { font-size: 14pt; background: #eee; padding: 5px; margin-top: 20px; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
-            th, td { border: 1px solid black !important; padding: 5px; text-align: left; }
-            .check-icon { font-weight: bold; }
-        }
-        .print-overlay { display: none; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; outline: none; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
     <div id="root" class="h-full flex flex-col"></div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, get, push, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
+        import { getDatabase, ref, push, get, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
         const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
-        window.fb = { get, ref, push, update, remove };
+        window.fb = { ref, push, get, update };
     </script>
-
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-
-        const SCENARIOS = [
-            { id: 1, title: 'Fire Emergency', icon: 'fa-fire', color: 'text-red-500', border: 'card-fire', 
-              checklist: ["Activate manual call point / sound alarm.", "Evacuate via nearest safe exit.", "Check doors for heat before opening.", "Stay low if smoke is present.", "Proceed to Assembly Point.", "Perform head count/roll call."] },
-            { id: 2, title: 'Chemical Spill', icon: 'fa-bottle-droplet', color: 'text-yellow-500', border: 'card-spill',
-              checklist: ["Isolate the area immediately.", "Identify chemical & consult MSDS.", "Don appropriate PPE.", "Use Spill Kit to contain.", "Dispose waste in haz-waste bins.", "Ventilate the area."] },
-            { id: 3, title: 'Electrical Outage', icon: 'fa-bolt', color: 'text-amber-500', border: 'card-electric',
-              checklist: ["Remain calm in work area.", "Lower MHE/Forklifts to floor.", "Check DG status.", "Ensure access control is functional.", "Contact Power Utility Provider."] },
-            { id: 4, title: 'Severe Weather', icon: 'fa-cloud-bolt', color: 'text-blue-500', border: 'card-weather',
-              checklist: ["Monitor weather alerts.", "Secure loose outdoor items.", "Close doors/windows securely.", "Move away from glass.", "Move to designated shelter."] },
-            { id: 5, title: 'Armed Aggressor', icon: 'fa-person-rifle', color: 'text-red-900', border: 'card-armed',
-              checklist: ["Run: Evacuate if safe.", "Hide: Lock door, lights off, silence phones.", "Fight: Last resort only.", "Keep hands visible for Police.", "Lockdown site access."] },
-            { id: 6, title: 'Earthquake', icon: 'fa-house-crack', color: 'text-purple-500', border: 'card-quake',
-              checklist: ["DROP, COVER, HOLD ON.", "Stay away from glass/shelving.", "Evacuate AFTER shaking stops.", "Inspect building for damage."] },
-            { id: 7, title: 'Medical Emergency', icon: 'fa-briefcase-medical', color: 'text-emerald-500', border: 'card-medical',
-              checklist: ["Assess scene safety.", "Do not move patient (unless danger).", "Call First Aider/Ambulance.", "Guide Ambulance to entrance.", "Protect patient privacy."] },
-            { id: 8, title: 'Civil Threat', icon: 'fa-user-secret', color: 'text-indigo-500', border: 'card-civil',
-              checklist: ["Do not touch suspicious items.", "Cordon off area.", "Notify Security/Police.", "Do not use radios near item.", "Evacuate immediate area."] }
-        ];
-
-        const EMERGENCY_TEAMS = [
-            "Transportation Team", "Spill Response Team", "Fire Fighting Team", "Evacuation Team", 
-            "Medical Emergency Team", "Security", "Public Relation"
-        ];
+        const { useState, useEffect } = React;
 
         const MockDrillApp = () => {
             const [session, setSession] = useState(null);
-            const [selectedDrill, setSelectedDrill] = useState(null);
-            const [history, setHistory] = useState([]);
+            const [view, setView] = useState('list');
+            const [drills, setDrills] = useState([]);
             const [sites, setSites] = useState([]);
-            const [users, setUsers] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [printData, setPrintData] = useState(null);
-
-            // Form State
+            
             const [form, setForm] = useState({
-                siteId: '',
-                eventType: 'Mock Drill', // NEW FIELD
-                date: new Date().toISOString().split('T')[0],
-                time: '',
-                shift: 'Day',
-                commander: '',
-                headCount: '',
-                debrief: ''
+                id: '', siteId: '', date: '', type: 'Fire Evacuation', evacTime: '', participants: '',
+                observations: '', capa: [] // [{ action, owner, due, status }]
             });
-            const [checks, setChecks] = useState({});
-            const [teamChecks, setTeamChecks] = useState({});
-            const [actionLog, setActionLog] = useState([]);
 
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
                 const sess = JSON.parse(s);
                 setSession(sess);
+                setForm(f => ({ ...f, siteId: sess.assignedSite || '' }));
 
                 const fetchData = async () => {
-                    const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
-                    const snap = await window.fb.get(dbRef);
+                    const snap = await window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}`));
                     if(snap.exists()) {
                         const val = snap.val();
+                        if(val.mockDrills) setDrills(Object.values(val.mockDrills));
                         if(val.sites) setSites(Object.values(val.sites));
-                        if(val.users) setUsers(Object.values(val.users));
-                        if(val.mockDrills) setHistory(Object.entries(val.mockDrills).map(([k,v]) => ({...v, firebaseKey: k})).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)));
                     }
-                    setLoading(false);
                 };
                 fetchData();
             }, []);
 
-            const availableCommanders = useMemo(() => {
-                if (!form.siteId) return [];
-                return users.filter(u => u.role === 'Owner' || u.assignedSite === form.siteId || (u.accessibleSites && u.accessibleSites.includes(form.siteId)));
-            }, [users, form.siteId]);
+            const addCapa = () => {
+                setForm({...form, capa: [...form.capa, { action: '', owner: '', due: '', status: 'Open' }]});
+            };
 
-            const openDrill = (scenario) => {
-                setSelectedDrill(scenario);
-                setForm({ 
+            const updateCapa = (idx, field, val) => {
+                const newCapa = [...form.capa];
+                newCapa[idx][field] = val;
+                setForm({...form, capa: newCapa});
+            };
+
+            const submitDrill = async () => {
+                if(!form.siteId || !form.date) return alert("Required fields missing");
+                const newRec = { 
                     ...form, 
-                    siteId: session.assignedSite || '', 
-                    eventType: 'Mock Drill', // Default
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-                    headCount: '', debrief: '' 
-                });
-                setChecks({});
-                setTeamChecks({});
-                setActionLog([{ time: '', action: '', observation: '' }]);
-            };
-
-            // ACTION LOG FUNCTIONS
-            const addActionRow = () => setActionLog([...actionLog, { time: '', action: '', observation: '' }]);
-            const removeActionRow = (i) => setActionLog(actionLog.filter((_, idx) => idx !== i));
-            const updateActionRow = (i, field, value) => {
-                const newLog = [...actionLog];
-                newLog[i][field] = value;
-                setActionLog(newLog);
-            };
-
-            const handleSubmit = async () => {
-                if(!form.siteId) return alert("Please select a Site ID.");
-                if(!form.commander) return alert("Please select an Incident Commander.");
-                
-                const teamsAlertedCount = Object.values(teamChecks).filter(Boolean).length;
-                if(teamsAlertedCount < EMERGENCY_TEAMS.length) {
-                    if(!confirm("Not all Emergency Teams have been marked as alerted. Proceed anyway?")) return;
-                }
-
-                const completedCount = Object.values(checks).filter(Boolean).length;
-                const totalCount = selectedDrill.checklist.length;
-                const score = Math.round((completedCount / totalCount) * 100);
-                
-                // GENERATE DOC ID: ORG-SITE-MD-SRNO (MD stands for Mock Drill, we can keep MD for ID or change to ER for real)
-                const prefix = form.eventType === 'Mock Drill' ? 'MD' : 'ER';
-                const srNo = Math.floor(10000 + Math.random() * 90000);
-                const docId = `${session.orgId}-${form.siteId}-${prefix}-${srNo}`;
-
-                const newRecord = {
-                    ...form,
-                    docId: docId,
-                    scenario: selectedDrill.title,
-                    score: score,
-                    teamsAlerted: teamChecks,
-                    checklistStatus: checks,
-                    actionLog: actionLog.filter(l => l.action),
-                    timestamp: new Date().toISOString(),
-                    loggedBy: session.user
+                    docId: `MD-${Date.now().toString().slice(-6)}`,
+                    createdBy: session.user 
                 };
-
-                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/mockDrills`), newRecord);
-                
-                setHistory([newRecord, ...history]);
-                setSelectedDrill(null); 
-                alert(`${form.eventType} Report Submitted! ID: ${docId}`);
+                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/mockDrills`), newRec);
+                setDrills([...drills, newRec]);
+                alert("Drill Record Saved!");
+                setView('list');
+                setForm({ id: '', siteId: session.assignedSite || '', date: '', type: 'Fire Evacuation', evacTime: '', participants: '', observations: '', capa: [] });
             };
 
-            const deleteRecord = async (record, index) => {
-                if(confirm("Are you sure you want to delete this record?")) {
-                    if(record.firebaseKey) {
-                        await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/mockDrills/${record.firebaseKey}`));
-                    }
-                    const newHistory = history.filter((_, i) => i !== index);
-                    setHistory(newHistory);
-                }
-            };
-
-            const generatePDF = (record) => {
-                const scenarioDef = SCENARIOS.find(s => s.title === record.scenario);
-                const fullRecord = { ...record, scenarioDef: scenarioDef };
-                setPrintData(fullRecord);
-                setTimeout(() => window.print(), 500);
-            };
-
-            const toggleCheck = (id, setFn) => setFn(prev => ({...prev, [id]: !prev[id]}));
-
-            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Resources...</div>;
+            if(!session) return null;
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
-                    
-                    {/* HEADER */}
-                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
                         <div className="flex items-center gap-4">
                             <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
-                            <h1 className="font-bold text-lg">Record Emergency / Drill</h1>
+                            <h1 className="font-bold text-lg">Emergency Preparedness</h1>
                         </div>
-                        <div className="text-xs bg-slate-800 px-3 py-1 rounded text-slate-400 border border-slate-700">User: {session.user}</div>
+                        <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
+                            <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='list'?'bg-pink-600 text-white':'text-slate-400'}`}>Records</button>
+                            <button onClick={()=>setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='form'?'bg-pink-600 text-white':'text-slate-400'}`}>New Drill</button>
+                        </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-8 no-print">
-                        <div className="max-w-6xl mx-auto">
-                            <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><i className="fas fa-clipboard-list text-blue-400"></i> Select Scenario</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                                {SCENARIOS.map(s => (
-                                    <div key={s.id} onClick={() => openDrill(s)} className={`glass-panel p-6 rounded-xl cursor-pointer relative group ${s.border}`}>
-                                        <div className={`w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-xl mb-4 ${s.color} group-hover:scale-110 transition-transform`}><i className={`fas ${s.icon}`}></i></div>
-                                        <h3 className="font-bold text-lg mb-1">{s.title}</h3>
-                                        <p className="text-xs text-slate-400">Initiate Protocol</p>
-                                    </div>
-                                ))}
+                    <div className="flex-1 overflow-y-auto p-8 custom-scroll">
+                        <div className="max-w-5xl mx-auto">
+                            
+                            {/* KPI CARDS */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-pink-500 flex justify-between items-center">
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Drills Conducted</p><h3 className="text-3xl font-bold">{drills.length}</h3></div>
+                                    <i className="fas fa-person-running text-2xl text-pink-500/50"></i>
+                                </div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Avg Evac Time</p><h3 className="text-3xl font-bold">{drills.length > 0 ? Math.round(drills.reduce((a,b)=>a+parseInt(b.evacTime||0),0)/drills.length) : 0} <span className="text-sm">min</span></h3></div>
+                                    <i className="fas fa-stopwatch text-2xl text-blue-500/50"></i>
+                                </div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center">
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Open CAPA</p><h3 className="text-3xl font-bold">{drills.reduce((acc, d) => acc + (d.capa ? d.capa.filter(c=>c.status==='Open').length : 0), 0)}</h3></div>
+                                    <i className="fas fa-clipboard-list text-2xl text-yellow-500/50"></i>
+                                </div>
                             </div>
 
-                            <div className="border-t border-slate-800 pt-8">
-                                <h3 className="font-bold text-slate-400 uppercase text-xs mb-4">Recent Logs</h3>
-                                <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                            {view === 'list' && (
+                                <div className="glass-panel rounded-xl overflow-hidden border border-slate-700">
                                     <table className="w-full text-left text-sm text-slate-300">
-                                        <thead className="bg-slate-950 text-slate-500 uppercase text-xs">
-                                            <tr>
-                                                <th className="p-4">Type</th>
-                                                <th className="p-4">Doc ID</th>
-                                                <th className="p-4">Scenario</th>
-                                                <th className="p-4">Date</th>
-                                                <th className="p-4">Commander</th>
-                                                <th className="p-4">Score</th>
-                                                <th className="p-4 text-right">Actions</th>
-                                            </tr>
+                                        <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
+                                            <tr><th className="p-4">Date</th><th className="p-4">Site</th><th className="p-4">Type</th><th className="p-4">Evac Time</th><th className="p-4">People</th><th className="p-4">CAPA</th></tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
-                                            {history.map((h, i) => (
+                                            {drills.map((d, i) => (
                                                 <tr key={i} className="hover:bg-slate-800/50">
-                                                    <td className="p-4">
-                                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${h.eventType === 'Real Emergency' ? 'bg-red-500 text-white' : 'bg-blue-500/20 text-blue-400'}`}>
-                                                            {h.eventType || 'Mock Drill'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 font-mono text-xs text-blue-300">{h.docId || 'PENDING'}</td>
-                                                    <td className="p-4 font-bold text-white">{h.scenario}</td>
-                                                    <td className="p-4 text-xs">{h.date}</td>
-                                                    <td className="p-4">{h.commander}</td>
-                                                    <td className="p-4"><span className={`px-2 py-1 rounded text-xs font-bold ${h.score===100?'bg-emerald-500/20 text-emerald-400':'bg-yellow-500/20 text-yellow-400'}`}>{h.score}%</span></td>
-                                                    <td className="p-4 text-right flex justify-end gap-2">
-                                                        <button onClick={() => generatePDF(h)} className="text-blue-400 hover:text-blue-300 p-2 rounded hover:bg-blue-500/10" title="Download Report"><i className="fas fa-file-pdf"></i></button>
-                                                        <button onClick={() => deleteRecord(h, i)} className="text-slate-500 hover:text-red-400 p-2 rounded hover:bg-red-500/10" title="Delete"><i className="fas fa-trash"></i></button>
-                                                    </td>
+                                                    <td className="p-4">{d.date}</td>
+                                                    <td className="p-4">{d.siteId}</td>
+                                                    <td className="p-4 font-bold text-white">{d.type}</td>
+                                                    <td className="p-4 font-mono text-pink-400">{d.evacTime} min</td>
+                                                    <td className="p-4">{d.participants}</td>
+                                                    <td className="p-4"><span className="bg-slate-700 px-2 py-1 rounded text-[10px]">{d.capa ? d.capa.length : 0} Items</span></td>
                                                 </tr>
                                             ))}
-                                            {history.length === 0 && <tr><td colSpan="7" className="p-6 text-center italic text-slate-600">No records found.</td></tr>}
                                         </tbody>
                                     </table>
                                 </div>
-                            </div>
+                            )}
+
+                            {view === 'form' && (
+                                <div className="glass-panel p-8 rounded-xl animate-fade-in">
+                                    <h2 className="text-xl font-bold mb-6 text-pink-400">Record Emergency Drill</h2>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                        <div className="col-span-2 md:col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label><select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select></div>
+                                        <div className="col-span-2 md:col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Date</label><input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})}/></div>
+                                        <div className="col-span-2 md:col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Type</label><select value={form.type} onChange={e=>setForm({...form, type:e.target.value})}><option>Fire Evacuation</option><option>Chemical Spill</option><option>Medical Emergency</option><option>Confined Space Rescue</option></select></div>
+                                        <div className="col-span-2 md:col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Evac Time (min)</label><input type="number" value={form.evacTime} onChange={e=>setForm({...form, evacTime:e.target.value})}/></div>
+                                    </div>
+                                    <div className="mb-6">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Observations / Shortcomings</label>
+                                        <textarea rows="3" value={form.observations} onChange={e=>setForm({...form, observations:e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" placeholder="What went wrong? What needs improvement?"></textarea>
+                                    </div>
+
+                                    {/* CAPA SECTION - This feeds into capa.html */}
+                                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <label className="text-[10px] uppercase font-bold text-blue-400">Improvement Actions (CAPA)</label>
+                                            <button onClick={addCapa} className="text-[10px] bg-blue-600 px-2 py-1 rounded text-white">+ Add Action</button>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {form.capa.map((c, i) => (
+                                                <div key={i} className="grid grid-cols-4 gap-2">
+                                                    <input value={c.action} onChange={e=>updateCapa(i, 'action', e.target.value)} placeholder="Action..." className="col-span-2 text-xs bg-slate-950" />
+                                                    <input value={c.owner} onChange={e=>updateCapa(i, 'owner', e.target.value)} placeholder="Owner" className="text-xs bg-slate-950" />
+                                                    <input type="date" value={c.due} onChange={e=>updateCapa(i, 'due', e.target.value)} className="text-xs bg-slate-950" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <button onClick={submitDrill} className="bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg mt-6 w-full">Save Drill Record</button>
+                                </div>
+                            )}
                         </div>
                     </div>
-
-                    {/* MODAL */}
-                    {selectedDrill && (
-                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
-                            <div className={`bg-slate-900 w-full max-w-3xl rounded-2xl border shadow-2xl flex flex-col max-h-[90vh] modal-content ${form.eventType === 'Real Emergency' ? 'border-red-500 ring-2 ring-red-900' : 'border-slate-700'}`}>
-                                <div className={`p-6 border-b border-slate-800 flex justify-between items-center ${selectedDrill.border}`}>
-                                    <div className="flex items-center gap-3"><i className={`fas ${selectedDrill.icon} text-2xl ${selectedDrill.color}`}></i><div><h2 className="text-xl font-bold">{selectedDrill.title}</h2><p className="text-xs text-slate-400">Protocol Initiation</p></div></div>
-                                    <button onClick={() => setSelectedDrill(null)} className="text-slate-400 hover:text-white"><i className="fas fa-times text-xl"></i></button>
-                                </div>
-                                <div className="p-6 overflow-y-auto custom-scroll space-y-6">
-                                    
-                                    {/* Event Type Toggle */}
-                                    <div className="flex justify-center mb-4">
-                                        <div className="bg-slate-950 p-1 rounded-lg flex border border-slate-700">
-                                            <button onClick={()=>setForm({...form, eventType: 'Mock Drill'})} className={`px-4 py-2 rounded text-xs font-bold uppercase transition ${form.eventType === 'Mock Drill' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Mock Drill</button>
-                                            <button onClick={()=>setForm({...form, eventType: 'Real Emergency'})} className={`px-4 py-2 rounded text-xs font-bold uppercase transition ${form.eventType === 'Real Emergency' ? 'bg-red-600 text-white animate-pulse' : 'text-slate-400 hover:text-white'}`}>Real Emergency</button>
-                                        </div>
-                                    </div>
-
-                                    {/* Context */}
-                                    <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-950 p-4 rounded-xl border ${form.eventType === 'Real Emergency' ? 'border-red-900/50' : 'border-slate-800'}`}>
-                                        <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Site ID</label><select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}><option value="">Select Site...</option>{sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}</select></div>
-                                        <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Incident Commander</label><select value={form.commander} onChange={e=>setForm({...form, commander:e.target.value})} disabled={!form.siteId}><option value="">{form.siteId ? 'Select Commander...' : 'Select Site First'}</option>{availableCommanders.map(u => <option key={u.id} value={u.name}>{u.name} ({u.role})</option>)}</select></div>
-                                        <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Date</label><input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} /></div>
-                                        <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Time Start</label><input type="time" value={form.time} onChange={e=>setForm({...form, time:e.target.value})} /></div>
-                                        <div><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Shift</label><select value={form.shift} onChange={e=>setForm({...form, shift:e.target.value})}><option>Day</option><option>Night</option><option>Swing</option></select></div>
-                                    </div>
-                                    
-                                    {/* Teams */}
-                                    <div><h3 className="font-bold text-orange-400 text-sm mb-3 uppercase tracking-wider border-b border-orange-500/20 pb-2">Emergency Teams Alerted</h3><div className="grid grid-cols-2 gap-3">{EMERGENCY_TEAMS.map((team, idx) => (<label key={idx} className="flex items-center gap-3 p-3 rounded bg-slate-800/50 hover:bg-slate-800 cursor-pointer border border-slate-700 custom-checkbox"><div className="relative flex items-center"><input type="checkbox" className="hidden" checked={!!teamChecks[idx]} onChange={() => toggleCheck(idx, setTeamChecks)} /><div className="w-4 h-4 rounded border border-slate-500 bg-slate-900 transition"></div></div><span className={`text-xs font-bold ${teamChecks[idx] ? 'text-white' : 'text-slate-400'}`}>{team}</span></label>))}</div></div>
-                                    
-                                    {/* Checklist */}
-                                    <div><h3 className="font-bold text-blue-400 text-sm mb-3 uppercase tracking-wider border-b border-blue-500/20 pb-2">Procedural Checklist</h3><div className="space-y-2">{selectedDrill.checklist.map((item, idx) => (<label key={idx} className="flex items-start gap-3 p-3 rounded hover:bg-slate-800 cursor-pointer custom-checkbox group transition"><div className="relative flex items-center mt-0.5"><input type="checkbox" className="hidden" checked={!!checks[idx]} onChange={() => toggleCheck(idx, setChecks)} /><div className="w-5 h-5 rounded border border-slate-500 bg-slate-900 group-hover:border-blue-400 transition"></div></div><span className={`text-sm ${checks[idx] ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{item}</span></label>))}</div></div>
-                                    
-                                    {/* Debrief & Action Log */}
-                                    <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700">
-                                        <h3 className="font-bold text-emerald-400 text-sm mb-3 uppercase tracking-wider">Post-Event Debrief</h3>
-                                        <div className="mb-4"><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Total Head Count</label><input type="number" value={form.headCount} onChange={e=>setForm({...form, headCount:e.target.value})} className="bg-slate-900 border-slate-600 w-1/3" /></div>
-                                        <div className="mb-6"><label className="text-[10px] uppercase text-slate-500 font-bold block mb-1">Debrief Notes</label><textarea rows="2" value={form.debrief} onChange={e=>setForm({...form, debrief:e.target.value})} className="bg-slate-900 border-slate-600 w-full"></textarea></div>
-                                        
-                                        <h4 className="text-xs font-bold text-slate-400 mb-2 border-b border-slate-700 pb-1">Action Log Timeline</h4>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-xs text-left mb-2">
-                                                <thead><tr className="text-slate-500"><th className="p-2 w-20">Time</th><th className="p-2">Action Done</th><th className="p-2">Observation</th><th className="w-8"></th></tr></thead>
-                                                <tbody>
-                                                    {actionLog.map((row, i) => (
-                                                        <tr key={i} className="border-b border-slate-800">
-                                                            <td className="p-1"><input type="time" value={row.time} onChange={e=>updateActionRow(i, 'time', e.target.value)} className="bg-slate-950 border-none rounded p-1 w-full" /></td>
-                                                            <td className="p-1"><input type="text" value={row.action} onChange={e=>updateActionRow(i, 'action', e.target.value)} className="bg-slate-950 border-none rounded p-1 w-full" placeholder="Action..." /></td>
-                                                            <td className="p-1"><input type="text" value={row.observation} onChange={e=>updateActionRow(i, 'observation', e.target.value)} className="bg-slate-950 border-none rounded p-1 w-full" placeholder="Obs..." /></td>
-                                                            <td className="p-1 text-center"><button onClick={()=>removeActionRow(i)} className="text-red-400 hover:text-red-300"><i className="fas fa-times"></i></button></td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                            <button onClick={addActionRow} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i className="fas fa-plus-circle"></i> Add Log Entry</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="p-4 border-t border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-b-2xl"><div className="text-xs text-slate-500">Checklist: {Object.values(checks).filter(Boolean).length} / {selectedDrill.checklist.length}</div><button onClick={handleSubmit} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 px-8 rounded-xl shadow-lg transition-all transform hover:-translate-y-1">Submit Report</button></div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* PRINT OVERLAY */}
-                    {printData && (
-                        <div className="print-overlay p-10">
-                            <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
-                                <div>
-                                    <h1 className="text-2xl font-bold uppercase mb-1">{printData.eventType || 'Mock Drill'} Report</h1>
-                                    <p className="text-sm font-bold">Document ID: {printData.docId}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-sm">Date: {printData.date}</p>
-                                    <p className="text-sm">Organization: {session.orgId}</p>
-                                </div>
-                            </div>
-
-                            {/* Section 1: Context */}
-                            <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">1. Event Information</h2>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div><strong>Type:</strong> {printData.eventType || 'Mock Drill'}</div>
-                                    <div><strong>Site ID:</strong> {printData.siteId}</div>
-                                    <div><strong>Scenario:</strong> {printData.scenario}</div>
-                                    <div><strong>Incident Commander:</strong> {printData.commander}</div>
-                                    <div><strong>Shift:</strong> {printData.shift}</div>
-                                    <div><strong>Time Start:</strong> {printData.time}</div>
-                                    <div><strong>Logged By:</strong> {printData.loggedBy}</div>
-                                </div>
-                            </div>
-
-                            {/* Section 2: Teams */}
-                            <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">2. Emergency Teams Activation</h2>
-                                <div className="grid grid-cols-2 gap-2 text-sm">
-                                    {EMERGENCY_TEAMS.map((team, idx) => (
-                                        <div key={idx} className="flex items-center gap-2">
-                                            <span className="check-icon">{printData.teamsAlerted && printData.teamsAlerted[idx] ? '[☑]' : '[☐]'}</span>
-                                            <span>{team}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Section 3: Checklist */}
-                            <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">3. Procedural Checklist Audit</h2>
-                                <table className="w-full text-sm border-collapse border border-black">
-                                    <thead>
-                                        <tr className="bg-gray-100">
-                                            <th className="border border-black p-2 w-10 text-center">Status</th>
-                                            <th className="border border-black p-2">Action Item</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {printData.scenarioDef ? printData.scenarioDef.checklist.map((item, idx) => (
-                                            <tr key={idx}>
-                                                <td className="border border-black p-2 text-center font-bold">
-                                                    {printData.checklistStatus && printData.checklistStatus[idx] ? 'PASS' : 'FAIL'}
-                                                </td>
-                                                <td className="border border-black p-2">{item}</td>
-                                            </tr>
-                                        )) : <tr><td colSpan="2" className="p-2">Scenario definition not found.</td></tr>}
-                                    </tbody>
-                                </table>
-                                <div className="mt-2 text-right font-bold text-sm">Score: {printData.score}%</div>
-                            </div>
-
-                            {/* Section 4: Debrief & Action Log */}
-                            <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">4. Post-Event Debrief</h2>
-                                <div className="mb-4 text-sm"><strong>Total Head Count:</strong> {printData.headCount || 'Not Recorded'}</div>
-                                <div className="mb-4 text-sm"><strong>Observations / Debrief Notes:</strong><br/>{printData.debrief || 'None provided.'}</div>
-                                
-                                <h3 className="font-bold border-b border-black mb-2 mt-4">Action Log Timeline</h3>
-                                <table className="w-full text-sm border-collapse border border-black">
-                                    <thead><tr className="bg-gray-100"><th className="border border-black p-1">Time</th><th className="border border-black p-1">Action</th><th className="border border-black p-1">Observation</th></tr></thead>
-                                    <tbody>
-                                        {printData.actionLog && printData.actionLog.length > 0 ? printData.actionLog.map((row, i) => (
-                                            <tr key={i}>
-                                                <td className="border border-black p-1 w-20">{row.time}</td>
-                                                <td className="border border-black p-1">{row.action}</td>
-                                                <td className="border border-black p-1">{row.observation}</td>
-                                            </tr>
-                                        )) : <tr><td colSpan="3" className="border border-black p-1 italic">No actions logged.</td></tr>}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* Footer */}
-                            <div className="flex justify-between mt-12 pt-12">
-                                <div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Incident Commander Signature</div>
-                                <div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">HSE Officer Signature</div>
-                            </div>
-                        </div>
-                    )}
-
                 </div>
             );
         };
-
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<MockDrillApp />);
     </script>
