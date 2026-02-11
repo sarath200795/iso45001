@@ -9,6 +9,7 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     
@@ -49,7 +50,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- HELPER: FILE TO BASE64 ---
+        // Helper: Convert File to Base64 for evidence
         const fileToBase64 = (file) => new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -69,7 +70,6 @@
             const [bulkForm, setBulkForm] = useState({
                 topic: '',
                 date: new Date().toISOString().split('T')[0],
-                expiry: '',
                 trainer: '',
                 evidence: null,
                 selectedUsers: [] // Array of User IDs
@@ -94,10 +94,37 @@
                 fetchData();
             }, []);
 
+            // --- 6-MONTH EXPIRY LOGIC ---
+            const getStatus = (user, topic) => {
+                // 1. Find all records for this user & topic
+                const userRecords = records
+                    .filter(r => r.user === user && r.topic === topic)
+                    .sort((a,b) => new Date(b.date) - new Date(a.date)); // Sort Newest First
+                
+                // 2. If no record exists
+                if(userRecords.length === 0) return { label: 'Not Trained', color: 'text-slate-500 bg-slate-900 border-slate-800' };
+                
+                // 3. Check Date Validity (6 Months)
+                const latest = userRecords[0];
+                const trainingDate = new Date(latest.date);
+                const today = new Date();
+                
+                // Calculate difference in months
+                const diffTime = Math.abs(today - trainingDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                const isExpired = diffDays > 180; // 180 days approx 6 months
+
+                if(isExpired) {
+                    return { label: 'Expired', color: 'text-red-400 bg-red-900/20 border-red-500/30' };
+                }
+                
+                return { label: 'Valid', color: 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30' };
+            };
+
             // --- BULK SUBMIT LOGIC ---
             const handleBulkSubmit = async () => {
                 if(!bulkForm.topic || !bulkForm.date || bulkForm.selectedUsers.length === 0) {
-                    return alert("Please select a Topic, Date, and at least one Employee.");
+                    return alert("Please select a Topic, Date, and at least one Attendee.");
                 }
 
                 const batchPromises = bulkForm.selectedUsers.map(userName => {
@@ -105,10 +132,8 @@
                         user: userName,
                         topic: bulkForm.topic,
                         date: bulkForm.date,
-                        expiry: bulkForm.expiry,
                         trainer: bulkForm.trainer,
                         evidence: bulkForm.evidence,
-                        status: 'Valid',
                         createdBy: session.user,
                         timestamp: new Date().toISOString()
                     };
@@ -122,7 +147,7 @@
                 
                 // Reset Form
                 setBulkForm({
-                    topic: '', date: new Date().toISOString().split('T')[0], expiry: '', trainer: '', evidence: null, selectedUsers: []
+                    topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: []
                 });
                 setView('matrix');
             };
@@ -151,20 +176,21 @@
                 }
             };
 
-            // --- MATRIX LOGIC ---
-            const getStatus = (user, topic) => {
-                // Find latest record for this user & topic
-                const userRecords = records
-                    .filter(r => r.user === user && r.topic === topic)
-                    .sort((a,b) => new Date(b.date) - new Date(a.date));
-                
-                if(userRecords.length === 0) return { label: 'Not Trained', color: 'text-slate-600 bg-slate-900 border-slate-800' };
-                
-                const latest = userRecords[0];
-                const isExpired = latest.expiry && new Date(latest.expiry) < new Date();
-                
-                if(isExpired) return { label: 'Expired', color: 'text-red-400 bg-red-900/20 border-red-500/30' };
-                return { label: 'Valid', color: 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30' };
+            // --- EXPORT TO EXCEL ---
+            const downloadMatrix = () => {
+                const data = users.map(u => {
+                    const row = { Employee: u.name, Role: u.role };
+                    topics.forEach(t => {
+                        const status = getStatus(u.name, t);
+                        row[t] = status.label;
+                    });
+                    return row;
+                });
+
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Training_Matrix");
+                XLSX.writeFile(wb, "Training_Matrix_6Month_Review.xlsx");
             };
 
             const complianceRate = useMemo(() => {
@@ -204,7 +230,7 @@
                             {/* KPI Cards */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center">
-                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Total Records</p><h3 className="text-3xl font-bold">{records.length}</h3></div>
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Total Sessions</p><h3 className="text-3xl font-bold">{records.length}</h3></div>
                                     <i className="fas fa-file-signature text-2xl text-yellow-500/50"></i>
                                 </div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center">
@@ -212,8 +238,10 @@
                                     <i className="fas fa-chart-pie text-2xl text-emerald-500/50"></i>
                                 </div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-red-500 flex justify-between items-center">
-                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Expired Records</p><h3 className="text-3xl font-bold text-red-400">{records.filter(r=>r.expiry && new Date(r.expiry) < new Date()).length}</h3></div>
-                                    <i className="fas fa-exclamation-circle text-2xl text-red-500/50"></i>
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Expired (6 Mo)</p><h3 className="text-3xl font-bold text-red-400">
+                                        {users.reduce((acc, u) => acc + topics.filter(t => getStatus(u.name, t).label === 'Expired').length, 0)}
+                                    </h3></div>
+                                    <i className="fas fa-history text-2xl text-red-500/50"></i>
                                 </div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
                                     <div><p className="text-xs text-slate-400 uppercase font-bold">Employees</p><h3 className="text-3xl font-bold">{users.length}</h3></div>
@@ -224,6 +252,10 @@
                             {/* 1. MATRIX VIEW */}
                             {view === 'matrix' && (
                                 <div className="glass-panel rounded-xl overflow-hidden border border-slate-700 animate-fade-in">
+                                    <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                                        <h3 className="text-lg font-bold text-white">Competency Matrix (Auto-Refreshes every 6 Months)</h3>
+                                        <button onClick={downloadMatrix} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center gap-2"><i className="fas fa-file-excel"></i> Download Excel</button>
+                                    </div>
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left text-sm text-slate-300">
                                             <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
@@ -280,7 +312,6 @@
                                                 </div>
                                             </div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Date Completed</label><input type="date" value={bulkForm.date} onChange={e=>setBulkForm({...bulkForm, date:e.target.value})} className="bg-slate-900 border-slate-700"/></div>
-                                            <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Valid Until (Expiry)</label><input type="date" value={bulkForm.expiry} onChange={e=>setBulkForm({...bulkForm, expiry:e.target.value})} className="bg-slate-900 border-slate-700"/></div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Trainer Name</label><input value={bulkForm.trainer} onChange={e=>setBulkForm({...bulkForm, trainer:e.target.value})} placeholder="Internal or External Trainer" className="bg-slate-900 border-slate-700"/></div>
                                             <div>
                                                 <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Upload Attendance Sheet (Evidence)</label>
@@ -289,7 +320,7 @@
                                             </div>
                                         </div>
 
-                                        {/* Right: User Selection */}
+                                        {/* Right: User Selection (Attendees) */}
                                         <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 flex flex-col h-full">
                                             <div className="flex justify-between items-center mb-3">
                                                 <label className="text-xs font-bold text-blue-400 uppercase">Select Attendees ({bulkForm.selectedUsers.length})</label>
