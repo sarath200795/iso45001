@@ -27,9 +27,6 @@
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 8px; width: 100%; outline: none; transition: border-color 0.2s; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
-        .type-badge-jdi { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-        .type-badge-kaizen { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
-        .type-badge-program { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
         .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
@@ -51,7 +48,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- DYNAMIC LIST (Simple Strings) ---
+        // --- COMPONENTS ---
         const DynamicList = ({ label, items, onChange, placeholder, color = "text-slate-500" }) => (
             <div className="mb-4">
                 <div className="flex justify-between items-center mb-2">
@@ -65,40 +62,10 @@
                             <button onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300 px-2 rounded bg-red-900/10 border border-red-900/30"><i className="fas fa-times"></i></button>
                         </div>
                     ))}
-                    {items.length === 0 && <div className="text-xs text-slate-600 italic p-2 border border-slate-800 border-dashed rounded text-center">No items added.</div>}
                 </div>
             </div>
         );
 
-        // --- TRAINING BUILDER (Topic + Responsible Person) ---
-        const TrainingBuilder = ({ trainings, users, onChange }) => (
-            <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
-                    <label className="text-[10px] uppercase font-bold text-yellow-400">Training Plan & Responsibility</label>
-                    <button onClick={() => onChange([...trainings, { topic: '', owner: '' }])} className="text-[10px] bg-yellow-900/30 text-yellow-400 border border-yellow-500/30 px-2 py-1 rounded hover:bg-yellow-900/50">+ Add Training</button>
-                </div>
-                <div className="space-y-2">
-                    {trainings.map((t, i) => (
-                        <div key={i} className="grid grid-cols-5 gap-2">
-                            <div className="col-span-3">
-                                <input value={t.topic} onChange={e => { const nt = [...trainings]; nt[i].topic = e.target.value; onChange(nt); }} placeholder="Training Topic (e.g. LOTO Awareness)" className="text-xs bg-slate-950" />
-                            </div>
-                            <div className="col-span-2 flex gap-2">
-                                <select value={t.owner} onChange={e => { const nt = [...trainings]; nt[i].owner = e.target.value; onChange(nt); }} className="text-xs bg-slate-950 w-full">
-                                    <option value="">Responsible Person...</option>
-                                    {users.map(u => <option key={u.id} value={u.name}>{u.name} ({u.role})</option>)}
-                                    <option value="External">External Trainer</option>
-                                </select>
-                                <button onClick={() => onChange(trainings.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-white px-2"><i className="fas fa-times"></i></button>
-                            </div>
-                        </div>
-                    ))}
-                    {trainings.length === 0 && <div className="text-xs text-slate-600 italic text-center p-2 border border-slate-800 border-dashed rounded">No training planned.</div>}
-                </div>
-            </div>
-        );
-
-        // --- METRICS BUILDER ---
         const MetricBuilder = ({ metrics, onChange }) => (
             <div className="mb-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700">
                 <div className="flex justify-between items-center mb-3">
@@ -108,92 +75,47 @@
                 <div className="space-y-2">
                     {metrics.map((m, i) => (
                         <div key={i} className="grid grid-cols-5 gap-2">
-                            <div className="col-span-3">
-                                <input value={m.name} onChange={e => { const nm = [...metrics]; nm[i].name = e.target.value; onChange(nm); }} placeholder="Metric Name (e.g. LTIR)" className="text-xs bg-slate-950" />
-                            </div>
-                            <div className="col-span-2 flex gap-2">
-                                <input value={m.value} onChange={e => { const nm = [...metrics]; nm[i].value = e.target.value; onChange(nm); }} placeholder="Impact (e.g. -5%)" className="text-xs bg-slate-950" />
-                                <button onClick={() => onChange(metrics.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-white px-2"><i className="fas fa-times"></i></button>
-                            </div>
+                            <div className="col-span-3"><input value={m.name} onChange={e => { const nm = [...metrics]; nm[i].name = e.target.value; onChange(nm); }} placeholder="Metric Name" className="text-xs bg-slate-950" /></div>
+                            <div className="col-span-2 flex gap-2"><input value={m.value} onChange={e => { const nm = [...metrics]; nm[i].value = e.target.value; onChange(nm); }} placeholder="Impact" className="text-xs bg-slate-950" /><button onClick={() => onChange(metrics.filter((_, idx) => idx !== i))} className="text-red-400 px-2"><i className="fas fa-times"></i></button></div>
                         </div>
                     ))}
-                    {metrics.length === 0 && <div className="text-xs text-slate-600 italic text-center">No specific metrics defined.</div>}
                 </div>
             </div>
         );
 
-        // --- NOTIFICATION BUILDER ---
-        const NotificationBuilder = ({ notifications, sites, onChange, label }) => {
-            const [selSite, setSelSite] = useState('');
-            const [selRole, setSelRole] = useState('');
-
-            const addNotify = () => {
-                if(selSite && selRole) {
-                    onChange([...notifications, { site: selSite, role: selRole }]);
-                    setSelSite(''); setSelRole('');
-                }
-            };
-
-            return (
-                <div className="mb-4 bg-blue-900/10 p-4 rounded-xl border border-blue-500/30">
-                    <div className="flex justify-between items-center mb-3">
-                        <label className="text-[10px] uppercase font-bold text-blue-400"><i className="fas fa-bullhorn mr-1"></i> {label || 'Notifications'}</label>
-                    </div>
-                    <div className="flex gap-2 mb-3">
-                        <select value={selSite} onChange={e=>setSelSite(e.target.value)} className="text-xs bg-slate-950 border-slate-700">
-                            <option value="">Select Site...</option>
-                            <option value="ALL">ALL SITES</option>
-                            {sites.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
-                        </select>
-                        <select value={selRole} onChange={e=>setSelRole(e.target.value)} className="text-xs bg-slate-950 border-slate-700">
-                            <option value="">Select Role...</option>
-                            <option value="Site Lead">Site Lead</option>
-                            <option value="Safety Officer">Safety Officer</option>
-                            <option value="Operations Manager">Operations Manager</option>
-                            <option value="Maintenance Lead">Maintenance Lead</option>
-                        </select>
-                        <button onClick={addNotify} className="bg-blue-600 text-white px-3 rounded text-xs font-bold">Add</button>
-                    </div>
-                    <div className="space-y-1">
-                        {notifications.map((n, i) => (
-                            <div key={i} className="flex justify-between bg-slate-900 p-2 rounded text-xs items-center border border-slate-700">
-                                <span>Notify <strong>{n.role}</strong> at <strong className="text-blue-300">{n.site}</strong></span>
-                                <button onClick={() => onChange(notifications.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-white"><i className="fas fa-times"></i></button>
-                            </div>
-                        ))}
-                        {notifications.length === 0 && <div className="text-xs text-slate-500 italic text-center">No notifications configured.</div>}
-                    </div>
+        // --- NEW ACTION PLAN BUILDER (CAPA) ---
+        const ActionPlanBuilder = ({ actions, users, onChange }) => (
+            <div className="mb-6 bg-slate-800/50 p-4 rounded-xl border border-slate-700 shadow-inner">
+                <div className="flex justify-between items-center mb-3">
+                    <label className="text-xs uppercase font-bold text-cyan-400"><i className="fas fa-list-check mr-2"></i> Implementation Action Plan (CAPA)</label>
+                    <button onClick={() => onChange([...actions, { action: '', owner: '', due: '', status: 'Open' }])} className="bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] px-3 py-1.5 rounded font-bold transition">+ Add Action</button>
                 </div>
-            );
-        };
+                <div className="space-y-2">
+                    {actions.map((act, i) => (
+                        <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-900 p-2 rounded border border-slate-700">
+                            <div className="col-span-6"><input value={act.action} onChange={e => { const na = [...actions]; na[i].action = e.target.value; onChange(na); }} placeholder="Action Description..." className="text-xs bg-transparent border-none p-0 focus:ring-0" /></div>
+                            <div className="col-span-3"><select value={act.owner} onChange={e => { const na = [...actions]; na[i].owner = e.target.value; onChange(na); }} className="text-xs bg-slate-950 border-slate-700 py-1"><option value="">Owner...</option>{users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+                            <div className="col-span-2"><input type="date" value={act.due} onChange={e => { const na = [...actions]; na[i].due = e.target.value; onChange(na); }} className="text-xs bg-slate-950 border-slate-700 py-1" /></div>
+                            <div className="col-span-1 text-center"><button onClick={() => onChange(actions.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-white"><i className="fas fa-times"></i></button></div>
+                        </div>
+                    ))}
+                    {actions.length === 0 && <div className="text-center text-xs text-slate-500 italic py-2">No actions defined. This improvement will not appear in the CAPA dashboard.</div>}
+                </div>
+            </div>
+        );
 
         const ImprovementApp = () => {
             const [session, setSession] = useState(null);
             const [view, setView] = useState('list');
             const [improvements, setImprovements] = useState([]);
             const [sites, setSites] = useState([]);
-            const [users, setUsers] = useState([]); // Added Users State
+            const [users, setUsers] = useState([]);
             const [loading, setLoading] = useState(true);
 
-            // Form State
             const [form, setForm] = useState({
-                type: 'JDI',
-                title: '',
-                siteId: '',
-                date: new Date().toISOString().split('T')[0],
-                description: '',
-                cost: '',
-                metrics: [], // {name, value}
-                
-                // Program Specific
-                documentation: [],
-                training: [], // {topic, owner} - UPDATED STRUCTURE
-                infrastructure: [],
-                
-                // Notifications (Kaizen & JDI)
-                notifications: [],
-                jdiNotifications: [], // Specific for JDI
-                
+                type: 'JDI', title: '', siteId: '', date: new Date().toISOString().split('T')[0], description: '', cost: '',
+                metrics: [], documentation: [], training: [], infrastructure: [], notifications: [],
+                actions: [], // NEW FIELD FOR CAPA
                 status: 'Proposed'
             });
 
@@ -211,7 +133,7 @@
                         const val = snap.val();
                         if(val.improvements) setImprovements(Object.values(val.improvements));
                         if(val.sites) setSites(Object.values(val.sites));
-                        if(val.users) setUsers(Object.values(val.users)); // Fetch Users
+                        if(val.users) setUsers(Object.values(val.users));
                     }
                     setLoading(false);
                 };
@@ -220,184 +142,60 @@
 
             const handleSubmit = async () => {
                 if(!form.title || !form.description) return alert("Title and Description are required.");
-
-                const newRecord = { 
-                    ...form, 
-                    id: `IMP-${Date.now().toString().slice(-6)}`,
-                    createdBy: session.user,
-                    timestamp: new Date().toISOString()
-                };
-
+                const newRecord = { ...form, id: `IMP-${Date.now().toString().slice(-6)}`, createdBy: session.user, timestamp: new Date().toISOString() };
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/improvements`), newRecord);
-                
                 setImprovements([newRecord, ...improvements]);
-                alert("Improvement Proposal Saved Successfully!");
+                alert("Proposal Saved! Actions have been pushed to CAPA Manager.");
                 setView('list');
-                
-                setForm({
-                    type: 'JDI', title: '', siteId: session.assignedSite || '', date: new Date().toISOString().split('T')[0],
-                    description: '', cost: '', metrics: [], documentation: [], training: [], infrastructure: [], notifications: [], jdiNotifications: [], status: 'Proposed'
-                });
+                setForm({ type: 'JDI', title: '', siteId: session.assignedSite || '', date: new Date().toISOString().split('T')[0], description: '', cost: '', metrics: [], documentation: [], training: [], infrastructure: [], notifications: [], actions: [], status: 'Proposed' });
             };
 
-            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Module...</div>;
+            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading...</div>;
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
-                    
-                    {/* Header */}
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
-                        <div className="flex items-center gap-4">
-                            <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
-                            <h1 className="font-bold text-lg">Continuous Improvement Program</h1>
-                        </div>
-                        <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
-                            <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='list'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>Dashboard</button>
-                            <button onClick={()=>setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='form'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>New Proposal</button>
-                        </div>
+                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Continuous Improvement</h1></div>
+                        <div className="flex bg-slate-800 p-1 rounded-lg gap-1"><button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='list'?'bg-blue-600 text-white':'text-slate-400'}`}>Dashboard</button><button onClick={()=>setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='form'?'bg-blue-600 text-white':'text-slate-400'}`}>New Proposal</button></div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-8 custom-scroll">
                         <div className="max-w-5xl mx-auto">
-
-                            {/* DASHBOARD VIEW */}
                             {view === 'list' && (
-                                <div className="space-y-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500">
-                                            <div className="text-slate-400 text-xs uppercase font-bold">Total JDIs</div>
-                                            <div className="text-3xl font-bold">{improvements.filter(i=>i.type==='JDI').length}</div>
-                                        </div>
-                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500">
-                                            <div className="text-slate-400 text-xs uppercase font-bold">Kaizens</div>
-                                            <div className="text-3xl font-bold">{improvements.filter(i=>i.type==='Kaizen').length}</div>
-                                        </div>
-                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-purple-500">
-                                            <div className="text-slate-400 text-xs uppercase font-bold">Programs</div>
-                                            <div className="text-3xl font-bold">{improvements.filter(i=>i.type==='Program Development').length}</div>
-                                        </div>
-                                    </div>
-
-                                    <div className="glass-panel rounded-xl overflow-hidden">
-                                        <table className="w-full text-left text-sm text-slate-300">
-                                            <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
-                                                <tr>
-                                                    <th className="p-4">Date</th>
-                                                    <th className="p-4">Type</th>
-                                                    <th className="p-4">Title</th>
-                                                    <th className="p-4">Site</th>
-                                                    <th className="p-4">Top Metric</th>
-                                                    <th className="p-4 text-right">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-800">
-                                                {improvements.map((imp, idx) => (
-                                                    <tr key={idx} className="hover:bg-slate-800/50">
-                                                        <td className="p-4 text-xs font-mono">{imp.date}</td>
-                                                        <td className="p-4">
-                                                            <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${imp.type==='JDI'?'type-badge-jdi':imp.type==='Kaizen'?'type-badge-kaizen':'type-badge-program'}`}>
-                                                                {imp.type === 'Program Development' ? 'Program' : imp.type}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-4 font-bold text-white">{imp.title}</td>
-                                                        <td className="p-4">{imp.siteId}</td>
-                                                        <td className="p-4 text-xs">
-                                                            {imp.cost && <div className="text-emerald-400"><i className="fas fa-dollar-sign"></i> {imp.cost}</div>}
-                                                            <div className="text-slate-400">
-                                                                {imp.metrics && imp.metrics.length > 0 ? imp.metrics[0].name + ': ' + imp.metrics[0].value : '-'}
-                                                                {imp.metrics && imp.metrics.length > 1 && ` (+${imp.metrics.length - 1})`}
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-4 text-right"><span className="bg-slate-700 px-2 py-1 rounded text-[10px]">{imp.status}</span></td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                <div className="glass-panel rounded-xl overflow-hidden">
+                                    <table className="w-full text-left text-sm text-slate-300">
+                                        <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Date</th><th className="p-4">Type</th><th className="p-4">Title</th><th className="p-4">Site</th><th className="p-4">Actions</th><th className="p-4 text-right">Status</th></tr></thead>
+                                        <tbody className="divide-y divide-slate-800">{improvements.map((imp, idx) => (<tr key={idx} className="hover:bg-slate-800/50"><td className="p-4 text-xs font-mono">{imp.date}</td><td className="p-4"><span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${imp.type==='JDI'?'text-emerald-400 bg-emerald-900/20':imp.type==='Kaizen'?'text-blue-400 bg-blue-900/20':'text-purple-400 bg-purple-900/20'}`}>{imp.type}</span></td><td className="p-4 font-bold text-white">{imp.title}</td><td className="p-4">{imp.siteId}</td><td className="p-4 text-xs font-mono text-cyan-400">{imp.actions ? imp.actions.length : 0} Actions</td><td className="p-4 text-right"><span className="bg-slate-700 px-2 py-1 rounded text-[10px]">{imp.status}</span></td></tr>))}</tbody>
+                                    </table>
                                 </div>
                             )}
 
-                            {/* FORM VIEW */}
                             {view === 'form' && (
                                 <div className="glass-panel p-8 rounded-2xl animate-fade-in">
-                                    <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
-                                        <span className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-sm"><i className="fas fa-lightbulb"></i></span> 
-                                        Submit Proposal
-                                    </h2>
-
-                                    {/* 1. Context */}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                        <div className="col-span-2 md:col-span-1">
-                                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Type</label>
-                                            <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})} className="border-blue-500/50 bg-blue-900/10">
-                                                <option value="JDI">JDI (Just Do It)</option>
-                                                <option value="Kaizen">Kaizen</option>
-                                                <option value="Program Development">Program Development</option>
-                                            </select>
-                                        </div>
-                                        <div className="col-span-2 md:col-span-1">
-                                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label>
-                                            <select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}>
-                                                <option value="">Select...</option>
-                                                {sites.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="col-span-2 md:col-span-2">
-                                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Title</label>
-                                            <input value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="Improvement Title..." />
-                                        </div>
+                                    <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><span className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-sm"><i className="fas fa-lightbulb"></i></span> Submit Proposal</h2>
+                                    <div className="grid grid-cols-4 gap-4 mb-6">
+                                        <div className="col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Type</label><select value={form.type} onChange={e=>setForm({...form, type:e.target.value})} className="border-blue-500/50 bg-blue-900/10"><option value="JDI">JDI</option><option value="Kaizen">Kaizen</option><option value="Program Development">Program</option></select></div>
+                                        <div className="col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label><select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}><option value="">Select...</option>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select></div>
+                                        <div className="col-span-2"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Title</label><input value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="Title..." /></div>
                                     </div>
-
                                     <div className="space-y-6">
-                                        {/* A: General */}
-                                        <div>
-                                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Description of Change</label>
-                                            <textarea rows="3" value={form.description} onChange={e=>setForm({...form, description:e.target.value})} placeholder="Current state vs Future state..." className="resize-none"></textarea>
-                                        </div>
+                                        <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Description</label><textarea rows="3" value={form.description} onChange={e=>setForm({...form, description:e.target.value})} placeholder="Current vs Future state..." className="resize-none"></textarea></div>
+                                        
+                                        {/* UNIVERSAL ACTION PLAN BUILDER */}
+                                        <ActionPlanBuilder actions={form.actions} users={users} onChange={a => setForm({...form, actions: a})} />
 
-                                        {/* B: Metrics (All Types) */}
                                         <MetricBuilder metrics={form.metrics} onChange={m => setForm({...form, metrics: m})} />
-
-                                        {/* C: JDI Specifics */}
-                                        {form.type === 'JDI' && (
-                                            <div className="bg-emerald-900/10 p-4 rounded-xl border border-emerald-500/30">
-                                                <NotificationBuilder label="Notify Stakeholders (JDI)" notifications={form.jdiNotifications} sites={sites} onChange={n => setForm({...form, jdiNotifications: n})} />
-                                            </div>
-                                        )}
-
-                                        {/* D: Kaizen Specifics */}
-                                        {(form.type === 'Kaizen' || form.type === 'Program Development') && (
-                                            <div>
-                                                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Estimated Cost / Investment</label>
-                                                <input value={form.cost} onChange={e=>setForm({...form, cost:e.target.value})} placeholder="$500 / 10 Man-hours" className="w-1/2" />
-                                            </div>
-                                        )}
-
-                                        {/* E: Kaizen Notifications */}
-                                        {form.type === 'Kaizen' && (
-                                            <NotificationBuilder label="Cross-Site Implementation Notifications" notifications={form.notifications} sites={sites} onChange={n => setForm({...form, notifications: n})} />
-                                        )}
-
-                                        {/* F: Program Development Specifics */}
+                                        
+                                        {(form.type === 'Kaizen' || form.type === 'Program Development') && <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Cost</label><input value={form.cost} onChange={e=>setForm({...form, cost:e.target.value})} placeholder="$" className="w-1/2" /></div>}
+                                        
                                         {form.type === 'Program Development' && (
-                                            <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-900/5">
-                                                <h3 className="font-bold text-purple-400 mb-4 border-b border-purple-500/30 pb-2">Program Requirements</h3>
-                                                <div className="grid grid-cols-1 gap-6">
-                                                    <DynamicList label="Documentation Required" items={form.documentation} onChange={v => setForm({...form, documentation: v})} placeholder="e.g. SOP-001" color="text-purple-300" />
-                                                    
-                                                    {/* NEW: Training Builder with Responsibility */}
-                                                    <TrainingBuilder trainings={form.training} users={users} onChange={v => setForm({...form, training: v})} />
-                                                    
-                                                    <DynamicList label="Infrastructure Needs" items={form.infrastructure} onChange={v => setForm({...form, infrastructure: v})} placeholder="e.g. New Server" color="text-purple-300" />
-                                                </div>
+                                            <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-900/5 grid grid-cols-3 gap-6">
+                                                <DynamicList label="Documentation" items={form.documentation} onChange={v => setForm({...form, documentation: v})} placeholder="e.g. SOP" color="text-purple-300" />
+                                                <DynamicList label="Training" items={form.training} onChange={v => setForm({...form, training: v})} placeholder="e.g. Topic" color="text-purple-300" />
+                                                <DynamicList label="Infrastructure" items={form.infrastructure} onChange={v => setForm({...form, infrastructure: v})} placeholder="e.g. Equipment" color="text-purple-300" />
                                             </div>
                                         )}
-
-                                        <div className="flex justify-end pt-4 border-t border-slate-700">
-                                            <button onClick={handleSubmit} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-transform hover:-translate-y-1">
-                                                Submit Proposal
-                                            </button>
-                                        </div>
+                                        <div className="flex justify-end pt-4 border-t border-slate-700"><button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg">Submit Proposal</button></div>
                                     </div>
                                 </div>
                             )}
@@ -406,7 +204,6 @@
                 </div>
             );
         };
-
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<ImprovementApp />);
     </script>
