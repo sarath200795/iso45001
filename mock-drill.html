@@ -4,19 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Emergency Drills | Enterprise Hub</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <script>
-        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Space Grotesk', 'sans-serif'] }, colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' } } } }
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
+                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
+                }
+            }
+        }
     </script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; }
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; outline: none; }
+        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; outline: none; transition: border-color 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: #ec4899; }
+        
         .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
@@ -24,14 +35,17 @@
 </head>
 <body class="min-h-screen flex flex-col">
     <div id="root" class="h-full flex flex-col"></div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, push, get, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
         const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
         const app = initializeApp(firebaseConfig);
         window.db = getDatabase(app);
         window.fb = { ref, push, get, update };
     </script>
+
     <script type="text/babel">
         const { useState, useEffect } = React;
 
@@ -40,10 +54,35 @@
             const [view, setView] = useState('list');
             const [drills, setDrills] = useState([]);
             const [sites, setSites] = useState([]);
-            
+            const [users, setUsers] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            // Comprehensive Form State
             const [form, setForm] = useState({
-                id: '', siteId: '', date: '', type: 'Fire Evacuation', evacTime: '', participants: '',
-                observations: '', capa: [] // [{ action, owner, due, status }]
+                id: '', 
+                siteId: '', 
+                date: new Date().toISOString().split('T')[0], 
+                type: 'Fire Evacuation',
+                scenario: '',
+                
+                // Metrics
+                evacTime: '', // Minutes
+                ertResponseTime: '', // Minutes
+                headcountStaff: '',
+                headcountVisitors: '',
+                
+                // System Checks (The "Other Options")
+                checklist: {
+                    alarmAudible: 'Yes',
+                    routesClear: 'Yes',
+                    signageVisible: 'Yes',
+                    assemblyManaged: 'Yes',
+                    voiceSystemWorked: 'N/A'
+                },
+
+                // Outcome
+                observations: '',
+                capa: [] // { action, owner, due, status }
             });
 
             useEffect(() => {
@@ -59,11 +98,14 @@
                         const val = snap.val();
                         if(val.mockDrills) setDrills(Object.values(val.mockDrills));
                         if(val.sites) setSites(Object.values(val.sites));
+                        if(val.users) setUsers(Object.values(val.users));
                     }
+                    setLoading(false);
                 };
                 fetchData();
             }, []);
 
+            // --- HANDLERS ---
             const addCapa = () => {
                 setForm({...form, capa: [...form.capa, { action: '', owner: '', due: '', status: 'Open' }]});
             };
@@ -74,32 +116,49 @@
                 setForm({...form, capa: newCapa});
             };
 
+            const handleChecklist = (key, val) => {
+                setForm({...form, checklist: { ...form.checklist, [key]: val }});
+            };
+
             const submitDrill = async () => {
-                if(!form.siteId || !form.date) return alert("Required fields missing");
+                if(!form.siteId || !form.date || !form.type) return alert("Required fields missing");
+                
                 const newRec = { 
                     ...form, 
                     docId: `MD-${Date.now().toString().slice(-6)}`,
-                    createdBy: session.user 
+                    createdBy: session.user,
+                    timestamp: new Date().toISOString()
                 };
+
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/mockDrills`), newRec);
                 setDrills([...drills, newRec]);
-                alert("Drill Record Saved!");
+                alert("Drill Record Saved Successfully!");
                 setView('list');
-                setForm({ id: '', siteId: session.assignedSite || '', date: '', type: 'Fire Evacuation', evacTime: '', participants: '', observations: '', capa: [] });
+                
+                // Reset
+                setForm({
+                    id: '', siteId: session.assignedSite || '', date: new Date().toISOString().split('T')[0], 
+                    type: 'Fire Evacuation', scenario: '', evacTime: '', ertResponseTime: '', 
+                    headcountStaff: '', headcountVisitors: '',
+                    checklist: { alarmAudible: 'Yes', routesClear: 'Yes', signageVisible: 'Yes', assemblyManaged: 'Yes', voiceSystemWorked: 'N/A' },
+                    observations: '', capa: []
+                });
             };
 
-            if(!session) return null;
+            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Module...</div>;
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    
+                    {/* Header */}
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
                         <div className="flex items-center gap-4">
                             <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
                             <h1 className="font-bold text-lg">Emergency Preparedness</h1>
                         </div>
                         <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
-                            <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='list'?'bg-pink-600 text-white':'text-slate-400'}`}>Records</button>
-                            <button onClick={()=>setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='form'?'bg-pink-600 text-white':'text-slate-400'}`}>New Drill</button>
+                            <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='list'?'bg-pink-600 text-white':'text-slate-400 hover:text-white'}`}>Drill Records</button>
+                            <button onClick={()=>setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='form'?'bg-pink-600 text-white':'text-slate-400 hover:text-white'}`}>New Drill</button>
                         </div>
                     </div>
 
@@ -109,11 +168,11 @@
                             {/* KPI CARDS */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-pink-500 flex justify-between items-center">
-                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Drills Conducted</p><h3 className="text-3xl font-bold">{drills.length}</h3></div>
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Total Drills</p><h3 className="text-3xl font-bold">{drills.length}</h3></div>
                                     <i className="fas fa-person-running text-2xl text-pink-500/50"></i>
                                 </div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
-                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Avg Evac Time</p><h3 className="text-3xl font-bold">{drills.length > 0 ? Math.round(drills.reduce((a,b)=>a+parseInt(b.evacTime||0),0)/drills.length) : 0} <span className="text-sm">min</span></h3></div>
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Avg Evacuation</p><h3 className="text-3xl font-bold">{drills.length > 0 ? Math.round(drills.reduce((a,b)=>a+parseInt(b.evacTime||0),0)/drills.length) : 0} <span className="text-sm text-slate-500">min</span></h3></div>
                                     <i className="fas fa-stopwatch text-2xl text-blue-500/50"></i>
                                 </div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center">
@@ -122,21 +181,29 @@
                                 </div>
                             </div>
 
+                            {/* VIEW: LIST */}
                             {view === 'list' && (
                                 <div className="glass-panel rounded-xl overflow-hidden border border-slate-700">
                                     <table className="w-full text-left text-sm text-slate-300">
                                         <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
-                                            <tr><th className="p-4">Date</th><th className="p-4">Site</th><th className="p-4">Type</th><th className="p-4">Evac Time</th><th className="p-4">People</th><th className="p-4">CAPA</th></tr>
+                                            <tr>
+                                                <th className="p-4">Date</th>
+                                                <th className="p-4">Site</th>
+                                                <th className="p-4">Type</th>
+                                                <th className="p-4">Scenario</th>
+                                                <th className="p-4">Evac Time</th>
+                                                <th className="p-4 text-right">CAPA Items</th>
+                                            </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
                                             {drills.map((d, i) => (
                                                 <tr key={i} className="hover:bg-slate-800/50">
-                                                    <td className="p-4">{d.date}</td>
+                                                    <td className="p-4 font-mono">{d.date}</td>
                                                     <td className="p-4">{d.siteId}</td>
                                                     <td className="p-4 font-bold text-white">{d.type}</td>
+                                                    <td className="p-4 text-xs text-slate-400 truncate max-w-xs">{d.scenario}</td>
                                                     <td className="p-4 font-mono text-pink-400">{d.evacTime} min</td>
-                                                    <td className="p-4">{d.participants}</td>
-                                                    <td className="p-4"><span className="bg-slate-700 px-2 py-1 rounded text-[10px]">{d.capa ? d.capa.length : 0} Items</span></td>
+                                                    <td className="p-4 text-right"><span className="bg-slate-700 px-2 py-1 rounded text-[10px]">{d.capa ? d.capa.length : 0} Actions</span></td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -144,42 +211,80 @@
                                 </div>
                             )}
 
+                            {/* VIEW: FORM */}
                             {view === 'form' && (
-                                <div className="glass-panel p-8 rounded-xl animate-fade-in">
-                                    <h2 className="text-xl font-bold mb-6 text-pink-400">Record Emergency Drill</h2>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                        <div className="col-span-2 md:col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label><select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select></div>
-                                        <div className="col-span-2 md:col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Date</label><input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})}/></div>
-                                        <div className="col-span-2 md:col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Type</label><select value={form.type} onChange={e=>setForm({...form, type:e.target.value})}><option>Fire Evacuation</option><option>Chemical Spill</option><option>Medical Emergency</option><option>Confined Space Rescue</option></select></div>
-                                        <div className="col-span-2 md:col-span-1"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Evac Time (min)</label><input type="number" value={form.evacTime} onChange={e=>setForm({...form, evacTime:e.target.value})}/></div>
-                                    </div>
-                                    <div className="mb-6">
-                                        <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Observations / Shortcomings</label>
-                                        <textarea rows="3" value={form.observations} onChange={e=>setForm({...form, observations:e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-white" placeholder="What went wrong? What needs improvement?"></textarea>
+                                <div className="glass-panel p-8 rounded-xl animate-fade-in space-y-8">
+                                    <h2 className="text-2xl font-bold text-pink-400 border-b border-pink-500/20 pb-4">Record Emergency Drill</h2>
+                                    
+                                    {/* Section 1: Drill Details */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">1. Drill Details</h3>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <div className="col-span-2 md:col-span-1"><label className="lbl">Site</label><select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select></div>
+                                            <div className="col-span-2 md:col-span-1"><label className="lbl">Date</label><input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})}/></div>
+                                            <div className="col-span-2 md:col-span-2"><label className="lbl">Drill Type</label><select value={form.type} onChange={e=>setForm({...form, type:e.target.value})}><option>Fire Evacuation</option><option>Chemical Spill</option><option>Medical Emergency</option><option>Confined Space Rescue</option><option>Natural Disaster</option></select></div>
+                                            <div className="col-span-4"><label className="lbl">Scenario Description</label><input value={form.scenario} onChange={e=>setForm({...form, scenario:e.target.value})} placeholder="e.g. Fire in Warehouse Zone B due to electrical short..." /></div>
+                                        </div>
                                     </div>
 
-                                    {/* CAPA SECTION - This feeds into capa.html */}
-                                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <label className="text-[10px] uppercase font-bold text-blue-400">Improvement Actions (CAPA)</label>
-                                            <button onClick={addCapa} className="text-[10px] bg-blue-600 px-2 py-1 rounded text-white">+ Add Action</button>
+                                    {/* Section 2: Performance Metrics */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">2. Performance Metrics</h3>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+                                            <div><label className="lbl text-pink-400">Evacuation Time (min)</label><input type="number" value={form.evacTime} onChange={e=>setForm({...form, evacTime:e.target.value})} placeholder="0" className="font-mono text-center"/></div>
+                                            <div><label className="lbl text-blue-400">ERT Response (min)</label><input type="number" value={form.ertResponseTime} onChange={e=>setForm({...form, ertResponseTime:e.target.value})} placeholder="0" className="font-mono text-center"/></div>
+                                            <div><label className="lbl">Headcount (Staff)</label><input type="number" value={form.headcountStaff} onChange={e=>setForm({...form, headcountStaff:e.target.value})} placeholder="0" className="text-center"/></div>
+                                            <div><label className="lbl">Headcount (Visitors)</label><input type="number" value={form.headcountVisitors} onChange={e=>setForm({...form, headcountVisitors:e.target.value})} placeholder="0" className="text-center"/></div>
                                         </div>
-                                        <div className="space-y-2">
-                                            {form.capa.map((c, i) => (
-                                                <div key={i} className="grid grid-cols-4 gap-2">
-                                                    <input value={c.action} onChange={e=>updateCapa(i, 'action', e.target.value)} placeholder="Action..." className="col-span-2 text-xs bg-slate-950" />
-                                                    <input value={c.owner} onChange={e=>updateCapa(i, 'owner', e.target.value)} placeholder="Owner" className="text-xs bg-slate-950" />
-                                                    <input type="date" value={c.due} onChange={e=>updateCapa(i, 'due', e.target.value)} className="text-xs bg-slate-950" />
+                                    </div>
+
+                                    {/* Section 3: System Checks (The "Other Options") */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">3. System & Procedure Checks</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {Object.entries(form.checklist).map(([key, val]) => (
+                                                <div key={key} className="flex justify-between items-center bg-slate-900 p-3 rounded border border-slate-700">
+                                                    <span className="text-xs uppercase font-bold text-slate-300">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                                    <select value={val} onChange={e=>handleChecklist(key, e.target.value)} className={`text-xs w-20 py-1 ${val==='Yes'?'text-emerald-400':val==='No'?'text-red-400':'text-slate-500'}`}>
+                                                        <option>Yes</option><option>No</option><option>N/A</option>
+                                                    </select>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
 
-                                    <button onClick={submitDrill} className="bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg mt-6 w-full">Save Drill Record</button>
+                                    {/* Section 4: Observations & CAPA */}
+                                    <div>
+                                        <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">4. Observations & CAPA</h3>
+                                        <textarea rows="3" value={form.observations} onChange={e=>setForm({...form, observations:e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded text-sm text-white mb-4" placeholder="General observations, successes, and areas for improvement..."></textarea>
+                                        
+                                        <div className="bg-slate-900/50 p-4 rounded-xl border border-blue-500/30">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <label className="text-xs uppercase font-bold text-blue-400">Action Plan (Linked to CAPA Manager)</label>
+                                                <button onClick={addCapa} className="text-[10px] bg-blue-600 px-3 py-1 rounded text-white hover:bg-blue-500">+ Add Action</button>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {form.capa.map((c, i) => (
+                                                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                                                        <div className="col-span-6"><input value={c.action} onChange={e=>updateCapa(i, 'action', e.target.value)} placeholder="Action Description..." className="text-xs bg-slate-950 border-slate-700" /></div>
+                                                        <div className="col-span-3"><select value={c.owner} onChange={e=>updateCapa(i, 'owner', e.target.value)} className="text-xs bg-slate-950 border-slate-700"><option value="">Owner...</option>{users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+                                                        <div className="col-span-2"><input type="date" value={c.due} onChange={e=>updateCapa(i, 'due', e.target.value)} className="text-xs bg-slate-950 border-slate-700" /></div>
+                                                        <div className="col-span-1 text-center"><button onClick={()=>setForm({...form, capa: form.capa.filter((_, idx) => idx !== i)})} className="text-red-400 hover:text-white"><i className="fas fa-times"></i></button></div>
+                                                    </div>
+                                                ))}
+                                                {form.capa.length === 0 && <div className="text-center text-xs text-slate-600 italic py-2">No actions recorded.</div>}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button onClick={submitDrill} className="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
+                                        Submit Drill Record
+                                    </button>
                                 </div>
                             )}
                         </div>
                     </div>
+                    <style>{`.lbl { display:block; font-size:9px; font-weight:bold; color:#94a3b8; text-transform:uppercase; margin-bottom:4px; }`}</style>
                 </div>
             );
         };
