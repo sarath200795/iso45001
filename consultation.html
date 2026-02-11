@@ -32,20 +32,19 @@
         .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
 
-        /* PRINT STYLES */
         @media print {
             @page { size: A4; margin: 15mm; }
-            body * { visibility: hidden; }
-            .print-overlay, .print-overlay * { visibility: visible !important; color: black !important; }
-            .print-overlay { 
-                position: absolute; top: 0; left: 0; width: 100%; min-height: 100%; 
-                background: white; z-index: 9999; display: block !important; 
-            }
-            .no-print { display: none !important; }
-            h1 { font-size: 24pt; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
-            h2 { font-size: 14pt; background: #eee; padding: 5px; margin-top: 20px; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
-            th, td { border: 1px solid black !important; padding: 5px; text-align: left; }
+            body { background: white; color: black; }
+            .no-print, header { display: none !important; }
+            .fixed.inset-0 { position: static !important; background: white !important; }
+            .fixed.inset-0 > div { width: 100% !important; max-width: none !important; background: white !important; color: black !important; border: none; box-shadow: none; }
+            h2, h3, p, span, div { color: black !important; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #000 !important; padding: 8px; color: black !important; }
+            th { background-color: #f0f0f0 !important; }
+            .bg-slate-800, .bg-slate-900, .bg-slate-950 { background: white !important; }
+            input, select, textarea { border: 1px solid #ccc !important; color: black !important; background: white !important; }
+            .print-overlay { display: block !important; position: absolute; top: 0; left: 0; width: 100%; min-height: 100%; background: white; z-index: 9999; }
         }
         .print-overlay { display: none; }
     </style>
@@ -83,7 +82,7 @@
             </select>
         );
 
-        // --- MEETING DETAIL MODAL (VIEW / EDIT ACTIONS) ---
+        // --- MEETING DETAIL MODAL ---
         const MeetingDetailModal = ({ meeting, onClose, onUpdateStatus, onPrint, session, permissions, users }) => {
             if (!meeting) return null;
 
@@ -112,47 +111,25 @@
 
                             {/* Agenda & Attendees */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                <div>
-                                    <h3 className="text-xs uppercase text-teal-400 font-bold mb-2">Agenda</h3>
-                                    <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-sm">{meeting.agenda || 'N/A'}</div>
-                                </div>
-                                <div>
-                                    <h3 className="text-xs uppercase text-teal-400 font-bold mb-2">Attendees</h3>
-                                    <div className="flex flex-wrap gap-2">{(meeting.attendees || []).map((a, i) => <span key={i} className="bg-slate-800 px-3 py-1 rounded-full text-xs border border-slate-700">{a}</span>)}</div>
-                                </div>
+                                <div><h3 className="text-xs uppercase text-teal-400 font-bold mb-2">Agenda</h3><div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-sm">{meeting.agenda || 'N/A'}</div></div>
+                                <div><h3 className="text-xs uppercase text-teal-400 font-bold mb-2">Attendees</h3><div className="flex flex-wrap gap-2">{(meeting.attendees || []).map((a, i) => <span key={i} className="bg-slate-800 px-3 py-1 rounded-full text-xs border border-slate-700">{a}</span>)}</div></div>
                             </div>
 
                             {/* Discussion Minutes */}
-                            <div className="mb-6">
-                                <h3 className="text-xs uppercase text-teal-400 font-bold mb-2">Discussion Minutes</h3>
-                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-sm whitespace-pre-wrap">{meeting.minutes || 'No minutes recorded.'}</div>
-                            </div>
+                            <div className="mb-6"><h3 className="text-xs uppercase text-teal-400 font-bold mb-2">Discussion Minutes</h3><div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-sm whitespace-pre-wrap">{meeting.minutes || 'No minutes recorded.'}</div></div>
 
                             {/* CAPA SECTION */}
                             <div className="section-box">
                                 <h3 className="text-xs uppercase text-teal-400 font-bold mb-3 border-b border-teal-500/20 pb-2">Action Plan (CAPA)</h3>
                                 <div className="overflow-x-auto rounded-xl border border-slate-700">
                                     <table className="w-full text-sm">
-                                        <thead className="bg-slate-800">
-                                            <tr>
-                                                <th className="p-3 text-left text-slate-400">Action Item</th>
-                                                <th className="p-3 text-left text-slate-400">Owner</th>
-                                                <th className="p-3 text-left text-slate-400">Due Date</th>
-                                                <th className="p-3 text-left text-slate-400 no-print">Status</th>
-                                            </tr>
-                                        </thead>
+                                        <thead className="bg-slate-800"><tr><th className="p-3 text-left text-slate-400">Action Item</th><th className="p-3 text-left text-slate-400">Owner</th><th className="p-3 text-left text-slate-400">Due Date</th><th className="p-3 text-left text-slate-400 no-print">Status</th></tr></thead>
                                         <tbody className="divide-y divide-slate-700">
                                             {(meeting.actions || []).map((row, idx) => (
                                                 <tr key={idx} className="hover:bg-slate-800/50">
-                                                    <td className="p-3 font-medium">{row.action}</td>
-                                                    <td className="p-3 text-blue-400">{row.owner}</td>
-                                                    <td className="p-3 font-mono text-xs">{row.due}</td>
+                                                    <td className="p-3 font-medium">{row.action}</td><td className="p-3 text-blue-400">{row.owner}</td><td className="p-3 font-mono text-xs">{row.due}</td>
                                                     <td className="p-3 no-print">
-                                                        <select value={row.status || 'Open'} onChange={e => onUpdateStatus(meeting.firebaseKey, idx, e.target.value)} disabled={!canEditStatus(row)} className={`text-xs px-2 py-1 rounded status-${row.status || 'Open'}`}>
-                                                            <option value="Open">Open</option>
-                                                            <option value="In Progress">In Progress</option>
-                                                            <option value="Closed">Closed</option>
-                                                        </select>
+                                                        <select value={row.status || 'Open'} onChange={e => onUpdateStatus(meeting.firebaseKey, idx, e.target.value)} disabled={!canEditStatus(row)} className={`text-xs px-2 py-1 rounded status-${row.status || 'Open'}`}><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="Closed">Closed</option></select>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -164,7 +141,6 @@
                         </div>
 
                         <div className="p-4 border-t border-slate-700 flex justify-end gap-3 no-print">
-                            {/* FIXED: Now calls onPrint(meeting) instead of window.print() directly */}
                             <button onClick={() => onPrint(meeting)} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i className="fas fa-print mr-2"></i> Print</button>
                             <button onClick={onClose} className="bg-teal-600 hover:bg-teal-500 text-white px-6 py-2 rounded-lg font-bold text-sm">Close</button>
                         </div>
@@ -173,86 +149,28 @@
             );
         };
 
-        // --- MEETING FORM (NEW RECORD) ---
+        // --- MEETING FORM ---
         const MeetingForm = ({ session, sites, users, siteId, permissions, prefill, onSave, onPrint }) => {
             const [selectedSite, setSelectedSite] = useState(siteId === 'GLOBAL' ? '' : siteId);
-            const [form, setForm] = useState({
-                interaction: 'Consultation', category: prefill?.category || 'Committee Meeting',
-                date: prefill?.date || new Date().toISOString().split('T')[0], time: prefill?.time || '',
-                agenda: prefill?.agenda || '', attendees: [], 
-                minutes: '', actions: [] 
-            });
+            const [form, setForm] = useState({ interaction: 'Consultation', category: prefill?.category || 'Committee Meeting', date: prefill?.date || new Date().toISOString().split('T')[0], time: prefill?.time || '', agenda: prefill?.agenda || '', attendees: [], minutes: '', actions: [] });
             const [newAttendee, setNewAttendee] = useState('');
 
-            const siteUsers = useMemo(() => {
-                if (!selectedSite) return users;
-                return users.filter(u => u.role === 'Owner' || (u.accessibleSites && u.accessibleSites.includes(selectedSite)) || u.assignedSite === selectedSite);
-            }, [users, selectedSite]);
-
+            const siteUsers = useMemo(() => { if (!selectedSite) return users; return users.filter(u => u.role === 'Owner' || (u.accessibleSites && u.accessibleSites.includes(selectedSite)) || u.assignedSite === selectedSite); }, [users, selectedSite]);
             const canEdit = !permissions.viewOnly;
-
             const addAttendee = () => { if (newAttendee && !form.attendees.includes(newAttendee)) { setForm({ ...form, attendees: [...form.attendees, newAttendee] }); setNewAttendee(''); } };
             const addAction = () => setForm({...form, actions: [...form.actions, { action: '', owner: '', due: '', status: 'Open' }]});
             const updateAction = (i, f, v) => { const na = [...form.actions]; na[i][f] = v; setForm({...form, actions: na}); };
             const removeAction = (i) => setForm({...form, actions: form.actions.filter((_, x) => x !== i)});
-
-            const handleSubmit = () => {
-                if (!selectedSite) return alert('Please select a site');
-                if (!form.category || !form.date) return alert('Fill required fields');
-                const meetingId = `MOM-${selectedSite}-${Date.now().toString().slice(-6)}`;
-                const finalData = { ...form, id: meetingId, siteId: selectedSite, createdBy: session.user, timestamp: Date.now() };
-                onSave(finalData);
-            };
+            const handleSubmit = () => { if (!selectedSite) return alert('Please select a site'); if (!form.category || !form.date) return alert('Fill required fields'); const meetingId = `MOM-${selectedSite}-${Date.now().toString().slice(-6)}`; onSave({ ...form, id: meetingId, siteId: selectedSite, createdBy: session.user, timestamp: Date.now() }); };
 
             return (
                 <div className="space-y-6 animate-fade-in">
                     <div className="glass-panel p-6 rounded-xl border border-slate-700">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-teal-400 flex items-center gap-2"><i className="fas fa-edit"></i> Record Meeting Minutes</h2>
-                            {/* Print Preview Button for Form */}
-                            <button onClick={() => onPrint({...form, siteId: selectedSite, id: 'DRAFT'})} className="text-slate-400 hover:text-white"><i className="fas fa-print"></i></button>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label><SiteSelect sites={sites} value={selectedSite} onChange={v => { setSelectedSite(v); setForm({...form, attendees: []}); }} disabled={!canEdit || siteId !== 'GLOBAL'} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Category</label><select value={form.category} onChange={e => setForm({...form, category: e.target.value})} disabled={!canEdit}>{MEETING_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Date</label><input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} disabled={!canEdit} /></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Time</label><input type="time" value={form.time} onChange={e => setForm({...form, time: e.target.value})} disabled={!canEdit} /></div>
-                            <div className="col-span-4"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Agenda</label><input value={form.agenda} onChange={e => setForm({...form, agenda: e.target.value})} placeholder="Meeting purpose..." disabled={!canEdit} /></div>
-                        </div>
-
-                        <div className="mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800">
-                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-2">Attendees</label>
-                            <div className="flex gap-2 mb-2">
-                                <UserSelect users={siteUsers} value={newAttendee} onChange={setNewAttendee} disabled={!canEdit} placeholder="Select attendee..." />
-                                {canEdit && <button onClick={addAttendee} className="bg-teal-600 hover:bg-teal-500 text-white px-4 rounded font-bold text-sm whitespace-nowrap">+ Add</button>}
-                            </div>
-                            <div className="flex flex-wrap gap-2">{form.attendees.map((a, i) => <span key={i} className="bg-slate-800 px-3 py-1 rounded-full text-xs flex items-center gap-2 border border-slate-700">{a}{canEdit && <button onClick={() => setForm({...form, attendees: form.attendees.filter((_, x) => x !== i)})} className="text-red-400 hover:text-red-300">×</button>}</span>)}</div>
-                        </div>
-
-                        <div className="mb-6">
-                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Minutes / Discussion Points</label>
-                            <textarea rows="6" value={form.minutes} onChange={e=>setForm({...form, minutes:e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-sm text-white focus:border-teal-500" placeholder="Record the general discussion points here..." disabled={!canEdit}></textarea>
-                        </div>
-
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-teal-500/30">
-                            <div className="flex justify-between items-center mb-3">
-                                <label className="text-xs uppercase font-bold text-teal-400"><i className="fas fa-list-check mr-2"></i> Action Plan (CAPA)</label>
-                                {canEdit && <button onClick={addAction} className="text-[10px] bg-teal-600 px-3 py-1.5 rounded text-white font-bold hover:bg-teal-500">+ Add Action</button>}
-                            </div>
-                            <div className="space-y-2">
-                                {form.actions.map((c, i) => (
-                                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                                        <div className="col-span-6"><input value={c.action} onChange={e=>updateAction(i, 'action', e.target.value)} placeholder="Action Description..." className="text-xs bg-slate-900 border-slate-700" disabled={!canEdit} /></div>
-                                        <div className="col-span-3"><select value={c.owner} onChange={e=>updateAction(i, 'owner', e.target.value)} className="text-xs bg-slate-900 border-slate-700" disabled={!canEdit}><option value="">Owner...</option>{users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
-                                        <div className="col-span-2"><input type="date" value={c.due} onChange={e=>updateAction(i, 'due', e.target.value)} className="text-xs bg-slate-900 border-slate-700" disabled={!canEdit} /></div>
-                                        <div className="col-span-1 text-center">{canEdit && <button onClick={()=>removeAction(i)} className="text-red-400 hover:text-white"><i className="fas fa-times"></i></button></div>
-                                    </div>
-                                ))}
-                                {form.actions.length === 0 && <div className="text-center text-xs text-slate-500 italic py-2">No actions added yet.</div>}
-                            </div>
-                        </div>
-
+                        <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-teal-400 flex items-center gap-2"><i className="fas fa-edit"></i> Record Meeting Minutes</h2><button onClick={() => onPrint({...form, siteId: selectedSite, id: 'DRAFT'})} className="text-slate-400 hover:text-white"><i className="fas fa-print"></i></button></div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label><SiteSelect sites={sites} value={selectedSite} onChange={v => { setSelectedSite(v); setForm({...form, attendees: []}); }} disabled={!canEdit || siteId !== 'GLOBAL'} /></div><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Category</label><select value={form.category} onChange={e => setForm({...form, category: e.target.value})} disabled={!canEdit}>{MEETING_TYPES.map(t => <option key={t}>{t}</option>)}</select></div><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Date</label><input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} disabled={!canEdit} /></div><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Time</label><input type="time" value={form.time} onChange={e => setForm({...form, time: e.target.value})} disabled={!canEdit} /></div><div className="col-span-4"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Agenda</label><input value={form.agenda} onChange={e => setForm({...form, agenda: e.target.value})} placeholder="Meeting purpose..." disabled={!canEdit} /></div></div>
+                        <div className="mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-2">Attendees</label><div className="flex gap-2 mb-2"><UserSelect users={siteUsers} value={newAttendee} onChange={setNewAttendee} disabled={!canEdit} placeholder="Select attendee..." />{canEdit && <button onClick={addAttendee} className="bg-teal-600 hover:bg-teal-500 text-white px-4 rounded font-bold text-sm whitespace-nowrap">+ Add</button>}</div><div className="flex flex-wrap gap-2">{form.attendees.map((a, i) => <span key={i} className="bg-slate-800 px-3 py-1 rounded-full text-xs flex items-center gap-2 border border-slate-700">{a}{canEdit && <button onClick={() => setForm({...form, attendees: form.attendees.filter((_, x) => x !== i)})} className="text-red-400 hover:text-red-300">×</button>}</span>)}</div></div>
+                        <div className="mb-6"><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Minutes / Discussion Points</label><textarea rows="6" value={form.minutes} onChange={e=>setForm({...form, minutes:e.target.value})} className="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg text-sm text-white focus:border-teal-500" placeholder="Record the general discussion points here..." disabled={!canEdit}></textarea></div>
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-teal-500/30"><div className="flex justify-between items-center mb-3"><label className="text-xs uppercase font-bold text-teal-400"><i className="fas fa-list-check mr-2"></i> Action Plan (CAPA)</label>{canEdit && <button onClick={addAction} className="text-[10px] bg-teal-600 px-3 py-1.5 rounded text-white font-bold hover:bg-teal-500">+ Add Action</button>}</div><div className="space-y-2">{form.actions.map((c, i) => (<div key={i} className="grid grid-cols-12 gap-2 items-center"><div className="col-span-6"><input value={c.action} onChange={e=>updateAction(i, 'action', e.target.value)} placeholder="Action Description..." className="text-xs bg-slate-900 border-slate-700" disabled={!canEdit} /></div><div className="col-span-3"><select value={c.owner} onChange={e=>updateAction(i, 'owner', e.target.value)} className="text-xs bg-slate-900 border-slate-700" disabled={!canEdit}><option value="">Owner...</option>{users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}</select></div><div className="col-span-2"><input type="date" value={c.due} onChange={e=>updateAction(i, 'due', e.target.value)} className="text-xs bg-slate-900 border-slate-700" disabled={!canEdit} /></div><div className="col-span-1 text-center">{canEdit && <button onClick={()=>removeAction(i)} className="text-red-400 hover:text-white"><i className="fas fa-times"></i></button>}</div></div>))}</div></div>
                         {canEdit && <div className="flex justify-end mt-6"><button onClick={handleSubmit} className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">Save Meeting Record</button></div>}
                     </div>
                 </div>
@@ -267,18 +185,9 @@
                 return meetings.filter(m => (filter.site === 'All' || m.siteId === filter.site) && (filter.category === 'All' || m.category === filter.category));
             }, [meetings, filter]);
 
-            // --- CALCULATE STATS ---
             const stats = useMemo(() => {
                 let total = 0, closed = 0, open = 0;
-                meetings.forEach(m => {
-                    if(m.actions) {
-                        m.actions.forEach(a => {
-                            total++;
-                            if(a.status === 'Closed') closed++;
-                            else open++;
-                        });
-                    }
-                });
+                meetings.forEach(m => { if(m.actions) { m.actions.forEach(a => { total++; if(a.status === 'Closed') closed++; else open++; }); } });
                 return { total, closed, open };
             }, [meetings]);
 
@@ -292,66 +201,19 @@
 
             return (
                 <div className="space-y-6 animate-fade-in">
-                    
-                    {/* KPI DASHBOARD */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="glass-panel p-6 rounded-xl border-l-4 border-teal-500 flex justify-between items-center">
-                            <div><p className="text-xs text-slate-400 uppercase font-bold">Meetings Held</p><h3 className="text-3xl font-bold">{meetings.length}</h3></div>
-                            <i className="fas fa-handshake text-2xl text-teal-500/50"></i>
-                        </div>
-                        <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center">
-                            <div><p className="text-xs text-slate-400 uppercase font-bold">Actions Closed</p><h3 className="text-3xl font-bold text-emerald-400">{stats.closed}</h3></div>
-                            <i className="fas fa-check-circle text-2xl text-emerald-500/50"></i>
-                        </div>
-                        <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center">
-                            <div><p className="text-xs text-slate-400 uppercase font-bold">Pending Actions</p><h3 className="text-3xl font-bold text-yellow-400">{stats.open}</h3></div>
-                            <i className="fas fa-clock text-2xl text-yellow-500/50"></i>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-end mb-6 bg-slate-900 p-4 rounded-xl border border-slate-800">
-                        <div className="flex gap-4">
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label><select className="bg-slate-800 p-2 rounded w-32 border border-slate-700" value={filter.site} onChange={e => setFilter({...filter, site: e.target.value})}><option value="All">All Sites</option>{[...new Set(meetings.map(m => m.siteId))].map(s => <option key={s}>{s}</option>)}</select></div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Category</label><select className="bg-slate-800 p-2 rounded w-40 border border-slate-700" value={filter.category} onChange={e => setFilter({...filter, category: e.target.value})}><option value="All">All Categories</option>{MEETING_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
-                        </div>
-                        <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-bold text-sm shadow-lg"><i className="fas fa-file-excel mr-2"></i>Export</button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filtered.map(m => {
-                            const acTotal = m.actions ? m.actions.length : 0;
-                            const acClosed = m.actions ? m.actions.filter(a => a.status === 'Closed').length : 0;
-                            
-                            return (
-                                <div key={m.firebaseKey} className="glass-panel p-5 rounded-xl border-l-4 border-teal-500 relative group" onClick={() => onView(m)}>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className="font-mono text-xs text-teal-400">{m.id}</span>
-                                        <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{m.date}</span>
-                                    </div>
-                                    <h3 className="font-bold text-white mb-1 truncate">{m.category}</h3>
-                                    <p className="text-xs text-slate-400 mb-3">{m.siteId} • {m.interaction}</p>
-                                    <div className="flex justify-between items-center border-t border-slate-800 pt-3">
-                                        <span className={`text-[10px] font-bold uppercase ${acClosed === acTotal && acTotal > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                                            Actions: {acClosed}/{acTotal}
-                                        </span>
-                                        {!permissions.viewOnly && permissions.canDelete && <button onClick={e => { e.stopPropagation(); onDelete(m); }} className="text-slate-600 hover:text-red-400 text-sm transition-colors"><i className="fas fa-trash"></i></button>}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="glass-panel p-6 rounded-xl border-l-4 border-teal-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Meetings Held</p><h3 className="text-3xl font-bold">{meetings.length}</h3></div><i className="fas fa-handshake text-2xl text-teal-500/50"></i></div><div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Actions Closed</p><h3 className="text-3xl font-bold text-emerald-400">{stats.closed}</h3></div><i className="fas fa-check-circle text-2xl text-emerald-500/50"></i></div><div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Pending Actions</p><h3 className="text-3xl font-bold text-yellow-400">{stats.open}</h3></div><i className="fas fa-clock text-2xl text-yellow-500/50"></i></div></div>
+                    <div className="flex justify-between items-end mb-6 bg-slate-900 p-4 rounded-xl border border-slate-800"><div className="flex gap-4"><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label><select className="bg-slate-800 p-2 rounded w-32 border border-slate-700" value={filter.site} onChange={e => setFilter({...filter, site: e.target.value})}><option value="All">All Sites</option>{[...new Set(meetings.map(m => m.siteId))].map(s => <option key={s}>{s}</option>)}</select></div><div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Category</label><select className="bg-slate-800 p-2 rounded w-40 border border-slate-700" value={filter.category} onChange={e => setFilter({...filter, category: e.target.value})}><option value="All">All Categories</option>{MEETING_TYPES.map(t => <option key={t}>{t}</option>)}</select></div></div><button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-bold text-sm shadow-lg"><i className="fas fa-file-excel mr-2"></i>Export</button></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{filtered.map(m => { const acTotal = m.actions ? m.actions.length : 0; const acClosed = m.actions ? m.actions.filter(a => a.status === 'Closed').length : 0; return (<div key={m.firebaseKey} className="glass-panel p-5 rounded-xl border-l-4 border-teal-500 relative group" onClick={() => onView(m)}><div className="flex justify-between items-start mb-2"><span className="font-mono text-xs text-teal-400">{m.id}</span><span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{m.date}</span></div><h3 className="font-bold text-white mb-1 truncate">{m.category}</h3><p className="text-xs text-slate-400 mb-3">{m.siteId} • {m.interaction}</p><div className="flex justify-between items-center border-t border-slate-800 pt-3"><span className={`text-[10px] font-bold uppercase ${acClosed === acTotal && acTotal > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>Actions: <span className={`${acClosed === acTotal && acTotal > 0 ? 'text-emerald-400' : 'text-white'}`}>{acClosed}/{acTotal}</span></span>{!permissions.viewOnly && permissions.canDelete && <button onClick={e => { e.stopPropagation(); onDelete(m); }} className="text-slate-600 hover:text-red-400 text-sm transition-colors"><i className="fas fa-trash"></i></button>}</div></div>); })}</div>
                 </div>
             );
         };
 
-        // --- MAIN APP ---
         const App = () => {
             const [view, setView] = useState('list');
             const [session, setSession] = useState(null);
             const [meetings, setMeetings] = useState([]);
             const [selectedMeeting, setSelectedMeeting] = useState(null);
             const [printData, setPrintData] = useState(null);
-            
             const [siteId, setSiteId] = useState('GLOBAL');
             const [sites, setSites] = useState([]);
             const [users, setUsers] = useState([]);
@@ -367,155 +229,50 @@
                 const params = new URLSearchParams(window.location.search);
                 const ctx = params.get('site');
                 if (ctx && ctx !== 'GLOBAL') setSiteId(ctx);
+                setPermissions({ viewOnly: (params.get('viewOnly') === 'true') || sess.role === 'User', canEditOwnedActions: sess.role === 'Manager', canDelete: sess.role === 'Owner' });
 
-                setPermissions({
-                    viewOnly: (params.get('viewOnly') === 'true') || sess.role === 'User',
-                    canEditOwnedActions: sess.role === 'Manager',
-                    canDelete: sess.role === 'Owner'
-                });
-
-                if (params.get('category')) {
-                    setPrefill({ category: params.get('category'), date: params.get('date'), time: params.get('time'), agenda: params.get('agenda') });
-                    setView('form');
-                }
+                if (params.get('category')) { setPrefill({ category: params.get('category'), date: params.get('date'), time: params.get('time'), agenda: params.get('agenda') }); setView('form'); }
 
                 const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
                 window.fb.get(dbRef).then(snap => {
                     if (snap.exists()) {
                         const data = snap.val();
-                        if (data.meetings || data.consultations) {
-                            const raw = data.consultations || data.meetings || {};
-                            setMeetings(Object.entries(raw).map(([k, v]) => ({ firebaseKey: k, ...v })).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)));
-                        }
-                        if (data.sites) {
-                            const allSites = Object.values(data.sites);
-                            if (sess.role === 'Owner') setSites(allSites);
-                            else {
-                                const accessible = sess.accessibleSites || (sess.assignedSite ? [sess.assignedSite] : []);
-                                setSites(allSites.filter(s => accessible.includes(s.code)));
-                            }
-                        }
+                        if (data.meetings || data.consultations) { const raw = data.consultations || data.meetings || {}; setMeetings(Object.entries(raw).map(([k, v]) => ({ firebaseKey: k, ...v })).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp))); }
+                        if (data.sites) { const allSites = Object.values(data.sites); if (sess.role === 'Owner') setSites(allSites); else { const accessible = sess.accessibleSites || (sess.assignedSite ? [sess.assignedSite] : []); setSites(allSites.filter(s => accessible.includes(s.code))); } }
                         if (data.users) setUsers(Object.entries(data.users).map(([k, v]) => ({ id: k, ...v })).filter(u => u.status === 'Active'));
                     }
                 });
             }, []);
 
-            const handleSave = async (data) => {
-                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/consultations`), data);
-                alert("Meeting saved successfully!");
-                window.location.reload();
-            };
-
-            const handleDelete = async (meeting) => {
-                if (confirm("Delete this record?")) {
-                    await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/consultations/${meeting.firebaseKey}`));
-                    setMeetings(meetings.filter(m => m.firebaseKey !== meeting.firebaseKey));
-                }
-            };
-
-            const handleStatusUpdate = async (firebaseKey, rowIdx, newStatus) => {
-                const meeting = meetings.find(m => m.firebaseKey === firebaseKey);
-                if (!meeting) return;
-                const updatedActions = [...meeting.actions];
-                updatedActions[rowIdx].status = newStatus;
-                await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/consultations/${firebaseKey}`), { actions: updatedActions });
-                setMeetings(meetings.map(m => m.firebaseKey === firebaseKey ? { ...m, actions: updatedActions } : m));
-                setSelectedMeeting({ ...selectedMeeting, actions: updatedActions });
-            };
-
-            const preparePrint = (meeting) => {
-                setPrintData(meeting);
-                setTimeout(() => window.print(), 500);
-            };
+            const handleSave = async (data) => { await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/consultations`), data); alert("Meeting saved successfully!"); window.location.reload(); };
+            const handleDelete = async (meeting) => { if (confirm("Delete this record?")) { await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/consultations/${meeting.firebaseKey}`)); setMeetings(meetings.filter(m => m.firebaseKey !== meeting.firebaseKey)); } };
+            const handleStatusUpdate = async (firebaseKey, rowIdx, newStatus) => { const meeting = meetings.find(m => m.firebaseKey === firebaseKey); if (!meeting) return; const updatedActions = [...meeting.actions]; updatedActions[rowIdx].status = newStatus; await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/consultations/${firebaseKey}`), { actions: updatedActions }); setMeetings(meetings.map(m => m.firebaseKey === firebaseKey ? { ...m, actions: updatedActions } : m)); setSelectedMeeting({ ...selectedMeeting, actions: updatedActions }); };
+            const preparePrint = (meeting) => { setPrintData(meeting); setTimeout(() => window.print(), 500); };
 
             if (!session) return null;
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
                     <header className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
-                        <div className="flex items-center gap-4">
-                            <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
-                            <h1 className="font-bold text-lg">Consultation & Participation</h1>
-                        </div>
-                        <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
-                            <button onClick={() => setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view === 'list' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}>Meetings</button>
-                            <button onClick={() => setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view === 'form' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}>New Record</button>
-                        </div>
+                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Consultation & Participation</h1></div>
+                        <div className="flex bg-slate-800 p-1 rounded-lg gap-1"><button onClick={() => setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view === 'list' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}>Meetings</button><button onClick={() => setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view === 'form' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}>New Record</button></div>
                     </header>
-
                     <main className="flex-1 overflow-y-auto p-8 custom-scroll">
                         <div className="max-w-6xl mx-auto">
                             {view === 'form' && <MeetingForm session={session} sites={sites} users={users} siteId={siteId} permissions={permissions} prefill={prefill} onSave={handleSave} onPrint={preparePrint} />}
                             {view === 'list' && <MeetingRepository meetings={meetings} onView={(m) => { setSelectedMeeting(m); }} onDelete={handleDelete} permissions={permissions} />}
                         </div>
                     </main>
-
                     {selectedMeeting && <MeetingDetailModal meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onUpdateStatus={handleStatusUpdate} session={session} permissions={permissions} users={users} onPrint={preparePrint} />}
-                    
                     {/* OVERLAY FOR PRINTING ONLY */}
                     {printData && (
                         <div className="print-overlay p-10">
-                            <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
-                                <div>
-                                    <h1 className="text-2xl font-bold uppercase mb-1">Minutes of Meeting</h1>
-                                    <p className="text-sm font-bold">Ref ID: {printData.id}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-sm">Date: {printData.date}</p>
-                                    <p className="text-sm">Site: {printData.siteId}</p>
-                                </div>
-                            </div>
-
-                            <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">1. Meeting Details</h2>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div><strong>Category:</strong> {printData.category}</div>
-                                    <div><strong>Type:</strong> {printData.interaction}</div>
-                                    <div><strong>Time:</strong> {printData.time}</div>
-                                    <div><strong>Logged By:</strong> {printData.createdBy}</div>
-                                </div>
-                                <div className="mt-4 text-sm">
-                                    <strong>Agenda:</strong> {printData.agenda}
-                                </div>
-                            </div>
-
-                            <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">2. Attendees</h2>
-                                <p className="text-sm">{(printData.attendees || []).join(', ')}</p>
-                            </div>
-
-                            <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">3. Discussion Minutes</h2>
-                                <div className="text-sm whitespace-pre-wrap">{printData.minutes}</div>
-                            </div>
-
-                            <div className="mb-6 border border-black p-4">
-                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">4. Action Plan (CAPA)</h2>
-                                <table className="w-full text-sm border-collapse border border-black">
-                                    <thead>
-                                        <tr className="bg-gray-100">
-                                            <th className="border border-black p-2">Action Item</th>
-                                            <th className="border border-black p-2">Owner</th>
-                                            <th className="border border-black p-2">Due Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {(printData.actions || []).map((row, idx) => (
-                                            <tr key={idx}>
-                                                <td className="border border-black p-2">{row.action}</td>
-                                                <td className="border border-black p-2">{row.owner}</td>
-                                                <td className="border border-black p-2">{row.due}</td>
-                                            </tr>
-                                        ))}
-                                        {(!printData.actions || printData.actions.length === 0) && <tr><td colSpan="3" className="border border-black p-2 text-center italic">No actions recorded.</td></tr>}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div className="flex justify-between mt-12 pt-12">
-                                <div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Prepared By</div>
-                                <div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Approved By</div>
-                            </div>
+                            <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-4"><div><h1 className="text-2xl font-bold uppercase mb-1">Minutes of Meeting</h1><p className="text-sm font-bold">Ref ID: {printData.id}</p></div><div className="text-right"><p className="text-sm">Date: {printData.date}</p><p className="text-sm">Site: {printData.siteId}</p></div></div>
+                            <div className="mb-6 border border-black p-4"><h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">1. Meeting Details</h2><div className="grid grid-cols-2 gap-4 text-sm"><div><strong>Category:</strong> {printData.category}</div><div><strong>Type:</strong> {printData.interaction}</div><div><strong>Time:</strong> {printData.time}</div><div><strong>Logged By:</strong> {printData.createdBy}</div></div><div className="mt-4 text-sm"><strong>Agenda:</strong> {printData.agenda}</div></div>
+                            <div className="mb-6 border border-black p-4"><h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">2. Attendees</h2><p className="text-sm">{(printData.attendees || []).join(', ')}</p></div>
+                            <div className="mb-6 border border-black p-4"><h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">3. Discussion Minutes</h2><div className="text-sm whitespace-pre-wrap">{printData.minutes}</div></div>
+                            <div className="mb-6 border border-black p-4"><h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">4. Action Plan (CAPA)</h2><table className="w-full text-sm border-collapse border border-black"><thead><tr className="bg-gray-100"><th className="border border-black p-2">Action Item</th><th className="border border-black p-2">Owner</th><th className="border border-black p-2">Due Date</th></tr></thead><tbody>{(printData.actions || []).map((row, idx) => (<tr key={idx}><td className="border border-black p-2">{row.action}</td><td className="border border-black p-2">{row.owner}</td><td className="border border-black p-2">{row.due}</td></tr>))}</tbody></table></div>
+                            <div className="flex justify-between mt-12 pt-12"><div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Prepared By</div><div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Approved By</div></div>
                         </div>
                     )}
                 </div>
