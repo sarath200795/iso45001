@@ -66,7 +66,7 @@
             .no-print, header, .repo-view, .form-view-tabs, .action-buttons { display: none !important; }
             .print-overlay { display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: white; z-index: 9999; }
             .print-overlay * { visibility: visible !important; color: black !important; }
-            .print-overlay h1 { font-size: 24pt; font-weight: bold; border-bottom: 2px solid black; margin-bottom: 20px; }
+            .print-overlay h1 { font-size: 24pt; font-weight: bold; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
             .print-overlay h2 { font-size: 16pt; font-weight: bold; margin-top: 20px; border-bottom: 1px solid #ccc; background: #eee !important; padding: 5px; -webkit-print-color-adjust: exact; }
             .print-overlay p, .print-overlay li, .print-overlay td { font-size: 11pt; }
             .rib-box, .tree-node { border: 1px solid black !important; background: white !important; color: black !important; }
@@ -249,6 +249,21 @@
                 });
             }, [incidents, filterType, filterLevel, filterSite, dateFrom, dateTo]);
 
+            // --- CALCULATE ACTION STATS ---
+            const stats = useMemo(() => {
+                let total = 0, closed = 0, open = 0;
+                incidents.forEach(inc => {
+                    if (inc.capa) {
+                        inc.capa.forEach(act => {
+                            total++;
+                            if (act.status === 'Closed') closed++;
+                            else open++;
+                        });
+                    }
+                });
+                return { total, closed, open };
+            }, [incidents]);
+
             const exportToExcel = () => {
                 const dataToExport = filteredData.map(({ id, date, time, siteId, type, severity, description }) => ({ ID: id, Date: date, Time: time, Site: siteId, Type: type, Severity: severity, Description: description }));
                 const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -259,6 +274,23 @@
 
             return (
                 <div className="space-y-6 animate-fade-in glass-panel-filters repo-view">
+                    
+                    {/* NEW KPI DASHBOARD */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
+                        <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
+                            <div><p className="text-xs text-slate-400 uppercase font-bold">Total CAPA Raised</p><h3 className="text-3xl font-bold">{stats.total}</h3></div>
+                            <i className="fas fa-list-check text-2xl text-blue-500/50"></i>
+                        </div>
+                        <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center">
+                            <div><p className="text-xs text-slate-400 uppercase font-bold">Actions Closed</p><h3 className="text-3xl font-bold text-emerald-400">{stats.closed}</h3></div>
+                            <i className="fas fa-check-circle text-2xl text-emerald-500/50"></i>
+                        </div>
+                        <div className="glass-panel p-6 rounded-xl border-l-4 border-orange-500 flex justify-between items-center">
+                            <div><p className="text-xs text-slate-400 uppercase font-bold">Actions Open</p><h3 className="text-3xl font-bold text-orange-400">{stats.open}</h3></div>
+                            <i className="fas fa-clock text-2xl text-orange-500/50"></i>
+                        </div>
+                    </div>
+
                     <div className="p-6 rounded-xl bg-gradient-to-r from-purple-900/40 to-slate-900 border border-purple-500/30 mb-6">
                         <div className="flex justify-between items-start mb-6">
                             <div><h2 className="text-2xl font-bold text-white flex items-center gap-3"><span className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center text-lg"><i className="fas fa-database"></i></span>Incident Repository</h2><p className="text-slate-400 text-sm mt-1 ml-14">Central database of all reported incidents.</p></div>
@@ -274,22 +306,30 @@
                     </div>
                     <div className="glass-panel rounded-xl overflow-hidden border border-slate-700 shadow-xl">
                         <table className="w-full text-left text-sm text-slate-300">
-                            <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Incident ID</th><th className="p-4">Date</th><th className="p-4">Site</th><th className="p-4">Type</th><th className="p-4">Level</th><th className="p-4 text-right">Actions</th></tr></thead>
+                            <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Incident ID</th><th className="p-4">Date</th><th className="p-4">Type</th><th className="p-4">CAPA Progress</th><th className="p-4 text-right">Actions</th></tr></thead>
                             <tbody className="divide-y divide-slate-800">
-                                {filteredData.map(inc => (
-                                    <tr key={inc.id} className="hover:bg-slate-800/50 transition-colors">
-                                        <td className="p-4 font-mono font-bold text-white">{inc.id}</td>
-                                        <td className="p-4">{inc.date}</td>
-                                        <td className="p-4 text-emerald-400 font-mono text-xs">{inc.siteId}</td>
-                                        <td className="p-4">{inc.type}</td>
-                                        <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold border ${inc.severity==='Level A'?'bg-red-500/10 text-red-400 border-red-500/20':inc.severity==='Level B'?'bg-orange-500/10 text-orange-400 border-orange-500/20':inc.severity==='Level C'?'bg-yellow-500/10 text-yellow-400 border-yellow-500/20':'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{inc.severity}</span></td>
-                                        <td className="p-4 text-right flex justify-end gap-2">
-                                            <button onClick={()=>onPrint(inc)} className="text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 px-3 py-1.5 rounded transition" title="Print Report"><i className="fas fa-print"></i></button>
-                                            {!permissions.viewOnly && <button onClick={()=>onEdit(inc)} className="text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500 px-3 py-1.5 rounded transition">Edit</button>}
-                                            {permissions.canDelete && <button onClick={()=>onDelete(inc)} className="text-slate-400 hover:text-white bg-slate-700 hover:bg-red-600 px-3 py-1.5 rounded transition"><i className="fas fa-trash-alt"></i></button>}
-                                        </td>
-                                    </tr>
-                                ))}
+                                {filteredData.map(inc => {
+                                    const total = inc.capa ? inc.capa.length : 0;
+                                    const closed = inc.capa ? inc.capa.filter(c => c.status === 'Closed').length : 0;
+                                    const progress = total > 0 ? (closed/total)*100 : 0;
+
+                                    return (
+                                        <tr key={inc.id} className="hover:bg-slate-800/50 transition-colors">
+                                            <td className="p-4 font-mono font-bold text-white">{inc.id}</td>
+                                            <td className="p-4">{inc.date}</td>
+                                            <td className="p-4">{inc.type}</td>
+                                            <td className="p-4">
+                                                <div className="flex justify-between text-[10px] mb-1"><span>{closed}/{total} Closed</span><span>{Math.round(progress)}%</span></div>
+                                                <div className="w-full bg-slate-700 rounded-full h-1.5"><div className="bg-emerald-500 h-1.5 rounded-full" style={{width: `${progress}%`}}></div></div>
+                                            </td>
+                                            <td className="p-4 text-right flex justify-end gap-2">
+                                                <button onClick={()=>onPrint(inc)} className="text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 px-3 py-1.5 rounded transition" title="Print Report"><i className="fas fa-print"></i></button>
+                                                {!permissions.viewOnly && <button onClick={()=>onEdit(inc)} className="text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500 px-3 py-1.5 rounded transition">Edit</button>}
+                                                {permissions.canDelete && <button onClick={()=>onDelete(inc)} className="text-slate-400 hover:text-white bg-slate-700 hover:bg-red-600 px-3 py-1.5 rounded transition"><i className="fas fa-trash-alt"></i></button>}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
