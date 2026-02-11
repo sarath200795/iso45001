@@ -32,19 +32,22 @@
         .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
 
+        /* PRINT STYLES */
         @media print {
             @page { size: A4; margin: 15mm; }
-            body { background: white; color: black; }
-            .no-print, header { display: none !important; }
-            .fixed.inset-0 { position: static !important; background: white !important; }
-            .fixed.inset-0 > div { width: 100% !important; max-width: none !important; background: white !important; color: black !important; border: none; box-shadow: none; }
-            h2, h3, p, span, div { color: black !important; }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid #000 !important; padding: 8px; color: black !important; }
-            th { background-color: #f0f0f0 !important; }
-            .bg-slate-800, .bg-slate-900, .bg-slate-950 { background: white !important; }
-            input, select, textarea { border: 1px solid #ccc !important; color: black !important; background: white !important; }
+            body * { visibility: hidden; }
+            .print-overlay, .print-overlay * { visibility: visible !important; color: black !important; }
+            .print-overlay { 
+                position: absolute; top: 0; left: 0; width: 100%; min-height: 100%; 
+                background: white; z-index: 9999; display: block !important; 
+            }
+            .no-print { display: none !important; }
+            h1 { font-size: 24pt; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            h2 { font-size: 14pt; background: #eee; padding: 5px; margin-top: 20px; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
+            th, td { border: 1px solid black !important; padding: 5px; text-align: left; }
         }
+        .print-overlay { display: none; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -81,7 +84,7 @@
         );
 
         // --- MEETING DETAIL MODAL (VIEW / EDIT ACTIONS) ---
-        const MeetingDetailModal = ({ meeting, onClose, onUpdateStatus, session, permissions, users }) => {
+        const MeetingDetailModal = ({ meeting, onClose, onUpdateStatus, onPrint, session, permissions, users }) => {
             if (!meeting) return null;
 
             const canEditStatus = (row) => {
@@ -91,7 +94,7 @@
             };
 
             return (
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto no-print">
                     <div className="bg-slate-900 border border-slate-700 w-full max-w-5xl rounded-2xl flex flex-col shadow-2xl relative min-h-[50vh]">
                         <div className="p-6 border-b border-slate-700 flex justify-between items-center">
                             <div><h1 className="text-2xl font-bold uppercase text-teal-400">Minutes of Meeting</h1><p className="text-sm text-slate-400">Ref: {meeting.id}</p></div>
@@ -161,7 +164,7 @@
                         </div>
 
                         <div className="p-4 border-t border-slate-700 flex justify-end gap-3 no-print">
-                            <button onClick={() => window.print()} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i className="fas fa-print mr-2"></i> Print</button>
+                            <button onClick={() => onPrint(meeting)} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-bold text-sm"><i className="fas fa-print mr-2"></i> Print</button>
                             <button onClick={onClose} className="bg-teal-600 hover:bg-teal-500 text-white px-6 py-2 rounded-lg font-bold text-sm">Close</button>
                         </div>
                     </div>
@@ -447,18 +450,72 @@
                         </div>
                     </main>
 
-                    {selectedMeeting && <MeetingDetailModal meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onUpdateStatus={handleStatusUpdate} session={session} permissions={permissions} users={users} />}
+                    {selectedMeeting && <MeetingDetailModal meeting={selectedMeeting} onClose={() => setSelectedMeeting(null)} onUpdateStatus={handleStatusUpdate} session={session} permissions={permissions} users={users} onPrint={preparePrint} />}
                     
                     {/* OVERLAY FOR PRINTING ONLY */}
                     {printData && (
                         <div className="print-overlay p-10">
-                            {/* ... (Print template same as before) ... */}
-                            <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-4"><div><h1 className="text-2xl font-bold uppercase mb-1">Minutes of Meeting</h1><p className="text-sm font-bold">Ref ID: {printData.id}</p></div><div className="text-right"><p className="text-sm">Date: {printData.date}</p><p className="text-sm">Site: {printData.siteId}</p></div></div>
-                            <div className="mb-6 border border-black p-4"><h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">1. Meeting Details</h2><div className="grid grid-cols-2 gap-4 text-sm"><div><strong>Category:</strong> {printData.category}</div><div><strong>Type:</strong> {printData.interaction}</div><div><strong>Time:</strong> {printData.time}</div><div><strong>Logged By:</strong> {printData.createdBy}</div></div><div className="mt-4 text-sm"><strong>Agenda:</strong> {printData.agenda}</div></div>
-                            <div className="mb-6 border border-black p-4"><h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">2. Attendees</h2><p className="text-sm">{(printData.attendees || []).join(', ')}</p></div>
-                            <div className="mb-6 border border-black p-4"><h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">3. Discussion Minutes</h2><div className="text-sm whitespace-pre-wrap">{printData.minutes}</div></div>
-                            <div className="mb-6 border border-black p-4"><h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">4. Action Plan (CAPA)</h2><table className="w-full text-sm border-collapse border border-black"><thead><tr className="bg-gray-100"><th className="border border-black p-2">Action Item</th><th className="border border-black p-2">Owner</th><th className="border border-black p-2">Due Date</th></tr></thead><tbody>{(printData.actions || []).map((row, idx) => (<tr key={idx}><td className="border border-black p-2">{row.action}</td><td className="border border-black p-2">{row.owner}</td><td className="border border-black p-2">{row.due}</td></tr>))}</tbody></table></div>
-                            <div className="flex justify-between mt-12 pt-12"><div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Prepared By</div><div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Approved By</div></div>
+                            <div className="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
+                                <div>
+                                    <h1 className="text-2xl font-bold uppercase mb-1">Minutes of Meeting</h1>
+                                    <p className="text-sm font-bold">Ref ID: {printData.id}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-sm">Date: {printData.date}</p>
+                                    <p className="text-sm">Site: {printData.siteId}</p>
+                                </div>
+                            </div>
+
+                            <div className="mb-6 border border-black p-4">
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">1. Meeting Details</h2>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div><strong>Category:</strong> {printData.category}</div>
+                                    <div><strong>Type:</strong> {printData.interaction}</div>
+                                    <div><strong>Time:</strong> {printData.time}</div>
+                                    <div><strong>Logged By:</strong> {printData.createdBy}</div>
+                                </div>
+                                <div className="mt-4 text-sm">
+                                    <strong>Agenda:</strong> {printData.agenda}
+                                </div>
+                            </div>
+
+                            <div className="mb-6 border border-black p-4">
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">2. Attendees</h2>
+                                <p className="text-sm">{(printData.attendees || []).join(', ')}</p>
+                            </div>
+
+                            <div className="mb-6 border border-black p-4">
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">3. Discussion Minutes</h2>
+                                <div className="text-sm whitespace-pre-wrap">{printData.minutes}</div>
+                            </div>
+
+                            <div className="mb-6 border border-black p-4">
+                                <h2 className="text-lg font-bold mb-4 uppercase bg-gray-200 p-2">4. Action Plan (CAPA)</h2>
+                                <table className="w-full text-sm border-collapse border border-black">
+                                    <thead>
+                                        <tr className="bg-gray-100">
+                                            <th className="border border-black p-2">Action Item</th>
+                                            <th className="border border-black p-2">Owner</th>
+                                            <th className="border border-black p-2">Due Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(printData.actions || []).map((row, idx) => (
+                                            <tr key={idx}>
+                                                <td className="border border-black p-2">{row.action}</td>
+                                                <td className="border border-black p-2">{row.owner}</td>
+                                                <td className="border border-black p-2">{row.due}</td>
+                                            </tr>
+                                        ))}
+                                        {(!printData.actions || printData.actions.length === 0) && <tr><td colSpan="3" className="border border-black p-2 text-center italic">No actions recorded.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="flex justify-between mt-12 pt-12">
+                                <div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Prepared By</div>
+                                <div className="border-t border-black w-1/3 pt-2 text-center text-sm font-bold">Approved By</div>
+                            </div>
                         </div>
                     )}
                 </div>
