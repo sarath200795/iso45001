@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous Improvement | ERP</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
+                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 8px; width: 100%; outline: none; transition: border-color 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+        .type-badge-jdi { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .type-badge-kaizen { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .type-badge-program { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, get, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { ref, push, get, update };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const ImprovementApp = () => {
+            const [session, setSession] = useState(null);
+            const [view, setView] = useState('list'); // list | form
+            const [improvements, setImprovements] = useState([]);
+            const [sites, setSites] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            // Form State
+            const [form, setForm] = useState({
+                type: 'JDI', // JDI | Kaizen | Program
+                title: '',
+                siteId: '',
+                date: new Date().toISOString().split('T')[0],
+                description: '',
+                metricsImpact: '',
+                safetyImpact: '',
+                cost: '',
+                documentation: '',
+                training: '',
+                infrastructure: '',
+                status: 'Proposed'
+            });
+
+            // LOAD DATA
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if(!s) { window.location.href='index.html'; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+                setForm(f => ({ ...f, siteId: sess.assignedSite || '' }));
+
+                const fetchData = async () => {
+                    const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
+                    const snap = await window.fb.get(dbRef);
+                    if(snap.exists()) {
+                        const val = snap.val();
+                        if(val.improvements) setImprovements(Object.values(val.improvements));
+                        if(val.sites) setSites(Object.values(val.sites));
+                    }
+                    setLoading(false);
+                };
+                fetchData();
+            }, []);
+
+            const handleSubmit = async () => {
+                if(!form.title || !form.description) return alert("Title and Description are required.");
+
+                const newRecord = { 
+                    ...form, 
+                    id: `IMP-${Date.now().toString().slice(-6)}`,
+                    createdBy: session.user,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Logic for Kaizen Cross-Site Notification
+                if(form.type === 'Kaizen') {
+                    newRecord.crossSite = true;
+                    newRecord.notificationMsg = `New Kaizen Alert: "${form.title}" implemented at ${form.siteId}. Review for cross-implementation.`;
+                    // In a real app, this would push to a separate 'notifications' node
+                }
+
+                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/improvements`), newRecord);
+                
+                // Optimistic UI Update
+                setImprovements([newRecord, ...improvements]);
+                alert(form.type === 'Kaizen' ? "Kaizen Submitted & Cross-Site Notification Sent!" : "Improvement Proposal Saved!");
+                setView('list');
+                setForm({
+                    type: 'JDI', title: '', siteId: session.assignedSite || '', date: new Date().toISOString().split('T')[0],
+                    description: '', metricsImpact: '', safetyImpact: '', cost: '', documentation: '', training: '', infrastructure: '', status: 'Proposed'
+                });
+            };
+
+            if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Module...</div>;
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    
+                    {/* Header */}
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
+                        <div className="flex items-center gap-4">
+                            <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
+                            <h1 className="font-bold text-lg">Continuous Improvement Program</h1>
+                        </div>
+                        <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
+                            <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='list'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>Dashboard</button>
+                            <button onClick={()=>setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='form'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>New Proposal</button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-8 custom-scroll">
+                        <div className="max-w-5xl mx-auto">
+
+                            {/* DASHBOARD VIEW */}
+                            {view === 'list' && (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500">
+                                            <div className="text-slate-400 text-xs uppercase font-bold">Total JDIs</div>
+                                            <div className="text-3xl font-bold">{improvements.filter(i=>i.type==='JDI').length}</div>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500">
+                                            <div className="text-slate-400 text-xs uppercase font-bold">Kaizens (Cross-Site)</div>
+                                            <div className="text-3xl font-bold">{improvements.filter(i=>i.type==='Kaizen').length}</div>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-purple-500">
+                                            <div className="text-slate-400 text-xs uppercase font-bold">Programs Developed</div>
+                                            <div className="text-3xl font-bold">{improvements.filter(i=>i.type==='Program Development').length}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="glass-panel rounded-xl overflow-hidden">
+                                        <table className="w-full text-left text-sm text-slate-300">
+                                            <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
+                                                <tr>
+                                                    <th className="p-4">Date</th>
+                                                    <th className="p-4">Type</th>
+                                                    <th className="p-4">Title</th>
+                                                    <th className="p-4">Site</th>
+                                                    <th className="p-4">Impact/Savings</th>
+                                                    <th className="p-4 text-right">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-800">
+                                                {improvements.map((imp, idx) => (
+                                                    <tr key={idx} className="hover:bg-slate-800/50">
+                                                        <td className="p-4 text-xs font-mono">{imp.date}</td>
+                                                        <td className="p-4">
+                                                            <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${imp.type==='JDI'?'type-badge-jdi':imp.type==='Kaizen'?'type-badge-kaizen':'type-badge-program'}`}>
+                                                                {imp.type === 'Program Development' ? 'Program' : imp.type}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4 font-bold text-white">{imp.title}</td>
+                                                        <td className="p-4">{imp.siteId}</td>
+                                                        <td className="p-4 text-xs">
+                                                            {imp.cost && <div className="text-emerald-400"><i className="fas fa-dollar-sign"></i> {imp.cost}</div>}
+                                                            <div className="text-slate-400 truncate w-32">{imp.metricsImpact || imp.safetyImpact}</div>
+                                                        </td>
+                                                        <td className="p-4 text-right"><span className="bg-slate-700 px-2 py-1 rounded text-[10px]">{imp.status}</span></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* FORM VIEW */}
+                            {view === 'form' && (
+                                <div className="glass-panel p-8 rounded-2xl animate-fade-in">
+                                    <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+                                        <span className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-sm"><i className="fas fa-lightbulb"></i></span> 
+                                        Submit Proposal
+                                    </h2>
+
+                                    {/* 1. Common Fields */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                        <div className="col-span-2 md:col-span-1">
+                                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Improvement Type</label>
+                                            <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})} className="border-blue-500/50 bg-blue-900/10">
+                                                <option value="JDI">JDI (Just Do It)</option>
+                                                <option value="Kaizen">Kaizen</option>
+                                                <option value="Program Development">Program Development</option>
+                                            </select>
+                                        </div>
+                                        <div className="col-span-2 md:col-span-1">
+                                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Site</label>
+                                            <select value={form.siteId} onChange={e=>setForm({...form, siteId:e.target.value})}>
+                                                <option value="">Select...</option>
+                                                {sites.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="col-span-2 md:col-span-2">
+                                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Title / Subject</label>
+                                            <input value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="Short title for improvement..." />
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Dynamic Sections */}
+                                    <div className="space-y-6">
+                                        
+                                        {/* SECTION A: Description (All Types) */}
+                                        <div>
+                                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Description of Change</label>
+                                            <textarea rows="3" value={form.description} onChange={e=>setForm({...form, description:e.target.value})} placeholder="What is the current state and what is the proposed change?" className="resize-none"></textarea>
+                                        </div>
+
+                                        {/* SECTION B: JDI Specifics */}
+                                        {form.type === 'JDI' && (
+                                            <div className="grid grid-cols-2 gap-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-900/5">
+                                                <div>
+                                                    <label className="text-[10px] uppercase font-bold text-emerald-400 block mb-1">Impact on Metrics</label>
+                                                    <input value={form.metricsImpact} onChange={e=>setForm({...form, metricsImpact:e.target.value})} placeholder="e.g. Reduced process time by 10%" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] uppercase font-bold text-emerald-400 block mb-1">Impact on Safety</label>
+                                                    <input value={form.safetyImpact} onChange={e=>setForm({...form, safetyImpact:e.target.value})} placeholder="e.g. Removed trip hazard" />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* SECTION C: Kaizen Specifics */}
+                                        {form.type === 'Kaizen' && (
+                                            <div className="space-y-4 p-4 rounded-xl border border-blue-500/20 bg-blue-900/5">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="text-[10px] uppercase font-bold text-blue-400 block mb-1">Safety Metric Improvement</label>
+                                                        <input value={form.safetyImpact} onChange={e=>setForm({...form, safetyImpact:e.target.value})} placeholder="e.g. 0 incidents in 6 months" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] uppercase font-bold text-blue-400 block mb-1">Estimated Cost / Savings</label>
+                                                        <input value={form.cost} onChange={e=>setForm({...form, cost:e.target.value})} placeholder="e.g. $500 implementation" />
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3 bg-blue-900/30 p-3 rounded-lg border border-blue-500/30">
+                                                    <i className="fas fa-bullhorn text-blue-400 text-xl animate-pulse"></i>
+                                                    <div>
+                                                        <h4 className="text-sm font-bold text-white">Cross-Site Implementation</h4>
+                                                        <p className="text-xs text-slate-400">Submitting this Kaizen will automatically create a notification for all other sites to review.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* SECTION D: Program Development Specifics */}
+                                        {form.type === 'Program Development' && (
+                                            <div className="space-y-4 p-4 rounded-xl border border-purple-500/20 bg-purple-900/5">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><label className="text-[10px] uppercase font-bold text-purple-400 block mb-1">Safety Metric Improvement</label><input value={form.safetyImpact} onChange={e=>setForm({...form, safetyImpact:e.target.value})} /></div>
+                                                    <div><label className="text-[10px] uppercase font-bold text-purple-400 block mb-1">Estimated Cost</label><input value={form.cost} onChange={e=>setForm({...form, cost:e.target.value})} /></div>
+                                                </div>
+                                                <div><label className="text-[10px] uppercase font-bold text-purple-400 block mb-1">Documentation Required</label><textarea rows="2" value={form.documentation} onChange={e=>setForm({...form, documentation:e.target.value})} placeholder="SOPs, Policies, Manuals..." className="resize-none"></textarea></div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><label className="text-[10px] uppercase font-bold text-purple-400 block mb-1">Training Plan</label><textarea rows="2" value={form.training} onChange={e=>setForm({...form, training:e.target.value})} placeholder="Who needs training?" className="resize-none"></textarea></div>
+                                                    <div><label className="text-[10px] uppercase font-bold text-purple-400 block mb-1">Infrastructure Needs</label><textarea rows="2" value={form.infrastructure} onChange={e=>setForm({...form, infrastructure:e.target.value})} placeholder="Equipment, Space, Software..." className="resize-none"></textarea></div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="flex justify-end pt-4 border-t border-slate-700">
+                                            <button onClick={handleSubmit} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-transform hover:-translate-y-1">
+                                                Submit Proposal
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ImprovementApp />);
+    </script>
+</body>
+</html>
