@@ -50,7 +50,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // Helper: Convert File to Base64 for evidence
         const fileToBase64 = (file) => new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -72,8 +71,11 @@
                 date: new Date().toISOString().split('T')[0],
                 trainer: '',
                 evidence: null,
-                selectedUsers: [] // Array of User IDs
+                selectedUsers: [], // Internal Users (from DB)
+                manualAttendees: [] // External Names (Free Text)
             });
+            
+            const [newExternalName, setNewExternalName] = useState('');
 
             // LOAD DATA
             useEffect(() => {
@@ -96,38 +98,32 @@
 
             // --- 6-MONTH EXPIRY LOGIC ---
             const getStatus = (user, topic) => {
-                // 1. Find all records for this user & topic
                 const userRecords = records
                     .filter(r => r.user === user && r.topic === topic)
-                    .sort((a,b) => new Date(b.date) - new Date(a.date)); // Sort Newest First
+                    .sort((a,b) => new Date(b.date) - new Date(a.date));
                 
-                // 2. If no record exists
                 if(userRecords.length === 0) return { label: 'Not Trained', color: 'text-slate-500 bg-slate-900 border-slate-800' };
                 
-                // 3. Check Date Validity (6 Months)
                 const latest = userRecords[0];
                 const trainingDate = new Date(latest.date);
                 const today = new Date();
-                
-                // Calculate difference in months
                 const diffTime = Math.abs(today - trainingDate);
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                const isExpired = diffDays > 180; // 180 days approx 6 months
+                const isExpired = diffDays > 180; // 6 months
 
-                if(isExpired) {
-                    return { label: 'Expired', color: 'text-red-400 bg-red-900/20 border-red-500/30' };
-                }
-                
+                if(isExpired) return { label: 'Expired', color: 'text-red-400 bg-red-900/20 border-red-500/30' };
                 return { label: 'Valid', color: 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30' };
             };
 
             // --- BULK SUBMIT LOGIC ---
             const handleBulkSubmit = async () => {
-                if(!bulkForm.topic || !bulkForm.date || bulkForm.selectedUsers.length === 0) {
+                const allAttendees = [...bulkForm.selectedUsers, ...bulkForm.manualAttendees];
+
+                if(!bulkForm.topic || !bulkForm.date || allAttendees.length === 0) {
                     return alert("Please select a Topic, Date, and at least one Attendee.");
                 }
 
-                const batchPromises = bulkForm.selectedUsers.map(userName => {
+                const batchPromises = allAttendees.map(userName => {
                     const newRec = {
                         user: userName,
                         topic: bulkForm.topic,
@@ -137,18 +133,13 @@
                         createdBy: session.user,
                         timestamp: new Date().toISOString()
                     };
-                    // Optimistic update local state
                     setRecords(prev => [...prev, newRec]);
                     return window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords`), newRec);
                 });
 
                 await Promise.all(batchPromises);
-                alert(`Successfully logged training for ${bulkForm.selectedUsers.length} employees!`);
-                
-                // Reset Form
-                setBulkForm({
-                    topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: []
-                });
+                alert(`Successfully logged training for ${allAttendees.length} people!`);
+                setBulkForm({ topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [] });
                 setView('matrix');
             };
 
@@ -160,12 +151,15 @@
                 }
             };
 
-            const selectAllUsers = () => {
-                if (bulkForm.selectedUsers.length === users.length) {
-                    setBulkForm({ ...bulkForm, selectedUsers: [] });
-                } else {
-                    setBulkForm({ ...bulkForm, selectedUsers: users.map(u => u.name) });
+            const addExternalAttendee = () => {
+                if(newExternalName.trim()) {
+                    setBulkForm({...bulkForm, manualAttendees: [...bulkForm.manualAttendees, newExternalName.trim()]});
+                    setNewExternalName('');
                 }
+            };
+
+            const removeManualAttendee = (idx) => {
+                setBulkForm({...bulkForm, manualAttendees: bulkForm.manualAttendees.filter((_, i) => i !== idx)});
             };
 
             const handleEvidenceUpload = async (e) => {
@@ -178,10 +172,11 @@
 
             // --- EXPORT TO EXCEL ---
             const downloadMatrix = () => {
-                const data = users.map(u => {
-                    const row = { Employee: u.name, Role: u.role };
+                const allTrainedNames = [...new Set([...users.map(u=>u.name), ...records.map(r=>r.user)])];
+                const data = allTrainedNames.map(name => {
+                    const row = { Name: name };
                     topics.forEach(t => {
-                        const status = getStatus(u.name, t);
+                        const status = getStatus(name, t);
                         row[t] = status.label;
                     });
                     return row;
@@ -193,19 +188,26 @@
                 XLSX.writeFile(wb, "Training_Matrix_6Month_Review.xlsx");
             };
 
+            // Calculate Compliance (Including External Records found)
+            const allMatrixRows = useMemo(() => {
+                // Combine registered users AND any other names found in records
+                const recordedNames = records.map(r => r.user);
+                const userNames = users.map(u => u.name);
+                return [...new Set([...userNames, ...recordedNames])].sort();
+            }, [users, records]);
+
             const complianceRate = useMemo(() => {
-                if(users.length === 0) return 0;
+                if(allMatrixRows.length === 0) return 0;
                 let compliantCount = 0;
-                let totalRequired = users.length * topics.length;
+                let totalRequired = allMatrixRows.length * topics.length;
                 
-                users.forEach(u => {
+                allMatrixRows.forEach(name => {
                     topics.forEach(t => {
-                        const stat = getStatus(u.name, t);
-                        if(stat.label === 'Valid') compliantCount++;
+                        if(getStatus(name, t).label === 'Valid') compliantCount++;
                     });
                 });
                 return Math.round((compliantCount / totalRequired) * 100);
-            }, [users, records, topics]);
+            }, [allMatrixRows, records, topics]);
 
             if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Training Data...</div>;
 
@@ -230,7 +232,7 @@
                             {/* KPI Cards */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center">
-                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Total Sessions</p><h3 className="text-3xl font-bold">{records.length}</h3></div>
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Total Records</p><h3 className="text-3xl font-bold">{records.length}</h3></div>
                                     <i className="fas fa-file-signature text-2xl text-yellow-500/50"></i>
                                 </div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center">
@@ -239,12 +241,12 @@
                                 </div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-red-500 flex justify-between items-center">
                                     <div><p className="text-xs text-slate-400 uppercase font-bold">Expired (6 Mo)</p><h3 className="text-3xl font-bold text-red-400">
-                                        {users.reduce((acc, u) => acc + topics.filter(t => getStatus(u.name, t).label === 'Expired').length, 0)}
+                                        {allMatrixRows.reduce((acc, name) => acc + topics.filter(t => getStatus(name, t).label === 'Expired').length, 0)}
                                     </h3></div>
                                     <i className="fas fa-history text-2xl text-red-500/50"></i>
                                 </div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
-                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Employees</p><h3 className="text-3xl font-bold">{users.length}</h3></div>
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Trained Staff</p><h3 className="text-3xl font-bold">{allMatrixRows.length}</h3></div>
                                     <i className="fas fa-users text-2xl text-blue-500/50"></i>
                                 </div>
                             </div>
@@ -260,18 +262,16 @@
                                         <table className="w-full text-left text-sm text-slate-300">
                                             <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
                                                 <tr>
-                                                    <th className="p-4 sticky left-0 bg-slate-900 z-10 border-r border-slate-700">Employee Name</th>
-                                                    <th className="p-4 bg-slate-900 border-r border-slate-700">Role</th>
+                                                    <th className="p-4 sticky left-0 bg-slate-900 z-10 border-r border-slate-700">Name</th>
                                                     {topics.map(t => <th key={t} className="p-4 text-center border-r border-slate-800 w-32">{t}</th>)}
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-800">
-                                                {users.map(u => (
-                                                    <tr key={u.id} className="hover:bg-slate-800/50 transition-colors">
-                                                        <td className="p-4 font-bold text-white sticky left-0 bg-slate-900/90 border-r border-slate-700">{u.name}</td>
-                                                        <td className="p-4 text-xs text-slate-400 border-r border-slate-700">{u.role}</td>
+                                                {allMatrixRows.map(name => (
+                                                    <tr key={name} className="hover:bg-slate-800/50 transition-colors">
+                                                        <td className="p-4 font-bold text-white sticky left-0 bg-slate-900/90 border-r border-slate-700">{name}</td>
                                                         {topics.map(t => {
-                                                            const stat = getStatus(u.name, t);
+                                                            const stat = getStatus(name, t);
                                                             return (
                                                                 <td key={t} className="p-2 text-center border-r border-slate-800/50">
                                                                     <div className={`px-2 py-1 rounded text-[10px] font-bold border ${stat.color} inline-block w-full`}>
@@ -323,12 +323,26 @@
                                         {/* Right: User Selection (Attendees) */}
                                         <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 flex flex-col h-full">
                                             <div className="flex justify-between items-center mb-3">
-                                                <label className="text-xs font-bold text-blue-400 uppercase">Select Attendees ({bulkForm.selectedUsers.length})</label>
-                                                <button onClick={selectAllUsers} className="text-[10px] text-slate-400 hover:text-white underline">
-                                                    {bulkForm.selectedUsers.length === users.length ? 'Deselect All' : 'Select All'}
-                                                </button>
+                                                <label className="text-xs font-bold text-blue-400 uppercase">Select Attendees</label>
+                                                <span className="text-[10px] text-slate-400">{bulkForm.selectedUsers.length + bulkForm.manualAttendees.length} Selected</span>
                                             </div>
+                                            
+                                            {/* Add External User Input */}
+                                            <div className="flex gap-2 mb-3">
+                                                <input placeholder="Add External Name..." value={newExternalName} onChange={e=>setNewExternalName(e.target.value)} className="bg-slate-800 border-none text-xs p-2 rounded flex-1" />
+                                                <button onClick={addExternalAttendee} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs font-bold">Add</button>
+                                            </div>
+
                                             <div className="flex-1 overflow-y-auto custom-scroll space-y-2 pr-2 max-h-64">
+                                                {/* Manual Attendees List */}
+                                                {bulkForm.manualAttendees.map((name, i) => (
+                                                    <div key={`manual-${i}`} className="p-2 rounded border border-purple-500/30 bg-purple-900/10 flex justify-between items-center">
+                                                        <span className="text-sm font-bold text-purple-200">{name} <span className="text-[9px] opacity-70">(External)</span></span>
+                                                        <button onClick={()=>removeManualAttendee(i)} className="text-red-400 text-xs hover:text-white">x</button>
+                                                    </div>
+                                                ))}
+
+                                                {/* System Users List */}
                                                 {users.map(u => (
                                                     <div key={u.id} onClick={() => toggleUserSelection(u.name)} className={`p-2 rounded cursor-pointer border flex justify-between items-center transition-all ${bulkForm.selectedUsers.includes(u.name) ? 'bg-blue-600/20 border-blue-500 text-blue-200' : 'bg-slate-800 border-transparent hover:bg-slate-700'}`}>
                                                         <span className="text-sm font-bold">{u.name}</span>
