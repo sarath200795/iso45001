@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training Matrix | Enterprise Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Space Grotesk', 'sans-serif'] }, colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' } } } }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        input, select { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; outline: none; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, get, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { ref, push, get, update };
+    </script>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const TrainingApp = () => {
+            const [session, setSession] = useState(null);
+            const [view, setView] = useState('matrix'); 
+            const [users, setUsers] = useState([]);
+            const [records, setRecords] = useState([]);
+            const [topics, setTopics] = useState(["LOTO", "Fire Safety", "First Aid", "Work at Height", "Chemical Handling"]);
+            
+            const [form, setForm] = useState({ user: '', topic: '', date: '', expiry: '' });
+
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if(!s) { window.location.href='index.html'; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+
+                const fetchData = async () => {
+                    const snap = await window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}`));
+                    if(snap.exists()) {
+                        const val = snap.val();
+                        if(val.users) setUsers(Object.values(val.users));
+                        if(val.trainingRecords) setRecords(Object.values(val.trainingRecords));
+                    }
+                };
+                fetchData();
+            }, []);
+
+            const addRecord = async () => {
+                if(!form.user || !form.topic || !form.date) return alert("Fill required fields");
+                const newRec = { ...form, status: 'Valid', createdBy: session.user };
+                await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords`), newRec);
+                setRecords([...records, newRec]);
+                setForm({ user: '', topic: '', date: '', expiry: '' });
+                alert("Training Logged!");
+            };
+
+            const getStatus = (user, topic) => {
+                const rec = records.filter(r => r.user === user && r.topic === topic).sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+                if(!rec) return { label: 'Not Trained', color: 'text-slate-600 bg-slate-900' };
+                const isExpired = rec.expiry && new Date(rec.expiry) < new Date();
+                if(isExpired) return { label: 'Expired', color: 'text-red-400 bg-red-900/20' };
+                return { label: 'Valid', color: 'text-emerald-400 bg-emerald-900/20' };
+            };
+
+            if(!session) return null;
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
+                        <div className="flex items-center gap-4">
+                            <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
+                            <h1 className="font-bold text-lg">Training & Competency</h1>
+                        </div>
+                        <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
+                            <button onClick={()=>setView('matrix')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='matrix'?'bg-yellow-600 text-white':'text-slate-400'}`}>Matrix</button>
+                            <button onClick={()=>setView('log')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='log'?'bg-yellow-600 text-white':'text-slate-400'}`}>Log Training</button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-8 custom-scroll">
+                        <div className="max-w-7xl mx-auto">
+                            
+                            {/* KPI CARDS (Aligned with CAPA Style) */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center">
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Total Sessions</p><h3 className="text-3xl font-bold">{records.length}</h3></div>
+                                    <i className="fas fa-chalkboard-teacher text-2xl text-yellow-500/50"></i>
+                                </div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center">
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Employees Trained</p><h3 className="text-3xl font-bold">{[...new Set(records.map(r=>r.user))].length}</h3></div>
+                                    <i className="fas fa-user-graduate text-2xl text-emerald-500/50"></i>
+                                </div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-red-500 flex justify-between items-center">
+                                    <div><p className="text-xs text-slate-400 uppercase font-bold">Expired / Overdue</p><h3 className="text-3xl font-bold">{records.filter(r=>r.expiry && new Date(r.expiry) < new Date()).length}</h3></div>
+                                    <i className="fas fa-clock text-2xl text-red-500/50"></i>
+                                </div>
+                            </div>
+
+                            {/* MAIN CONTENT */}
+                            {view === 'matrix' && (
+                                <div className="glass-panel rounded-xl overflow-hidden border border-slate-700">
+                                    <table className="w-full text-left text-sm text-slate-300">
+                                        <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
+                                            <tr>
+                                                <th className="p-4">Employee</th>
+                                                {topics.map(t => <th key={t} className="p-4 text-center">{t}</th>)}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800">
+                                            {users.map(u => (
+                                                <tr key={u.id} className="hover:bg-slate-800/50">
+                                                    <td className="p-4 font-bold text-white">{u.name} <span className="text-[10px] text-slate-500 block font-normal">{u.role}</span></td>
+                                                    {topics.map(t => {
+                                                        const stat = getStatus(u.name, t);
+                                                        return <td key={t} className="p-4 text-center"><span className={`px-2 py-1 rounded text-[10px] font-bold border border-current ${stat.color}`}>{stat.label}</span></td>
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {view === 'log' && (
+                                <div className="glass-panel p-8 rounded-xl max-w-2xl mx-auto">
+                                    <h2 className="text-xl font-bold mb-6 text-yellow-400">Log Completed Training</h2>
+                                    <div className="space-y-4">
+                                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Employee</label><select value={form.user} onChange={e=>setForm({...form, user:e.target.value})}>{users.map(u=><option key={u.id} value={u.name}>{u.name}</option>)}</select></div>
+                                        <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Topic</label><select value={form.topic} onChange={e=>setForm({...form, topic:e.target.value})}>{topics.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Date Completed</label><input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})}/></div>
+                                            <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Valid Until (Expiry)</label><input type="date" value={form.expiry} onChange={e=>setForm({...form, expiry:e.target.value})}/></div>
+                                        </div>
+                                        <button onClick={addRecord} className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-xl mt-4">Save Record</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TrainingApp />);
+    </script>
+</body>
+</html>
