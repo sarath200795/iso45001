@@ -49,7 +49,12 @@
             { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
             { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' },
             { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' }, 
-            { id: 'improvement', label: 'Improvement', desc: 'Kaizen & JDI', icon: 'fa-chart-line', color: 'text-blue-400' }, // Linked to improvement.html
+            
+            // NEW MODULES ADDED HERE
+            { id: 'capa', label: 'CAPA Manager', desc: 'Global Actions', icon: 'fa-list-check', color: 'text-cyan-400' },
+            { id: 'training', label: 'Training', desc: 'LMS & Competency', icon: 'fa-graduation-cap', color: 'text-yellow-400' },
+
+            { id: 'improvement', label: 'Improvement', desc: 'Kaizen & JDI', icon: 'fa-chart-line', color: 'text-blue-400' },
             { id: 'mock-drill', label: 'Record Emergency', desc: 'Drills & Real Events', icon: 'fa-person-running', color: 'text-pink-400' },
             { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true },
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
@@ -185,7 +190,9 @@
                 else if (moduleId === 'mock-drill') window.location.href = 'mock-drill.html';
                 else if (moduleId === 'incidents') window.location.href = 'incidents.html';
                 else if (moduleId === 'risk') window.location.href = 'risk.html';
-                else if (moduleId === 'improvement') window.location.href = 'improvement.html'; // Linked!
+                else if (moduleId === 'improvement') window.location.href = 'improvement.html';
+                else if (moduleId === 'training') window.location.href = 'training.html'; // New Link
+                else if (moduleId === 'capa') window.location.href = 'capa.html'; // New Link
                 else window.location.href = `${moduleId}.html?site=${selectedSite}`;
             };
 
