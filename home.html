@@ -46,10 +46,10 @@
         const MODULES = [
             { id: 'dashboard', label: 'Dashboard', desc: 'KPIs & Stats', icon: 'fa-chart-pie', color: 'text-purple-400', allowGlobal: true },
             { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
-            { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' }, // Links to risk.html
+            { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
             { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' },
             { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' }, 
-            { id: 'improvement', label: 'Improvement', desc: 'CAPA Tracking', icon: 'fa-chart-line', color: 'text-blue-400' },
+            { id: 'improvement', label: 'Improvement', desc: 'Kaizen & JDI', icon: 'fa-chart-line', color: 'text-blue-400' }, // Linked to improvement.html
             { id: 'mock-drill', label: 'Record Emergency', desc: 'Drills & Real Events', icon: 'fa-person-running', color: 'text-pink-400' },
             { id: 'users', label: 'Users', desc: 'Manage Access', icon: 'fa-users-gear', color: 'text-slate-300', admin: true },
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
@@ -75,11 +75,11 @@
 
                 // 2. INCIDENTS
                 Object.values(data.incidents || {}).filter(filterSite).forEach(inc => {
-                    if(inc.status !== 'Closed') newAlerts.push({ type: 'warn', msg: `Incident ${inc.id} is Open (${inc.severity})`, link: `incidents.html?site=${inc.siteId}` });
+                    if(inc.status !== 'Closed') newAlerts.push({ type: 'warn', msg: `Incident ${inc.docId || inc.id} is Open (${inc.severity})`, link: `incidents.html?site=${inc.siteId}` });
                     (inc.capa || []).forEach(c => {
                         if(c.status === 'Open' && c.due) {
                             const due = new Date(c.due);
-                            if(due < today) newAlerts.push({ type: 'danger', msg: `Overdue Action in ${inc.id}`, link: `incidents.html?site=${inc.siteId}` });
+                            if(due < today) newAlerts.push({ type: 'danger', msg: `Overdue Action in ${inc.docId || inc.id}`, link: `incidents.html?site=${inc.siteId}` });
                         }
                     });
                 });
@@ -158,11 +158,14 @@
                 window.fb.get(window.fb.child(dbRef, `organizations/${sess.orgId}`)).then((snap) => {
                     if (snap.exists()) {
                         const val = snap.val();
+                        // Consolidate data for notifications
+                        const incidentsData = val.incidents || {};
                         const auditsData = val.auditFindings || val.audits || {}; 
+                        
                         setData({ 
                             sites: val.sites ? Object.values(val.sites) : [],
                             users: val.users || {},
-                            incidents: val.incidents || {},
+                            incidents: incidentsData,
                             audits: auditsData 
                         });
                     }
@@ -179,6 +182,10 @@
                 if (moduleId === 'users') window.location.href = 'users.html';
                 else if (moduleId === 'sites') window.location.href = 'sites.html';
                 else if (moduleId === 'dashboard') alert("Dashboard coming soon.");
+                else if (moduleId === 'mock-drill') window.location.href = 'mock-drill.html';
+                else if (moduleId === 'incidents') window.location.href = 'incidents.html';
+                else if (moduleId === 'risk') window.location.href = 'risk.html';
+                else if (moduleId === 'improvement') window.location.href = 'improvement.html'; // Linked!
                 else window.location.href = `${moduleId}.html?site=${selectedSite}`;
             };
 
