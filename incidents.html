@@ -64,10 +64,10 @@
                 -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
             }
             .no-print, header, .repo-view, .form-view-tabs, .action-buttons { display: none !important; }
-            .print-overlay { display: block !important; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 9999; }
+            .print-overlay { display: block !important; position: absolute; top: 0; left: 0; width: 100%; min-height: 100%; background: white; z-index: 9999; }
             .print-overlay * { visibility: visible !important; color: black !important; }
-            .print-overlay h1 { font-size: 24pt; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
-            .print-overlay h2 { font-size: 14pt; background: #eee !important; padding: 5px; margin-top: 20px; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact; }
+            .print-overlay h1 { font-size: 24pt; font-weight: bold; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            .print-overlay h2 { font-size: 16pt; font-weight: bold; margin-top: 20px; border-bottom: 1px solid #ccc; background: #eee !important; padding: 5px; -webkit-print-color-adjust: exact; }
             .print-overlay p, .print-overlay li, .print-overlay td { font-size: 11pt; }
             /* Hide diagrams in print, show text summary instead */
             .fishbone-container, .tree { display: none !important; }
@@ -276,7 +276,7 @@
             return (
                 <div className="space-y-6 animate-fade-in glass-panel-filters repo-view">
                     
-                    {/* NEW KPI DASHBOARD */}
+                    {/* KPI DASHBOARD */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
                         <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
                             <div><p className="text-xs text-slate-400 uppercase font-bold">Total CAPA Raised</p><h3 className="text-3xl font-bold">{stats.total}</h3></div>
@@ -696,7 +696,10 @@
                                             <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
                                                 <div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner">
                                                     <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required for {data.siteId}?</p></div>
+                                                    
+                                                    {/* FIXED BUTTON: Redirects to risk.html with site param in SAME TAB */}
                                                     <a href={`risk.html?site=${data.siteId}`} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2">Open Risk Module <i className="fas fa-external-link-alt"></i></a>
+                                                
                                                 </div>
                                                 <div className="flex gap-4 items-start mb-10 p-6 border border-slate-700 rounded-xl bg-slate-900/30">
                                                     <input type="checkbox" className="w-6 h-6 mt-0.5 accent-emerald-500 cursor-pointer" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} disabled={!canEdit} />
@@ -743,13 +746,17 @@
 
                             <div className="report-section">
                                 <h2 className="section-heading">3. Root Cause Analysis</h2>
-                                <div className="mb-6 print-diagram-summary">
-                                    <strong>Investigation Summary:</strong>
-                                    <ul>
-                                        <li><strong>Root Cause:</strong> {printData.investigation.rootCause}</li>
-                                        <li><strong>Fishbone Man:</strong> {printData.investigation.fishbone.man.join(', ')}</li>
-                                        <li><strong>Fishbone Machine:</strong> {printData.investigation.fishbone.machine.join(', ')}</li>
-                                    </ul>
+                                <div className="mb-6">
+                                    <strong>Fishbone Diagram:</strong>
+                                    <div style={{transform:'scale(0.8)', transformOrigin:'top left'}}>
+                                        <Fishbone data={printData.investigation.fishbone} onChange={()=>{}} disabled={true} />
+                                    </div>
+                                </div>
+                                <div className="mb-6">
+                                    <strong>Fault Tree Analysis:</strong>
+                                    <div style={{transform:'scale(0.8)', transformOrigin:'top left'}} className="tree">
+                                        <ul><FaultTreeNode node={printData.investigation.faultTree} onUpdate={()=>{}} disabled={true} /></ul>
+                                    </div>
                                 </div>
                                 <div className="mb-4">
                                     <strong>5 Whys:</strong>
@@ -759,6 +766,7 @@
                                         </div>
                                     ))}
                                 </div>
+                                <div><strong>Final Root Cause:</strong> {printData.investigation.rootCause}</div>
                             </div>
 
                             <div className="report-section">
@@ -805,5 +813,3 @@
     </script>
 </body>
 </html>
-
-check the Risk Module tab for redirection
