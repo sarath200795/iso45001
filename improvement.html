@@ -46,7 +46,7 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
         // --- COMPONENTS ---
         const DynamicList = ({ label, items, onChange, placeholder, color = "text-slate-500" }) => (
@@ -150,6 +150,23 @@
                 setForm({ type: 'JDI', title: '', siteId: session.assignedSite || '', date: new Date().toISOString().split('T')[0], description: '', cost: '', metrics: [], documentation: [], training: [], infrastructure: [], notifications: [], actions: [], status: 'Proposed' });
             };
 
+            const stats = useMemo(() => {
+                let totalActions = 0;
+                let closedActions = 0;
+                let openActions = 0;
+
+                improvements.forEach(imp => {
+                    if (imp.actions) {
+                        imp.actions.forEach(act => {
+                            totalActions++;
+                            if (act.status === 'Closed') closedActions++;
+                            else openActions++;
+                        });
+                    }
+                });
+                return { totalActions, closedActions, openActions };
+            }, [improvements]);
+
             if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading...</div>;
 
             return (
@@ -162,11 +179,46 @@
                     <div className="flex-1 overflow-y-auto p-8 custom-scroll">
                         <div className="max-w-5xl mx-auto">
                             {view === 'list' && (
-                                <div className="glass-panel rounded-xl overflow-hidden">
-                                    <table className="w-full text-left text-sm text-slate-300">
-                                        <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Date</th><th className="p-4">Type</th><th className="p-4">Title</th><th className="p-4">Site</th><th className="p-4">Actions</th><th className="p-4 text-right">Status</th></tr></thead>
-                                        <tbody className="divide-y divide-slate-800">{improvements.map((imp, idx) => (<tr key={idx} className="hover:bg-slate-800/50"><td className="p-4 text-xs font-mono">{imp.date}</td><td className="p-4"><span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${imp.type==='JDI'?'text-emerald-400 bg-emerald-900/20':imp.type==='Kaizen'?'text-blue-400 bg-blue-900/20':'text-purple-400 bg-purple-900/20'}`}>{imp.type}</span></td><td className="p-4 font-bold text-white">{imp.title}</td><td className="p-4">{imp.siteId}</td><td className="p-4 text-xs font-mono text-cyan-400">{imp.actions ? imp.actions.length : 0} Actions</td><td className="p-4 text-right"><span className="bg-slate-700 px-2 py-1 rounded text-[10px]">{imp.status}</span></td></tr>))}</tbody>
-                                    </table>
+                                <div className="space-y-6">
+                                    {/* DASHBOARD */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500">
+                                            <div className="text-slate-400 text-xs uppercase font-bold">Proposals</div>
+                                            <div className="text-3xl font-bold">{improvements.length}</div>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500">
+                                            <div className="text-slate-400 text-xs uppercase font-bold">Actions Closed</div>
+                                            <div className="text-3xl font-bold text-blue-400">{stats.closedActions}</div>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500">
+                                            <div className="text-slate-400 text-xs uppercase font-bold">Actions Open</div>
+                                            <div className="text-3xl font-bold text-yellow-400">{stats.openActions}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="glass-panel rounded-xl overflow-hidden">
+                                        <table className="w-full text-left text-sm text-slate-300">
+                                            <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Date</th><th className="p-4">Type</th><th className="p-4">Title</th><th className="p-4">Site</th><th className="p-4">Action Progress</th><th className="p-4 text-right">Status</th></tr></thead>
+                                            <tbody className="divide-y divide-slate-800">{improvements.map((imp, idx) => {
+                                                const total = imp.actions ? imp.actions.length : 0;
+                                                const closed = imp.actions ? imp.actions.filter(a => a.status === 'Closed').length : 0;
+                                                const pct = total > 0 ? (closed/total)*100 : 0;
+                                                return (
+                                                    <tr key={idx} className="hover:bg-slate-800/50">
+                                                        <td className="p-4 text-xs font-mono">{imp.date}</td>
+                                                        <td className="p-4"><span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${imp.type==='JDI'?'text-emerald-400 bg-emerald-900/20':imp.type==='Kaizen'?'text-blue-400 bg-blue-900/20':'text-purple-400 bg-purple-900/20'}`}>{imp.type}</span></td>
+                                                        <td className="p-4 font-bold text-white">{imp.title}</td>
+                                                        <td className="p-4">{imp.siteId}</td>
+                                                        <td className="p-4 w-1/3">
+                                                            <div className="flex justify-between text-[10px] mb-1"><span>{closed}/{total} Closed</span><span>{Math.round(pct)}%</span></div>
+                                                            <div className="w-full bg-slate-700 rounded-full h-1.5"><div className="bg-cyan-500 h-1.5 rounded-full" style={{width: `${pct}%`}}></div></div>
+                                                        </td>
+                                                        <td className="p-4 text-right"><span className="bg-slate-700 px-2 py-1 rounded text-[10px]">{imp.status}</span></td>
+                                                    </tr>
+                                                );
+                                            })}</tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             )}
 
