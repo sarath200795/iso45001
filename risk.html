@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Intelligent Risk Assessment (HIRA) | ERP</title>
+    <title>Risk Assessment (HIRA) | ERP</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -28,49 +28,15 @@
         input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; outline: none; transition: border-color 0.2s; }
         input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
         
-        /* RISK MATRIX COLORS */
-        .risk-low { background-color: #10b981; color: white; } 
-        .risk-med { background-color: #eab308; color: black; } 
-        .risk-high { background-color: #ef4444; color: white; } 
-        .risk-ext { background-color: #7f1d1d; color: white; } 
+        /* Risk Matrix Colors */
+        .risk-low { background-color: #10b981; color: white; } /* 1-4 */
+        .risk-med { background-color: #eab308; color: black; } /* 5-9 */
+        .risk-high { background-color: #ef4444; color: white; } /* 10-16 */
+        .risk-ext { background-color: #7f1d1d; color: white; } /* 17-25 */
 
-        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-
-        /* A4 PAPER PREVIEW */
-        .a4-paper {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 15mm;
-            margin: 0 auto;
-            background: white;
-            color: black;
-            box-shadow: 0 0 15px rgba(0,0,0,0.5);
-            font-size: 10pt;
-            transform-origin: top center;
-        }
-        .a4-paper table { width: 100%; border-collapse: collapse; font-size: 9pt; }
-        .a4-paper th, .a4-paper td { border: 1px solid black; padding: 4px; text-align: left; vertical-align: top; color: black; }
-        .a4-paper th { background-color: #eee; font-weight: bold; }
-        .a4-paper .risk-cell { text-align: center; font-weight: bold; }
-
-        /* PRINT STYLES */
-        @media print {
-            @page { size: A4 landscape; margin: 0; }
-            body * { visibility: hidden; }
-            .a4-paper, .a4-paper * { visibility: visible !important; }
-            .a4-paper { 
-                position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 10mm; 
-                box-shadow: none; min-height: auto; transform: none !important;
-            }
-            .no-print { display: none !important; }
-            
-            .risk-low { background-color: #10b981 !important; color: white !important; -webkit-print-color-adjust: exact; }
-            .risk-med { background-color: #eab308 !important; color: black !important; -webkit-print-color-adjust: exact; }
-            .risk-high { background-color: #ef4444 !important; color: white !important; -webkit-print-color-adjust: exact; }
-            .risk-ext { background-color: #7f1d1d !important; color: white !important; -webkit-print-color-adjust: exact; }
-        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -87,61 +53,13 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
-        // --- HAZARD KNOWLEDGE BASE ---
-        const HAZARD_KB = {
-            "Work at Height": {
-                "Falls from Elevation": { controls: ["Guardrails (1100mm)", "Safety Nets", "Toe Boards"], p_reduce: 2, add_controls: ["Full Body Harness (Double Lanyard)", "Lifeline System", "PTW - Height"] },
-                "Dropped Objects": { controls: ["Tool Lanyards", "Debris Netting", "Hard Hats (Chin Strap)"], p_reduce: 2, add_controls: ["Exclusion Zone Barricading", "Signage"] },
-                "Fragile Roofs": { controls: ["Crawling Boards", "Signage"], p_reduce: 3, add_controls: ["Roof Ladder", "Fall Arrest System"] }
-            },
-            "Lifting & Rigging": {
-                "Suspended Loads": { controls: ["SWL Marking", "Barricading Area", "Competent Rigger"], p_reduce: 2, add_controls: ["Tag lines", "Lifting Plan"] },
-                "Crane Failure": { controls: ["TPI Certificate", "Daily Inspection Checklist"], p_reduce: 3, add_controls: ["Load Moment Indicator (LMI)", "Ground Compactness Test"] },
-                "Wire Rope Snap": { controls: ["Visual Inspection", "Discard Criteria"], p_reduce: 2, add_controls: ["Preventive Maintenance", "Proof Load Test"] }
-            },
-            "Electrical": {
-                "Electric Shock": { controls: ["ELCB/RCCB (30mA)", "Double Insulation", "Earthing"], p_reduce: 3, add_controls: ["LOTO System", "Insulated Tools", "Rubber Mats"] },
-                "Arc Flash": { controls: ["Panel Doors Closed", "Remote Racking"], p_reduce: 2, add_controls: ["Arc Flash Suit (Cal rated)", "Face Shield", "PTW - Electrical"] },
-                "Static Electricity": { controls: ["Bonding & Grounding", "Anti-static Flooring"], p_reduce: 2, add_controls: ["Static Discharge Rods", "Humidity Control"] }
-            },
-            "Chemical": {
-                "Toxic Inhalation": { controls: ["Local Exhaust Ventilation (LEV)", "Fume Hoods"], p_reduce: 2, add_controls: ["Respirator (Half/Full Face)", "Gas Detectors", "Wind Sock"] },
-                "Skin Contact (Corrosive)": { controls: ["Closed Handling System", "Safety Showers"], p_reduce: 2, add_controls: ["Chemical Suit", "Face Shield", "Nitrile/PVC Gloves"] },
-                "Flammable Storage": { controls: ["Flammable Cabinets", "Grounding"], p_reduce: 2, add_controls: ["Fire Extinguishers", "Explosion Proof Electricals"] }
-            },
-            "Fire & Explosion": {
-                "Hot Work (Welding/Cutting)": { controls: ["Remove Combustibles", "Fire Extinguisher"], p_reduce: 2, add_controls: ["Fire Watcher", "Fire Blanket", "Gas Test"] },
-                "Electrical Fire": { controls: ["Correct Fuse Rating", "No Overloading"], p_reduce: 2, add_controls: ["Thermal Imaging", "Auto-Suppression System"] },
-                "Combustible Dust": { controls: ["Dust Extraction", "Housekeeping"], p_reduce: 2, add_controls: ["Explosion Venting", "Anti-static Equipment"] }
-            },
-            "Mechanical / Machinery": {
-                "Rotating Parts": { controls: ["Fixed Guards", "Emergency Stop"], p_reduce: 3, add_controls: ["Interlock Switches", "LOTO"] },
-                "Ejection of Parts": { controls: ["Protective Screens", "Maintenance"], p_reduce: 2, add_controls: ["Eye Protection", "Face Shield"] },
-                "High Pressure Fluid": { controls: ["Hose Restraints (Whip check)", "Relief Valves"], p_reduce: 2, add_controls: ["Isolation Valves", "Pressure Gauge Monitoring"] }
-            },
-            "Excavation": {
-                "Soil Collapse": { controls: ["Sloping/Benching", "Shoring"], p_reduce: 3, add_controls: ["Trench Box", "Shielding"] },
-                "Underground Utilities": { controls: ["Cable Detector Scanning", "As-built Drawings"], p_reduce: 2, add_controls: ["Hand Digging (Trial Pits)", "Permit to Excavate"] },
-                "People Falling In": { controls: ["Hard Barricading", "Signage"], p_reduce: 2, add_controls: ["Blinker Lights", "Security Watch"] }
-            },
-            "Confined Space": {
-                "Oxygen Deficiency": { controls: ["Forced Ventilation", "Gas Testing"], p_reduce: 3, add_controls: ["BA Sets (SCBA/Airline)", "Confined Space Sentry"] },
-                "Toxic Gases (H2S/CO)": { controls: ["Gas Testing (Initial & Continuous)", "Purging"], p_reduce: 3, add_controls: ["Emergency Escape Set (ELSA)", "Rescue Tripod"] }
-            },
-            "Ergonomic": {
-                "Manual Handling": { controls: ["Team Lifting", "Trolleys"], p_reduce: 1, add_controls: ["Mechanical Aids (Forklift/Hoist)", "Training"] },
-                "Repetitive Motion": { controls: ["Job Rotation", "Rest Breaks"], p_reduce: 1, add_controls: ["Workstation Redesign", "Tools with better grip"] }
-            },
-            "Environmental": {
-                "Heat Stress": { controls: ["Drinking Water", "Shaded Rest Area"], p_reduce: 2, add_controls: ["Work-Rest Cycle", "Cooling Vests"] },
-                "Noise": { controls: ["Acoustic Enclosure", "Maintenance"], p_reduce: 2, add_controls: ["Ear Plugs/Muffs", "Audiometric Testing"] }
-            }
-        };
-
+        // --- CONSTANTS ---
         const PROBABILITY = [ {v:1, l:'1 - Rare'}, {v:2, l:'2 - Unlikely'}, {v:3, l:'3 - Possible'}, {v:4, l:'4 - Likely'}, {v:5, l:'5 - Almost Certain'} ];
         const SEVERITY = [ {v:1, l:'1 - Negligible'}, {v:2, l:'2 - Minor'}, {v:3, l:'3 - Moderate'}, {v:4, l:'4 - Major'}, {v:5, l:'5 - Catastrophic'} ];
+        const HAZARD_CATS = ["Physical", "Chemical", "Biological", "Ergonomic", "Psychosocial", "Electrical", "Mechanical", "Fire/Explosion"];
+        const CONTROL_CATS = ["Elimination", "Substitution", "Engineering Controls", "Administrative Controls", "PPE"];
 
         const getRiskClass = (score) => {
             if(score >= 15) return 'risk-ext';
@@ -150,91 +68,21 @@
             return 'risk-low';
         };
 
-        // --- REPORT COMPONENT ---
-        const ReportContent = ({ data }) => (
-            <div className="a4-paper">
-                <div className="mb-6 border-b-2 border-black pb-2">
-                    <div className="flex justify-between items-center">
-                        <h1 className="text-2xl font-bold uppercase">HIRA Report</h1>
-                        <div className="text-right text-xs">
-                            <div><strong>Doc ID:</strong> {data.docId}</div>
-                            <div><strong>Date:</strong> {data.date}</div>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mt-4 text-sm border-t border-black pt-2">
-                        <div><strong>Site:</strong> {data.siteId}</div>
-                        <div><strong>Location:</strong> {data.location}</div>
-                    </div>
-                </div>
-
-                {data.activities.map((act, i) => (
-                    <div key={i} className="mb-6">
-                        <h3 className="font-bold text-lg bg-gray-200 p-2 border border-black mb-2">{i+1}. Activity: {act.name}</h3>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th style={{width:'15%'}}>Hazard</th>
-                                    <th style={{width:'5%'}}>Prob</th>
-                                    <th style={{width:'5%'}}>Sev</th>
-                                    <th style={{width:'5%'}}>Risk</th>
-                                    <th style={{width:'20%'}}>Existing Controls</th>
-                                    <th style={{width:'5%'}}>R-Prob</th>
-                                    <th style={{width:'5%'}}>R-Sev</th>
-                                    <th style={{width:'5%'}}>Res Risk</th>
-                                    <th style={{width:'30%'}}>Additional Controls / ALARP</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {act.hazards.map((h, j) => (
-                                    <tr key={j}>
-                                        <td><strong>{h.category} - {h.type}</strong><br/>{h.desc}</td>
-                                        <td className="text-center">{h.p1}</td>
-                                        <td className="text-center">{h.s1}</td>
-                                        <td className={`risk-cell ${getRiskClass(h.r1)}`}>{h.r1}</td>
-                                        <td>{Array.isArray(h.existingControls) ? h.existingControls.join(', ') : h.existingControls}</td>
-                                        <td className="text-center">{h.p2}</td>
-                                        <td className="text-center">{h.s2}</td>
-                                        <td className={`risk-cell ${getRiskClass(h.r2)}`}>{h.r2}</td>
-                                        <td>
-                                            {h.alarp ? 
-                                                <div><strong>ALARP:</strong> {h.alarpJustification}</div> : 
-                                                <ul>
-                                                    {(h.additionalControls || []).map((ac, k) => (
-                                                        <li key={k}>[{ac.category}] {ac.desc} ({ac.owner})</li>
-                                                    ))}
-                                                </ul>
-                                            }
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ))}
-
-                <div className="mt-12 flex justify-between">
-                    <div className="border-t border-black w-1/3 pt-2 text-center font-bold">Assessor Signature</div>
-                    <div className="border-t border-black w-1/3 pt-2 text-center font-bold">Reviewer Signature</div>
-                    <div className="border-t border-black w-1/3 pt-2 text-center font-bold">Approver Signature</div>
-                </div>
-            </div>
-        );
-
         const RiskModule = () => {
             const [session, setSession] = useState(null);
-            const [view, setView] = useState('list');
+            const [view, setView] = useState('list'); // list | form
             const [sites, setSites] = useState([]);
             const [users, setUsers] = useState([]);
             const [assessments, setAssessments] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [printData, setPrintData] = useState(null);
-            const [selectedReport, setSelectedReport] = useState(null);
 
+            // Form State
             const [formData, setFormData] = useState({
                 id: '', siteId: '', location: '', date: new Date().toISOString().split('T')[0],
-                activities: [] 
+                activities: [] // [{ name: '', hazards: [ ... ] }]
             });
 
+            // LOAD DATA
             useEffect(() => {
                 const s = sessionStorage.getItem('isoSession');
                 if(!s) { window.location.href='index.html'; return; }
@@ -248,38 +96,14 @@
                         const val = snap.val();
                         if(val.sites) setSites(Object.values(val.sites));
                         if(val.users) setUsers(Object.values(val.users));
-                        if(val.riskAssessments) setAssessments(Object.entries(val.riskAssessments).map(([k,v]) => ({...v, firebaseKey: k})).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)));
+                        if(val.riskAssessments) setAssessments(Object.entries(val.riskAssessments).map(([k,v]) => ({...v, firebaseKey: k})));
                     }
                     setLoading(false);
                 };
                 fetchData();
             }, []);
 
-            // --- AUTO SUGGEST LOGIC ---
-            const handleHazardTypeChange = (actIdx, hazIdx, type) => {
-                const newActivities = [...formData.activities];
-                const hazard = newActivities[actIdx].hazards[hazIdx];
-                const cat = hazard.category;
-
-                hazard.type = type;
-
-                if (HAZARD_KB[cat] && HAZARD_KB[cat][type]) {
-                    const knowledge = HAZARD_KB[cat][type];
-                    hazard.existingControls = knowledge.controls;
-                    hazard.p2 = Math.max(1, hazard.p1 - knowledge.p_reduce);
-                    hazard.s2 = hazard.s1; // Severity stays same
-                    hazard.r2 = hazard.p2 * hazard.s2;
-                    if (hazard.r2 > 8) {
-                        hazard.additionalControls = knowledge.add_controls.map(desc => ({
-                            category: 'Suggested', desc: desc, owner: session.user, status: 'Proposed'
-                        }));
-                    } else {
-                        hazard.additionalControls = [];
-                    }
-                }
-                setFormData({ ...formData, activities: newActivities });
-            };
-
+            // --- FORM HANDLERS ---
             const handleAddActivity = () => {
                 setFormData({ ...formData, activities: [...formData.activities, { id: Date.now(), name: '', hazards: [] }] });
             };
@@ -287,8 +111,8 @@
             const handleAddHazard = (actIdx) => {
                 const newActivities = [...formData.activities];
                 newActivities[actIdx].hazards.push({
-                    id: Date.now(), category: 'Work at Height', type: '', desc: '', who: '',
-                    p1: 5, s1: 3, r1: 15,
+                    id: Date.now(), category: 'Physical', desc: '', who: '',
+                    p1: 1, s1: 1, r1: 1,
                     existingControls: [],
                     p2: 1, s2: 1, r2: 1,
                     additionalControls: [],
@@ -302,6 +126,7 @@
                 const hazard = newActivities[actIdx].hazards[hazIdx];
                 hazard[field] = val;
                 
+                // Auto calculate Risks
                 if(field === 'p1' || field === 's1') hazard.r1 = hazard.p1 * hazard.s1;
                 if(field === 'p2' || field === 's2') hazard.r2 = hazard.p2 * hazard.s2;
 
@@ -311,10 +136,17 @@
             const saveAssessment = async () => {
                 if(!formData.siteId || !formData.location) return alert("Site and Location are required.");
                 
-                // GENERATE ID
-                const docId = formData.docId || `HIRA-${formData.siteId}-${Date.now().toString().slice(-6)}`;
-                
-                const payload = { ...formData, docId, createdBy: session.user, updatedAt: new Date().toISOString() };
+                // Validate ALARP
+                let needsAttention = false;
+                formData.activities.forEach(act => {
+                    act.hazards.forEach(haz => {
+                        if(haz.r2 > 8 && haz.additionalControls.length === 0 && !haz.alarp) needsAttention = true;
+                    });
+                });
+
+                if(needsAttention) return alert("High Residual Risks found! You must either add Additional Controls OR declare ALARP.");
+
+                const payload = { ...formData, createdBy: session.user, updatedAt: new Date().toISOString() };
                 
                 if(formData.firebaseKey) {
                     await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/riskAssessments/${formData.firebaseKey}`), payload);
@@ -325,58 +157,71 @@
                 window.location.reload();
             };
 
-            const deleteAssessment = async (firebaseKey) => {
-                if(confirm("Delete this assessment?")) {
-                    await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/riskAssessments/${firebaseKey}`));
-                    setAssessments(assessments.filter(a => a.firebaseKey !== firebaseKey));
-                }
-            };
-
             if(loading) return <div className="flex h-screen items-center justify-center text-white">Loading Risks...</div>;
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
                     
                     {/* Header */}
-                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6 no-print">
+                    <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
                         <div className="flex items-center gap-4">
                             <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
                             <h1 className="font-bold text-lg">HIRA Risk Management</h1>
                         </div>
-                        <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
-                            <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='list'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>Dashboard</button>
-                            <button onClick={()=>{setFormData({ id: '', siteId: '', location: '', date: new Date().toISOString().split('T')[0], activities: [] }); setView('form');}} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='form'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>New Assessment</button>
-                            <button onClick={()=>setView('report')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='report'?'bg-blue-600 text-white':'text-slate-400 hover:text-white'}`}>Reports</button>
+                        <div className="flex bg-slate-800 p-1 rounded-lg">
+                            <button onClick={()=>setView('list')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='list'?'bg-red-600 text-white':'text-slate-400'}`}>Dashboard</button>
+                            <button onClick={()=>{
+                                setFormData({ id: '', siteId: '', location: '', date: new Date().toISOString().split('T')[0], activities: [] });
+                                setView('form');
+                            }} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='form'?'bg-red-600 text-white':'text-slate-400'}`}>New Assessment</button>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-8 custom-scroll no-print">
-                        <div className="max-w-7xl mx-auto h-full">
+                    <div className="flex-1 overflow-y-auto p-8 custom-scroll">
+                        <div className="max-w-7xl mx-auto">
                             
                             {/* DASHBOARD VIEW */}
                             {view === 'list' && (
                                 <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500">
+                                            <div className="text-slate-400 text-xs uppercase font-bold">Total Assessments</div>
+                                            <div className="text-3xl font-bold">{assessments.length}</div>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-red-500">
+                                            <div className="text-slate-400 text-xs uppercase font-bold">High Risk (Residual)</div>
+                                            <div className="text-3xl font-bold">{assessments.filter(a => a.activities.some(act => act.hazards.some(h => h.r2 > 10))).length}</div>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500">
+                                            <div className="text-slate-400 text-xs uppercase font-bold">ALARP Cases</div>
+                                            <div className="text-3xl font-bold">{assessments.filter(a => a.activities.some(act => act.hazards.some(h => h.alarp))).length}</div>
+                                        </div>
+                                    </div>
+
                                     <div className="glass-panel rounded-xl overflow-hidden">
                                         <table className="w-full text-left text-sm text-slate-300">
                                             <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
                                                 <tr>
-                                                    <th className="p-4">Doc ID</th><th className="p-4">Site</th><th className="p-4">Location</th><th className="p-4">Date</th><th className="p-4">Max Risk</th><th className="p-4 text-right">Action</th>
+                                                    <th className="p-4">Site</th>
+                                                    <th className="p-4">Location</th>
+                                                    <th className="p-4">Date</th>
+                                                    <th className="p-4">Activities</th>
+                                                    <th className="p-4">Max Risk</th>
+                                                    <th className="p-4 text-right">Action</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-800">
                                                 {assessments.map(a => {
-                                                    const maxRisk = a.activities ? Math.max(...a.activities.flatMap(act => act.hazards ? act.hazards.map(h => h.r2) : [0]), 0) : 0;
+                                                    const maxRisk = Math.max(...a.activities.flatMap(act => act.hazards.map(h => h.r2)), 0);
                                                     return (
                                                         <tr key={a.firebaseKey} className="hover:bg-slate-800/50">
-                                                            <td className="p-4 font-mono text-blue-400">{a.docId || 'DRAFT'}</td>
                                                             <td className="p-4">{a.siteId}</td>
                                                             <td className="p-4 font-bold text-white">{a.location}</td>
                                                             <td className="p-4">{a.date}</td>
+                                                            <td className="p-4">{a.activities.length} Acts</td>
                                                             <td className="p-4"><span className={`px-2 py-1 rounded font-bold text-xs ${getRiskClass(maxRisk)}`}>{maxRisk}</span></td>
-                                                            <td className="p-4 text-right flex justify-end gap-2">
-                                                                <button onClick={()=>{setSelectedReport(a); setView('report');}} className="bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white px-3 py-1 rounded transition"><i className="fas fa-file-invoice"></i> View</button>
-                                                                <button onClick={()=>{setFormData(a); setView('form');}} className="bg-slate-700 text-slate-400 hover:text-white px-3 py-1 rounded transition"><i className="fas fa-edit"></i> Edit</button>
-                                                                <button onClick={()=>deleteAssessment(a.firebaseKey)} className="text-red-400 hover:text-white px-2 py-1"><i className="fas fa-trash"></i></button>
+                                                            <td className="p-4 text-right">
+                                                                <button onClick={()=>{setFormData(a); setView('form');}} className="text-blue-400 hover:text-white px-3 py-1 rounded hover:bg-slate-700">Edit</button>
                                                             </td>
                                                         </tr>
                                                     );
@@ -390,45 +235,48 @@
                             {/* FORM VIEW */}
                             {view === 'form' && (
                                 <div className="space-y-8 animate-fade-in">
+                                    
+                                    {/* 1. Context */}
                                     <div className="glass-panel p-6 rounded-xl grid grid-cols-3 gap-6">
                                         <div><label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Site</label><select value={formData.siteId} onChange={e=>setFormData({...formData, siteId:e.target.value})}><option value="">Select Site...</option>{sites.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}</select></div>
                                         <div><label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Location / Area</label><input value={formData.location} onChange={e=>setFormData({...formData, location:e.target.value})} placeholder="e.g. Warehouse Zone A" /></div>
                                         <div><label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Date</label><input type="date" value={formData.date} onChange={e=>setFormData({...formData, date:e.target.value})} /></div>
                                     </div>
 
+                                    {/* 2. Activities */}
                                     {formData.activities.map((act, actIdx) => (
-                                        <div key={act.id} className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 relative">
+                                        <div key={act.id} className="glass-panel p-6 rounded-xl border-l-4 border-purple-500 relative">
                                             <div className="mb-6 flex gap-4">
-                                                <div className="flex-1"><label className="block text-[10px] uppercase font-bold text-blue-400 mb-1">Activity Description</label><input value={act.name} onChange={e=>{const n=[...formData.activities]; n[actIdx].name=e.target.value; setFormData({...formData, activities:n})}} placeholder="Describe activity..." className="bg-slate-900 border-blue-500/30 focus:border-blue-500" /></div>
-                                                <button onClick={()=>handleAddActivity()} className="bg-blue-600 hover:bg-blue-500 text-white px-4 rounded text-xs font-bold mt-5">+ Add Hazard</button>
+                                                <div className="flex-1">
+                                                    <label className="block text-[10px] uppercase font-bold text-purple-400 mb-1">Activity Description</label>
+                                                    <input value={act.name} onChange={e=>{const n=[...formData.activities]; n[actIdx].name=e.target.value; setFormData({...formData, activities:n})}} placeholder="Describe activity (e.g. Loading trucks)" className="bg-slate-900 border-purple-500/30 focus:border-purple-500" />
+                                                </div>
+                                                <button onClick={()=>handleAddHazard(actIdx)} className="bg-purple-600 hover:bg-purple-500 text-white px-4 rounded text-xs font-bold mt-5">+ Add Hazard</button>
                                             </div>
 
+                                            {/* Hazards */}
                                             <div className="space-y-4">
                                                 {act.hazards.map((haz, hazIdx) => (
                                                     <div key={haz.id} className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
                                                         <div className="grid grid-cols-12 gap-4 mb-4">
-                                                            <div className="col-span-2">
-                                                                <label className="lbl">Category</label>
-                                                                <select value={haz.category} onChange={e=>updateHazard(actIdx, hazIdx, 'category', e.target.value)}>{Object.keys(HAZARD_KB).map(c=><option key={c}>{c}</option>)}</select>
-                                                            </div>
-                                                            <div className="col-span-2">
-                                                                <label className="lbl">Type (Auto-Suggest)</label>
-                                                                <select value={haz.type} onChange={e=>handleHazardTypeChange(actIdx, hazIdx, e.target.value)}>
-                                                                    <option value="">Select Type...</option>
-                                                                    {HAZARD_KB[haz.category] && Object.keys(HAZARD_KB[haz.category]).map(t=><option key={t}>{t}</option>)}
-                                                                </select>
-                                                            </div>
-                                                            <div className="col-span-3"><label className="lbl">Hazard Description</label><textarea rows="1" value={haz.desc} onChange={e=>updateHazard(actIdx, hazIdx, 'desc', e.target.value)} placeholder="Specific details..." className="resize-none"></textarea></div>
+                                                            <div className="col-span-2"><label className="lbl">Hazard Category</label><select value={haz.category} onChange={e=>updateHazard(actIdx, hazIdx, 'category', e.target.value)}>{HAZARD_CATS.map(c=><option key={c}>{c}</option>)}</select></div>
+                                                            <div className="col-span-3"><label className="lbl">Hazard Description</label><textarea rows="1" value={haz.desc} onChange={e=>updateHazard(actIdx, hazIdx, 'desc', e.target.value)} placeholder="What can cause harm?" className="resize-none"></textarea></div>
+                                                            <div className="col-span-2"><label className="lbl">Who is harmed?</label><input value={haz.who} onChange={e=>updateHazard(actIdx, hazIdx, 'who', e.target.value)} placeholder="e.g. Workers, Visitors" /></div>
                                                             
+                                                            {/* Initial Risk */}
                                                             <div className="col-span-3 grid grid-cols-3 gap-1 bg-slate-800 p-2 rounded text-center">
                                                                 <div><label className="lbl">Prob</label><select value={haz.p1} onChange={e=>updateHazard(actIdx, hazIdx, 'p1', parseInt(e.target.value))} className="text-xs p-1">{PROBABILITY.map(p=><option key={p.v} value={p.v}>{p.v}</option>)}</select></div>
                                                                 <div><label className="lbl">Sev</label><select value={haz.s1} onChange={e=>updateHazard(actIdx, hazIdx, 's1', parseInt(e.target.value))} className="text-xs p-1">{SEVERITY.map(s=><option key={s.v} value={s.v}>{s.v}</option>)}</select></div>
                                                                 <div><label className="lbl">Risk</label><div className={`font-bold text-sm py-1 rounded ${getRiskClass(haz.r1)}`}>{haz.r1}</div></div>
                                                             </div>
                                                             
-                                                            <div className="col-span-2"><label className="lbl">Existing Controls</label><textarea rows="2" className="resize-none border-l-2 border-emerald-500" value={Array.isArray(haz.existingControls) ? haz.existingControls.join(', ') : haz.existingControls} onChange={e=>updateHazard(actIdx, hazIdx, 'existingControls', e.target.value.split(', '))} placeholder="Auto-filled..."></textarea></div>
+                                                            <div className="col-span-2"><label className="lbl">Existing Controls</label><textarea rows="2" placeholder="What is already in place?" className="resize-none" onBlur={e=>{
+                                                                const vals = e.target.value.split('\n').filter(Boolean);
+                                                                updateHazard(actIdx, hazIdx, 'existingControls', vals);
+                                                            }} defaultValue={haz.existingControls.join('\n')}></textarea></div>
                                                         </div>
 
+                                                        {/* Residual Risk & Logic */}
                                                         <div className="grid grid-cols-12 gap-4 items-start border-t border-slate-700 pt-4">
                                                             <div className="col-span-3 grid grid-cols-3 gap-1 bg-slate-800 p-2 rounded text-center">
                                                                 <div><label className="lbl">Res Prob</label><select value={haz.p2} onChange={e=>updateHazard(actIdx, hazIdx, 'p2', parseInt(e.target.value))} className="text-xs p-1">{PROBABILITY.map(p=><option key={p.v} value={p.v}>{p.v}</option>)}</select></div>
@@ -441,8 +289,9 @@
                                                                     <div className="bg-red-900/20 border border-red-500/50 p-3 rounded">
                                                                         <div className="flex justify-between mb-2">
                                                                             <h4 className="text-red-400 font-bold text-xs uppercase"><i className="fas fa-triangle-exclamation"></i> High Risk: Additional Controls Required</h4>
-                                                                            <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={haz.alarp} onChange={e=>updateHazard(actIdx, hazIdx, 'alarp', e.target.checked)} /> Declare ALARP</label>
+                                                                            <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={haz.alarp} onChange={e=>updateHazard(actIdx, hazIdx, 'alarp', e.target.checked)} /> Declare ALARP (Submit for Approval)</label>
                                                                         </div>
+                                                                        
                                                                         {haz.alarp ? (
                                                                             <input placeholder="Justification for ALARP..." value={haz.alarpJustification} onChange={e=>updateHazard(actIdx, hazIdx, 'alarpJustification', e.target.value)} className="border-red-500 bg-slate-950" />
                                                                         ) : (
@@ -455,8 +304,8 @@
                                                                                         const cat = document.getElementById(`ctrl-cat-${haz.id}`).value;
                                                                                         const desc = document.getElementById(`ctrl-desc-${haz.id}`).value;
                                                                                         const own = document.getElementById(`ctrl-owner-${haz.id}`).value;
-                                                                                        if(desc) {
-                                                                                            const newCtrls = [...(haz.additionalControls || []), {category:cat, desc, owner:own, status:'Open'}];
+                                                                                        if(desc && own) {
+                                                                                            const newCtrls = [...haz.additionalControls, {category:cat, desc, owner:own, status:'Open'}];
                                                                                             updateHazard(actIdx, hazIdx, 'additionalControls', newCtrls);
                                                                                             document.getElementById(`ctrl-desc-${haz.id}`).value = '';
                                                                                         }
@@ -464,16 +313,17 @@
                                                                                 </div>
                                                                             </div>
                                                                         )}
+                                                                        
                                                                         <div className="mt-2 space-y-1">
-                                                                            {(haz.additionalControls || []).map((ac, k) => (
+                                                                            {haz.additionalControls.map((ac, k) => (
                                                                                 <div key={k} className="text-xs bg-slate-950 p-1 px-2 rounded flex justify-between">
-                                                                                    <span><b className="text-blue-400">[{ac.category}]</b> {ac.desc} <span className="text-slate-500">({ac.owner || 'Auto'})</span></span>
+                                                                                    <span><b className="text-blue-400">[{ac.category}]</b> {ac.desc} <span className="text-slate-500">({ac.owner})</span></span>
                                                                                 </div>
                                                                             ))}
                                                                         </div>
                                                                     </div>
                                                                 ) : (
-                                                                    <div className="text-emerald-400 text-xs flex items-center h-full font-bold bg-emerald-900/20 p-2 rounded"><i className="fas fa-check-circle mr-2"></i> Risk is Acceptable</div>
+                                                                    <div className="text-emerald-400 text-xs flex items-center h-full"><i className="fas fa-check-circle mr-2"></i> Risk is Acceptable</div>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -489,37 +339,8 @@
                                     </div>
                                 </div>
                             )}
-
-                            {/* REPORTS VIEW */}
-                            {view === 'report' && (
-                                <div className="flex h-full gap-6">
-                                    <div className="w-1/4 glass-panel rounded-xl overflow-hidden flex flex-col no-print">
-                                        <div className="p-4 bg-slate-900 border-b border-slate-700"><h3 className="font-bold">Select Report</h3></div>
-                                        <div className="flex-1 overflow-y-auto custom-scroll p-2 space-y-2">
-                                            {assessments.map(a => (
-                                                <div key={a.firebaseKey} onClick={()=>setSelectedReport(a)} className={`p-3 rounded cursor-pointer transition ${selectedReport?.firebaseKey === a.firebaseKey ? 'bg-blue-600 text-white' : 'bg-slate-800/50 hover:bg-slate-800'}`}>
-                                                    <div className="font-bold text-xs">{a.docId}</div>
-                                                    <div className="text-[10px] opacity-70">{a.location}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="flex-1 glass-panel rounded-xl p-8 overflow-y-auto bg-slate-900/50 flex flex-col items-center custom-scroll">
-                                        {selectedReport ? (
-                                            <div className="w-full flex flex-col items-center">
-                                                <div className="flex gap-4 mb-6 no-print w-full max-w-[210mm] justify-end">
-                                                    <button onClick={()=>window.print()} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded shadow-lg flex items-center gap-2"><i className="fas fa-print"></i> Print Document</button>
-                                                </div>
-                                                <ReportContent data={selectedReport} />
-                                            </div>
-                                        ) : <div className="flex flex-col items-center justify-center h-full text-slate-500"><i className="fas fa-file-invoice text-4xl mb-4 opacity-50"></i><p>Select a report to preview.</p></div>}
-                                    </div>
-                                </div>
-                            )}
-
                         </div>
                     </div>
-
                     <style>{`.lbl { display:block; font-size:9px; font-weight:bold; color:#64748b; text-transform:uppercase; margin-bottom:2px; }`}</style>
                 </div>
             );
