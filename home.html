@@ -47,7 +47,7 @@
             { id: 'dashboard', label: 'Dashboard', desc: 'KPIs & Stats', icon: 'fa-chart-pie', color: 'text-purple-400', allowGlobal: true },
             { id: 'incidents', label: 'Incidents', desc: 'Report Hazards', icon: 'fa-triangle-exclamation', color: 'text-orange-400' },
             { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
-            { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' }, // ID is 'consultation'
+            { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' }, 
             { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' }, 
             { id: 'capa', label: 'CAPA Manager', desc: 'Global Actions', icon: 'fa-list-check', color: 'text-cyan-400' },
             { id: 'training', label: 'Training', desc: 'LMS & Competency', icon: 'fa-graduation-cap', color: 'text-yellow-400' },
@@ -160,8 +160,11 @@
                     case 'users': window.location.href = 'users.html'; break;
                     case 'sites': window.location.href = 'sites.html'; break;
                     case 'incidents': window.location.href = `incidents.html${params}`; break;
+                    
+                    // FIXED: Explicitly routing 'risk' to 'risk.html'
                     case 'risk': window.location.href = `risk.html${params}`; break;
-                    case 'consultation': window.location.href = `consultation.html${params}`; break; // Explicit Link
+                    
+                    case 'consultation': window.location.href = `consultation.html${params}`; break;
                     case 'audit': window.location.href = `audit.html${params}`; break;
                     case 'capa': window.location.href = `capa.html${params}`; break;
                     case 'training': window.location.href = `training.html${params}`; break;
