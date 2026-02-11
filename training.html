@@ -58,7 +58,7 @@
 
         const TrainingApp = () => {
             const [session, setSession] = useState(null);
-            const [view, setView] = useState('matrix'); // matrix | bulk-log | history
+            const [view, setView] = useState('matrix'); 
             const [users, setUsers] = useState([]);
             const [records, setRecords] = useState([]);
             const [topics, setTopics] = useState(["LOTO", "Fire Safety", "First Aid", "Work at Height", "Chemical Handling", "Forklift Safety"]);
@@ -77,20 +77,23 @@
 
             // --- LOAD DATA ---
             const loadData = async (sess) => {
-                const snap = await window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}`));
-                if(snap.exists()) {
-                    const val = snap.val();
-                    if(val.users) setUsers(Object.values(val.users).filter(u => u.status === 'Active'));
-                    
-                    // Essential: Load records with Keys
-                    if(val.trainingRecords) {
-                        const recArray = Object.entries(val.trainingRecords).map(([k, v]) => ({ ...v, firebaseKey: k }));
-                        setRecords(recArray);
-                    } else {
-                        setRecords([]);
-                    }
+                try {
+                    const snap = await window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}`));
+                    if(snap.exists()) {
+                        const val = snap.val();
+                        if(val.users) setUsers(Object.values(val.users).filter(u => u.status === 'Active'));
+                        
+                        if(val.trainingRecords) {
+                            const recArray = Object.entries(val.trainingRecords).map(([k, v]) => ({ ...v, firebaseKey: k }));
+                            setRecords(recArray);
+                        } else {
+                            setRecords([]);
+                        }
 
-                    if(val.trainingTopics) setTopics(val.trainingTopics);
+                        if(val.trainingTopics) setTopics(val.trainingTopics);
+                    }
+                } catch (err) {
+                    console.error("Error loading data:", err);
                 }
                 setLoading(false);
             };
@@ -134,38 +137,79 @@
 
             const handleBulkSubmit = async () => {
                 const allAttendees = [...bulkForm.selectedUsers, ...bulkForm.manualAttendees];
-                if(!bulkForm.topic || !bulkForm.date || allAttendees.length === 0) return alert("Missing fields!");
-
-                const entries = allAttendees.map(name => ({
-                    user: name,
-                    topic: bulkForm.topic,
-                    date: bulkForm.date,
-                    trainer: bulkForm.trainer,
-                    evidence: bulkForm.evidence,
-                    createdBy: session.user,
-                    timestamp: new Date().toISOString()
-                }));
-
-                const updates = entries.map(e => window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords`), e));
-                await Promise.all(updates);
                 
-                await loadData(session); // Force Refresh Data
-                alert(`Logged ${entries.length} records!`);
-                setBulkForm({ topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [] });
-                setView('history'); // Redirect to log to show it worked
+                // VALIDATION CHECKS
+                if(!bulkForm.topic) return alert("Please select a Training Topic.");
+                if(!bulkForm.date) return alert("Please select a Date.");
+                if(allAttendees.length === 0) return alert("Please select at least one Attendee (User or External).");
+
+                try {
+                    const entries = allAttendees.map(name => ({
+                        user: name,
+                        topic: bulkForm.topic,
+                        date: bulkForm.date,
+                        trainer: bulkForm.trainer,
+                        evidence: bulkForm.evidence,
+                        createdBy: session.user,
+                        timestamp: new Date().toISOString()
+                    }));
+
+                    // Perform updates in parallel
+                    const updates = entries.map(e => window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords`), e));
+                    await Promise.all(updates);
+                    
+                    alert(`Successfully logged ${entries.length} training records!`);
+                    
+                    // Clear form
+                    setBulkForm({ topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [] });
+                    
+                    // Reload & Switch View
+                    await loadData(session); 
+                    setView('history');
+
+                } catch (error) {
+                    console.error("Error saving training:", error);
+                    alert("Error saving data: " + error.message);
+                }
             };
 
             const handleUpdateRecord = async () => {
                 if(!editingRecord) return;
                 await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords/${editingRecord.firebaseKey}`), editingRecord);
-                await loadData(session); // Refresh
+                await loadData(session); 
                 setEditingRecord(null);
             };
 
             const handleDeleteRecord = async (key) => {
                 if(confirm("Delete record?")) {
                     await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords/${key}`));
-                    await loadData(session); // Refresh
+                    await loadData(session); 
+                }
+            };
+
+            // Toggle Internal User Selection
+            const toggleUserSelection = (userName) => {
+                if (bulkForm.selectedUsers.includes(userName)) {
+                    setBulkForm({ ...bulkForm, selectedUsers: bulkForm.selectedUsers.filter(u => u !== userName) });
+                } else {
+                    setBulkForm({ ...bulkForm, selectedUsers: [...bulkForm.selectedUsers, userName] });
+                }
+            };
+
+            // Select All Internal Users
+            const selectAllUsers = () => {
+                if (bulkForm.selectedUsers.length === users.length) {
+                    setBulkForm({ ...bulkForm, selectedUsers: [] });
+                } else {
+                    setBulkForm({ ...bulkForm, selectedUsers: users.map(u => u.name) });
+                }
+            };
+
+            // Add External Name
+            const addExternalAttendee = () => {
+                if(newExternalName.trim()) {
+                    setBulkForm({...bulkForm, manualAttendees: [...bulkForm.manualAttendees, newExternalName.trim()]});
+                    setNewExternalName('');
                 }
             };
 
@@ -192,11 +236,11 @@
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
-                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Training & Competency</h1></div>
+                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Training & Competency</h1></div>
                         <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
-                            <button onClick={()=>setView('matrix')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='matrix'?'bg-yellow-600 text-white':'text-slate-400'}`}>Matrix</button>
-                            <button onClick={()=>setView('history')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='history'?'bg-yellow-600 text-white':'text-slate-400'}`}>History (Log)</button>
-                            <button onClick={()=>setView('bulk-log')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view==='bulk-log'?'bg-yellow-600 text-white':'text-slate-400'}`}>Log Training</button>
+                            <button onClick={()=>setView('matrix')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='matrix'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>Matrix</button>
+                            <button onClick={()=>setView('history')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='history'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>History / Edit</button>
+                            <button onClick={()=>setView('bulk-log')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='bulk-log'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>Log Training</button>
                         </div>
                     </div>
 
@@ -204,17 +248,17 @@
                         <div className="max-w-7xl mx-auto">
                             {/* KPI */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                                <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500"><div><p className="text-xs text-slate-400 font-bold uppercase">Total Records</p><h3 className="text-3xl font-bold">{records.length}</h3></div></div>
-                                <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500"><div><p className="text-xs text-slate-400 font-bold uppercase">Compliance</p><h3 className="text-3xl font-bold text-emerald-400">{compliance}%</h3></div></div>
-                                <div className="glass-panel p-6 rounded-xl border-l-4 border-red-500"><div><p className="text-xs text-slate-400 font-bold uppercase">Expired</p><h3 className="text-3xl font-bold text-red-400">{allMatrixRows.reduce((a,n)=>a+topics.filter(t=>getMatrixCell(n,t).label==='Expired').length,0)}</h3></div></div>
-                                <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500"><div><p className="text-xs text-slate-400 font-bold uppercase">Staff</p><h3 className="text-3xl font-bold">{allMatrixRows.length}</h3></div></div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Total Records</p><h3 className="text-3xl font-bold">{records.length}</h3></div><i className="fas fa-file-signature text-2xl text-yellow-500/50"></i></div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Compliance</p><h3 className="text-3xl font-bold text-emerald-400">{compliance}%</h3></div><i className="fas fa-chart-pie text-2xl text-emerald-500/50"></i></div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-red-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Expired</p><h3 className="text-3xl font-bold text-red-400">{allMatrixRows.reduce((a,n)=>a+topics.filter(t=>getMatrixCell(n,t).label==='Expired').length,0)}</h3></div><i className="fas fa-history text-2xl text-red-500/50"></i></div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Staff</p><h3 className="text-3xl font-bold">{allMatrixRows.length}</h3></div><i className="fas fa-users text-2xl text-blue-500/50"></i></div>
                             </div>
 
                             {/* MATRIX VIEW */}
                             {view === 'matrix' && (
                                 <div className="glass-panel rounded-xl overflow-hidden border border-slate-700 animate-fade-in">
                                     <div className="p-4 border-b border-slate-700 flex justify-between items-center"><h3 className="text-lg font-bold text-white">Competency Matrix</h3><button onClick={downloadMatrix} className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm font-bold flex gap-2 text-white"><i className="fas fa-file-excel"></i> Export</button></div>
-                                    <div className="overflow-x-auto"><table className="w-full text-left text-sm text-slate-300"><thead className="bg-slate-900 text-xs font-bold text-slate-500 uppercase"><tr><th className="p-4 sticky left-0 bg-slate-900 border-r border-slate-700 z-10">Name</th>{topics.map(t=><th key={t} className="p-4 text-center border-r border-slate-800 min-w-[100px]">{t}</th>)}</tr></thead><tbody className="divide-y divide-slate-800">{allMatrixRows.map(n=>(<tr key={n} className="hover:bg-slate-800/50"><td className="p-4 font-bold text-white sticky left-0 bg-slate-900/90 border-r border-slate-700">{n}</td>{topics.map(t=>{const s=getMatrixCell(n,t); return (<td key={t} className="p-2 text-center border-r border-slate-800/50"><div className={`px-2 py-1 rounded text-[10px] font-bold border ${s.color} w-full`}>{s.label}</div></td>)})}</tr>))}</tbody></table></div>
+                                    <div className="overflow-x-auto"><table className="w-full text-left text-sm text-slate-300"><thead className="bg-slate-900 text-xs font-bold text-slate-500 uppercase"><tr><th className="p-4 sticky left-0 bg-slate-900 border-r border-slate-700 z-10">Name</th>{topics.map(t=><th key={t} className="p-4 text-center border-r border-slate-800 min-w-[100px]">{t}</th>)}</tr></thead><tbody className="divide-y divide-slate-800">{allMatrixRows.map(n=>(<tr key={n} className="hover:bg-slate-800/50 transition-colors"><td className="p-4 font-bold text-white sticky left-0 bg-slate-900/90 border-r border-slate-700">{n}</td>{topics.map(t=>{const s=getMatrixCell(n,t); return (<td key={t} className="p-2 text-center border-r border-slate-800/50"><div className={`px-2 py-1 rounded text-[10px] font-bold border ${s.color} w-full`}>{s.label}</div></td>)})}</tr>))}</tbody></table></div>
                                 </div>
                             )}
 
@@ -234,24 +278,24 @@
                             {/* BULK LOG VIEW */}
                             {view === 'bulk-log' && (
                                 <div className="glass-panel p-8 rounded-xl max-w-4xl mx-auto border border-slate-700 animate-fade-in">
-                                    <h2 className="text-2xl font-bold mb-6 text-yellow-400 flex items-center gap-3"><i className="fas fa-clipboard-check"></i> Log Training</h2>
+                                    <h2 className="text-2xl font-bold mb-6 text-yellow-400 flex items-center gap-3"><i className="fas fa-clipboard-check"></i> Log Training Session</h2>
                                     <div className="grid grid-cols-2 gap-6 mb-8">
                                         <div className="space-y-4">
-                                            <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Topic</label><div className="flex gap-2"><select value={bulkForm.topic} onChange={e=>setBulkForm({...bulkForm, topic:e.target.value})} className="bg-slate-900 border-slate-700 flex-1"><option value="">Select...</option>{topics.map(t=><option key={t}>{t}</option>)}</select><button onClick={handleAddTopic} className="bg-slate-800 px-3 rounded text-yellow-400 font-bold">+</button></div></div>
+                                            <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Topic</label><div className="flex gap-2"><select value={bulkForm.topic} onChange={e=>setBulkForm({...bulkForm, topic:e.target.value})} className="bg-slate-900 border-slate-700 flex-1"><option value="">Select Topic...</option>{topics.map(t=><option key={t} value={t}>{t}</option>)}</select><button onClick={handleAddTopic} className="bg-slate-800 px-3 rounded text-yellow-400 font-bold">+</button></div></div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Date</label><input type="date" value={bulkForm.date} onChange={e=>setBulkForm({...bulkForm, date:e.target.value})} className="bg-slate-900 border-slate-700"/></div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Trainer</label><input value={bulkForm.trainer} onChange={e=>setBulkForm({...bulkForm, trainer:e.target.value})} className="bg-slate-900 border-slate-700"/></div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Evidence</label><input type="file" onChange={e=>{if(e.target.files[0]) fileToBase64(e.target.files[0]).then(b64=>setBulkForm({...bulkForm, evidence:b64}))}} className="text-xs text-slate-400"/></div>
                                         </div>
-                                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 flex flex-col h-full">
-                                            <div className="flex justify-between items-center mb-3"><label className="text-xs font-bold text-blue-400 uppercase">Attendees ({bulkForm.selectedUsers.length + bulkForm.manualAttendees.length})</label></div>
-                                            <div className="flex gap-2 mb-3"><input placeholder="External Name..." value={newExternalName} onChange={e=>setNewExternalName(e.target.value)} className="bg-slate-800 border-none text-xs p-2 flex-1 rounded"/><button onClick={()=>{if(newExternalName){setBulkForm({...bulkForm, manualAttendees:[...bulkForm.manualAttendees, newExternalName]}); setNewExternalName('');}}} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold">Add</button></div>
+                                        <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 flex flex-col h-full">
+                                            <div className="flex justify-between items-center mb-3"><label className="text-xs font-bold text-blue-400 uppercase">Attendees ({bulkForm.selectedUsers.length + bulkForm.manualAttendees.length})</label><button onClick={selectAllUsers} className="text-[10px] text-slate-400 hover:text-white underline">Select All Users</button></div>
+                                            <div className="flex gap-2 mb-3"><input placeholder="External Name..." value={newExternalName} onChange={e=>setNewExternalName(e.target.value)} className="bg-slate-800 border-none text-xs p-2 flex-1 rounded"/><button onClick={addExternalAttendee} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs font-bold">Add</button></div>
                                             <div className="flex-1 overflow-y-auto custom-scroll space-y-2 pr-2 max-h-64">
                                                 {bulkForm.manualAttendees.map((n,i)=>(<div key={`m-${i}`} className="p-2 rounded bg-purple-900/20 border border-purple-500/30 flex justify-between"><span className="text-sm font-bold text-purple-200">{n} (Ext)</span><button onClick={()=>setBulkForm({...bulkForm, manualAttendees:bulkForm.manualAttendees.filter((_,x)=>x!==i)})} className="text-red-400 text-xs">x</button></div>))}
-                                                {users.map(u=>(<div key={u.id} onClick={()=>{const s=bulkForm.selectedUsers; setBulkForm({...bulkForm, selectedUsers:s.includes(u.name)?s.filter(x=>x!==u.name):[...s,u.name]})}} className={`p-2 rounded cursor-pointer border flex justify-between ${bulkForm.selectedUsers.includes(u.name)?'bg-blue-600/20 border-blue-500 text-blue-200':'bg-slate-800 border-transparent'}`}><span className="text-sm font-bold">{u.name}</span><span className="text-[10px] opacity-70">{u.role}</span></div>))}
+                                                {users.map(u=>(<div key={u.id} onClick={()=>{toggleUserSelection(u.name)}} className={`p-2 rounded cursor-pointer border flex justify-between ${bulkForm.selectedUsers.includes(u.name)?'bg-blue-600/20 border-blue-500 text-blue-200':'bg-slate-800 border-transparent'}`}><span className="text-sm font-bold">{u.name}</span><span className="text-[10px] opacity-70">{u.role}</span></div>))}
                                             </div>
                                         </div>
                                     </div>
-                                    <button onClick={handleBulkSubmit} className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 text-white font-bold py-4 rounded-xl shadow-lg">Save Records</button>
+                                    <button onClick={handleBulkSubmit} className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 text-white font-bold py-4 rounded-xl shadow-lg">Save Training Records</button>
                                 </div>
                             )}
                         </div>
