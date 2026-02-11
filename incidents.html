@@ -64,19 +64,20 @@
                 -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
             }
             .no-print, header, .repo-view, .form-view-tabs, .action-buttons { display: none !important; }
-            .print-overlay { display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: white; z-index: 9999; }
+            .print-overlay { display: block !important; position: absolute; top: 0; left: 0; width: 100%; min-height: 100%; background: white; z-index: 9999; }
             .print-overlay * { visibility: visible !important; color: black !important; }
-            .print-overlay h1 { font-size: 24pt; font-weight: bold; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
-            .print-overlay h2 { font-size: 16pt; font-weight: bold; margin-top: 20px; border-bottom: 1px solid #ccc; background: #eee !important; padding: 5px; -webkit-print-color-adjust: exact; }
+            .print-overlay h1 { font-size: 24pt; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            .print-overlay h2 { font-size: 14pt; background: #eee !important; padding: 5px; margin-top: 20px; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact; }
             .print-overlay p, .print-overlay li, .print-overlay td { font-size: 11pt; }
-            .rib-box, .tree-node { border: 1px solid black !important; background: white !important; color: black !important; }
-            .spine, .spine::after, .ribs-top .rib-box::after, .ribs-bottom .rib-box::before, .tree li::before, .tree li::after, .tree ul ul::before { background: black !important; border-color: black !important; }
-            .head { border: 2px solid black !important; background: white !important; color: black !important; }
+            /* Hide diagrams in print, show text summary instead */
+            .fishbone-container, .tree { display: none !important; }
+            .print-diagram-summary { display: block !important; }
+            
             .incident-image { max-width: 300px; max-height: 200px; border: 1px solid black; margin-top: 10px; }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th, td { border: 1px solid black !important; padding: 5px; }
         }
-        .print-overlay { display: none; }
+        .print-overlay, .print-diagram-summary { display: none; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -275,7 +276,7 @@
             return (
                 <div className="space-y-6 animate-fade-in glass-panel-filters repo-view">
                     
-                    {/* NEW KPI DASHBOARD */}
+                    {/* KPI DASHBOARD */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
                         <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
                             <div><p className="text-xs text-slate-400 uppercase font-bold">Total CAPA Raised</p><h3 className="text-3xl font-bold">{stats.total}</h3></div>
@@ -554,7 +555,7 @@
             const STEPS = [ { id: 1, label: 'Initial' }, ...(data.severity !== 'Level D' ? [{ id: 2, label: 'Team & Consult' }] : []), { id: 3, label: 'Investigate' }, { id: 4, label: 'CAPA' }, { id: 5, label: 'Review' } ];
 
             return (
-                <div className="flex flex-col h-screen bg-slate-950 text-white overflow-hidden main-content">
+                <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden main-content">
                     <header className="h-16 border-b border-slate-800 flex items-center justify-between px-6 no-print bg-slate-900">
                         <div className="flex items-center gap-4">
                             <a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a>
@@ -742,17 +743,13 @@
 
                             <div className="report-section">
                                 <h2 className="section-heading">3. Root Cause Analysis</h2>
-                                <div className="mb-6">
-                                    <strong>Fishbone Diagram:</strong>
-                                    <div style={{transform:'scale(0.8)', transformOrigin:'top left'}}>
-                                        <Fishbone data={printData.investigation.fishbone} onChange={()=>{}} disabled={true} />
-                                    </div>
-                                </div>
-                                <div className="mb-6">
-                                    <strong>Fault Tree Analysis:</strong>
-                                    <div style={{transform:'scale(0.8)', transformOrigin:'top left'}} className="tree">
-                                        <ul><FaultTreeNode node={printData.investigation.faultTree} onUpdate={()=>{}} disabled={true} /></ul>
-                                    </div>
+                                <div className="mb-6 print-diagram-summary">
+                                    <strong>Investigation Summary:</strong>
+                                    <ul>
+                                        <li><strong>Root Cause:</strong> {printData.investigation.rootCause}</li>
+                                        <li><strong>Fishbone Man:</strong> {printData.investigation.fishbone.man.join(', ')}</li>
+                                        <li><strong>Fishbone Machine:</strong> {printData.investigation.fishbone.machine.join(', ')}</li>
+                                    </ul>
                                 </div>
                                 <div className="mb-4">
                                     <strong>5 Whys:</strong>
@@ -762,7 +759,6 @@
                                         </div>
                                     ))}
                                 </div>
-                                <div><strong>Final Root Cause:</strong> {printData.investigation.rootCause}</div>
                             </div>
 
                             <div className="report-section">
