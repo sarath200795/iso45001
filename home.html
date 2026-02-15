@@ -49,6 +49,7 @@
             { id: 'risk', label: 'Risk Assessment', desc: 'HIRA & JSA', icon: 'fa-shield-virus', color: 'text-red-400' },
             { id: 'consultation', label: 'Participation', desc: 'Committees & MOM', icon: 'fa-comments', color: 'text-teal-400' }, 
             { id: 'audit', label: 'Internal Audit', desc: 'Compliance Checks', icon: 'fa-clipboard-check', color: 'text-emerald-400' }, 
+            { id: 'standards', label: 'Standards & Files', desc: 'SOPs, Policies & Manuals', icon: 'fa-folder-open', color: 'text-indigo-400' }, // NEW TILE
             { id: 'capa', label: 'CAPA Manager', desc: 'Global Actions', icon: 'fa-list-check', color: 'text-cyan-400' },
             { id: 'training', label: 'Training', desc: 'LMS & Competency', icon: 'fa-graduation-cap', color: 'text-yellow-400' },
             { id: 'improvement', label: 'Improvement', desc: 'Kaizen & JDI', icon: 'fa-chart-line', color: 'text-blue-400' },
@@ -57,16 +58,11 @@
             { id: 'sites', label: 'Sites', desc: 'Manage Locations', icon: 'fa-building-shield', color: 'text-slate-300', admin: true },
         ];
 
-        // NOTIFICATION COMPONENT
         const Notifications = ({ data, session, selectedSite }) => {
             const [alerts, setAlerts] = useState([]);
 
             useEffect(() => {
                 const newAlerts = [];
-                const today = new Date();
-                const sevenDays = new Date(today);
-                sevenDays.setDate(today.getDate() + 7);
-
                 const filterSite = (item) => selectedSite === 'GLOBAL' ? true : item.siteId === selectedSite;
 
                 if(session.role === 'Owner') {
@@ -152,17 +148,17 @@
 
             const handleLogout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
 
-            // --- FIXED NAVIGATION LOGIC ---
             const handleNav = (moduleId) => {
                 const params = `?site=${selectedSite}`;
                 switch(moduleId) {
-                    case 'dashboard': window.location.href = `dashboard.html${params}`; break; // UPDATED
+                    case 'dashboard': window.location.href = `dashboard.html${params}`; break;
                     case 'users': window.location.href = 'users.html'; break;
                     case 'sites': window.location.href = 'sites.html'; break;
                     case 'incidents': window.location.href = `incidents.html${params}`; break;
                     case 'risk': window.location.href = `risk.html${params}`; break;
                     case 'consultation': window.location.href = `consultation.html${params}`; break;
                     case 'audit': window.location.href = `audit.html${params}`; break;
+                    case 'standards': window.location.href = `standards.html${params}`; break; // LINKED NEW PAGE
                     case 'capa': window.location.href = `capa.html${params}`; break;
                     case 'training': window.location.href = `training.html${params}`; break;
                     case 'improvement': window.location.href = `improvement.html${params}`; break;
