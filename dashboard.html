@@ -30,7 +30,6 @@
         .kpi-card:hover { transform: translateY(-5px); }
         input { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; outline: none; }
         input:focus { border-color: #3b82f6; }
-        /* Custom Scrollbar for the main area */
         .custom-scroll::-webkit-scrollbar { width: 8px; }
         .custom-scroll::-webkit-scrollbar-track { background: #0f172a; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
@@ -72,7 +71,6 @@
             const [manHours, setManHours] = useState([]);
             
             // --- DATE FILTER STATE ---
-            // Default to current year: Jan 1st to Today
             const [filterStart, setFilterStart] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
             const [filterEnd, setFilterEnd] = useState(new Date().toISOString().split('T')[0]);
 
@@ -99,7 +97,7 @@
                 fetchData();
             }, []);
 
-            // --- FILTERING DATA BASED ON DATE RANGE ---
+            // --- FILTERING ---
             const filteredIncidents = useMemo(() => {
                 if (!filterStart || !filterEnd) return incidents;
                 return incidents.filter(i => i.date >= filterStart && i.date <= filterEnd);
@@ -110,21 +108,17 @@
                 return manHours.filter(m => m.date >= filterStart && m.date <= filterEnd);
             }, [manHours, filterStart, filterEnd]);
 
-            // --- KPI CALCULATIONS (Using Filtered Data) ---
+            // --- CALCULATIONS ---
             const stats = useMemo(() => {
-                const totalManHours = filteredManHours.reduce((acc, curr) => acc + parseFloat(curr.perm || 0) + parseFloat(curr.cont || 0), 0) || 1; // Avoid divide by zero
+                const totalManHours = filteredManHours.reduce((acc, curr) => acc + parseFloat(curr.perm || 0) + parseFloat(curr.cont || 0), 0) || 1;
                 
-                // Incident Counts
                 const nearMiss = filteredIncidents.filter(i => i.type === 'Near Miss').length;
                 const firstAid = filteredIncidents.filter(i => i.type === 'First Aid injury').length;
                 const lti = filteredIncidents.filter(i => i.type === 'Lost Time injury').length;
-                const recordable = filteredIncidents.filter(i => ['Lost Time injury', 'Reportable Injury', 'Medical Treatment'].includes(i.type)).length;
+                const recordable = filteredIncidents.filter(i => ['Lost Time injury', 'Reportable Injury'].includes(i.type)).length;
 
-                // Rates (Per 200,000 Hours)
-                // Formula: (Count * 200,000) / Total Man Hours
                 const calcRate = (count) => ((count * 200000) / totalManHours).toFixed(2);
 
-                // CAPA Closure (Based on filtered incidents or global? Usually filtered incidents)
                 let totalActions = 0;
                 let closedActions = 0;
                 filteredIncidents.forEach(inc => {
@@ -137,7 +131,6 @@
                 });
                 const closureRate = totalActions === 0 ? 100 : Math.round((closedActions / totalActions) * 100);
 
-                // Man Hour Splits
                 const totalPerm = filteredManHours.reduce((acc, curr) => acc + parseFloat(curr.perm || 0), 0);
                 const totalCont = filteredManHours.reduce((acc, curr) => acc + parseFloat(curr.cont || 0), 0);
                 const permPercent = totalManHours > 1 ? Math.round((totalPerm / totalManHours) * 100) : 0;
@@ -169,30 +162,21 @@
 
                 await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/manHours`), newLog);
                 alert("Man Hours Logged!");
-                
-                // Update local state
                 setManHours([...manHours, newLog]);
                 setPermHours(0);
                 setContHours(0);
             };
 
-            // --- CHART LOGIC (Updates with Filter) ---
+            // --- CHART ---
             useEffect(() => {
                 if(!loading) {
                     const ctx = document.getElementById('trendChart');
                     if(ctx) {
                         if(window.myChart) window.myChart.destroy();
-                        
-                        // Prepare Monthly Buckets for the selected Range (Simplification: Buckets by Month Name)
                         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
                         const monthlyCounts = new Array(12).fill(0);
-                        
                         filteredIncidents.forEach(inc => {
                             const d = new Date(inc.date);
-                            // Only plot if it falls within selected range (FilteredIncidents handles this, but mapping to Jan-Dec assumes year overlap)
-                            // For simplicity in this view, we aggregate by month regardless of year to show seasonality, 
-                            // or ideally, we just plot the months in the range. 
-                            // Let's stick to standard 12-month bucket for simplicity given it's a dashboard summary.
                             monthlyCounts[d.getMonth()]++;
                         });
 
@@ -221,7 +205,7 @@
                         });
                     }
                 }
-            }, [loading, filteredIncidents]); // Re-render chart when filtered incidents change
+            }, [loading, filteredIncidents]);
 
             if(loading) return <div className="flex h-screen items-center justify-center text-white text-xl font-bold animate-pulse">Loading Dashboard...</div>;
 
@@ -230,109 +214,96 @@
                     {/* Header */}
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
                         <div className="flex items-center gap-4">
-                            <div className="w-8 h-8 rounded bg-blue-600 flex items-center justify-center font-bold text-lg">E</div>
-                            <h1 className="font-bold text-lg tracking-tight">Enterprise <span className="text-blue-400">Safety Hub</span></h1>
+                            <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2 transition-colors"><i className="fas fa-arrow-left"></i> Back</a>
+                            <div className="h-6 w-px bg-slate-700 mx-2"></div>
+                            <h1 className="font-bold text-lg tracking-tight">Safety Dashboard</h1>
                         </div>
                         <div className="flex items-center gap-4">
-                            <span className="text-xs text-slate-400">Welcome, <b>{session.user}</b></span>
-                            <a href="index.html" className="text-xs bg-red-900/20 text-red-400 px-3 py-1 rounded hover:bg-red-900/40">Logout</a>
+                            <span className="text-xs text-slate-400 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">User: <b className="text-white">{session.user}</b></span>
                         </div>
                     </div>
 
-                    <div className="flex flex-1 overflow-hidden">
-                        {/* Sidebar Navigation */}
-                        <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col p-4 space-y-2">
-                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-2 pl-2">Modules</div>
-                            <a href="#" className="flex items-center gap-3 bg-blue-600 text-white px-4 py-3 rounded-lg text-sm font-bold shadow-lg shadow-blue-900/20"><i className="fas fa-chart-pie w-5"></i> Dashboard</a>
-                            <a href="incidents.html" className="flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800 px-4 py-3 rounded-lg text-sm font-medium transition"><i className="fas fa-exclamation-triangle w-5"></i> Incidents</a>
-                            <a href="risk.html" className="flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800 px-4 py-3 rounded-lg text-sm font-medium transition"><i className="fas fa-shield-alt w-5"></i> Risk (HIRA)</a>
-                            <a href="training.html" className="flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800 px-4 py-3 rounded-lg text-sm font-medium transition"><i className="fas fa-graduation-cap w-5"></i> Training</a>
-                            <a href="audit.html" className="flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800 px-4 py-3 rounded-lg text-sm font-medium transition"><i className="fas fa-clipboard-check w-5"></i> Audits</a>
-                            <a href="consultation.html" className="flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800 px-4 py-3 rounded-lg text-sm font-medium transition"><i className="fas fa-comments w-5"></i> Consultation</a>
-                        </div>
-
-                        {/* Main Content */}
-                        <div className="flex-1 overflow-y-auto p-8 custom-scroll">
-                            <div className="max-w-7xl mx-auto">
-                                
-                                {/* --- DATE FILTER BAR --- */}
-                                <div className="glass-panel p-4 rounded-xl mb-8 flex justify-between items-center border border-slate-700">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400"><i className="fas fa-calendar-alt"></i></div>
-                                        <div><h3 className="font-bold text-white text-sm">Date Range Filter</h3><p className="text-[10px] text-slate-400">Adjust range to update KPIs</p></div>
-                                    </div>
-                                    <div className="flex gap-4 items-center">
-                                        <div className="flex flex-col"><label className="text-[10px] text-slate-500 font-bold uppercase">From</label><input type="date" value={filterStart} onChange={e=>setFilterStart(e.target.value)} className="bg-slate-900 border-slate-700 py-1" /></div>
-                                        <div className="flex flex-col"><label className="text-[10px] text-slate-500 font-bold uppercase">To</label><input type="date" value={filterEnd} onChange={e=>setFilterEnd(e.target.value)} className="bg-slate-900 border-slate-700 py-1" /></div>
-                                    </div>
+                    {/* Main Content (Full Width) */}
+                    <div className="flex-1 overflow-y-auto p-8 custom-scroll">
+                        <div className="max-w-7xl mx-auto">
+                            
+                            {/* --- DATE FILTER BAR --- */}
+                            <div className="glass-panel p-4 rounded-xl mb-8 flex justify-between items-center border border-slate-700">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400"><i className="fas fa-filter"></i></div>
+                                    <div><h3 className="font-bold text-white text-sm">Dashboard Filter</h3><p className="text-[10px] text-slate-400">Date Range for KPIs & Charts</p></div>
                                 </div>
-
-                                {/* KPI Grid */}
-                                <h3 className="text-xl font-bold text-white mb-6">Safety Performance Indicators</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-                                    <KPICard title="NMR (Near Miss Rate)" value={stats.nmr} subtext="Per 200k Hours" color="border-yellow-500" icon={<i className="fas fa-exclamation"></i>} />
-                                    <KPICard title="FAIR (First Aid Rate)" value={stats.fair} subtext="Per 200k Hours" color="border-blue-500" icon={<i className="fas fa-user-nurse"></i>} />
-                                    <KPICard title="LTIR (Lost Time Rate)" value={stats.ltir} subtext="Per 200k Hours" color="border-red-500" icon={<i className="fas fa-crutch"></i>} />
-                                    <KPICard title="RIR (Recordable Rate)" value={stats.rir} subtext="OSHA Recordables" color="border-orange-500" icon={<i className="fas fa-file-medical"></i>} />
-                                    <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 relative overflow-hidden">
-                                        <div className="flex justify-between items-start z-10 relative">
-                                            <div>
-                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">CAPA Closure</p>
-                                                <h3 className="text-3xl font-bold text-emerald-400">{stats.capa}%</h3>
-                                                <p className="text-[10px] text-slate-500 mt-2">Action Effectiveness</p>
-                                            </div>
-                                            <div className="text-2xl text-emerald-500/20"><i className="fas fa-check-circle"></i></div>
-                                        </div>
-                                        <div className="absolute bottom-0 left-0 h-1 bg-emerald-500/30 w-full"><div className="h-full bg-emerald-500" style={{width: `${stats.capa}%`}}></div></div>
-                                    </div>
+                                <div className="flex gap-4 items-center">
+                                    <div className="flex flex-col"><label className="text-[10px] text-slate-500 font-bold uppercase">From</label><input type="date" value={filterStart} onChange={e=>setFilterStart(e.target.value)} className="bg-slate-900 border-slate-700 py-1" /></div>
+                                    <div className="flex flex-col"><label className="text-[10px] text-slate-500 font-bold uppercase">To</label><input type="date" value={filterEnd} onChange={e=>setFilterEnd(e.target.value)} className="bg-slate-900 border-slate-700 py-1" /></div>
                                 </div>
-
-                                {/* Charts & Man Hours Row */}
-                                <div className="grid grid-cols-3 gap-6 mb-8">
-                                    <div className="col-span-2 glass-panel p-6 rounded-xl border border-slate-700">
-                                        <h4 className="text-sm font-bold text-slate-400 uppercase mb-4">Incident Trend (Selected Period)</h4>
-                                        <div className="h-64">
-                                            <canvas id="trendChart"></canvas>
-                                        </div>
-                                    </div>
-                                    <div className="glass-panel p-6 rounded-xl border border-slate-700">
-                                        <h4 className="text-sm font-bold text-slate-400 uppercase mb-4">Total Man-Hours (Range)</h4>
-                                        <div className="flex items-center justify-center h-48 flex-col">
-                                            <span className="text-5xl font-bold text-white mb-2">{Math.round(stats.totalHours).toLocaleString()}</span>
-                                            <span className="text-sm text-slate-500 bg-slate-900 px-3 py-1 rounded-full">Cumulative Hours</span>
-                                        </div>
-                                        <div className="border-t border-slate-700 pt-4 mt-2">
-                                            <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Permanent Staff</span><span>{stats.permPercent}%</span></div>
-                                            <div className="w-full bg-slate-800 rounded-full h-1.5 mb-3"><div className="bg-blue-500 h-1.5 rounded-full" style={{width: `${stats.permPercent}%`}}></div></div>
-                                            <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Contractors</span><span>{stats.contPercent}%</span></div>
-                                            <div className="w-full bg-slate-800 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full" style={{width: `${stats.contPercent}%`}}></div></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Man Hour Logger */}
-                                <div className="glass-panel p-6 rounded-xl flex items-end gap-4 border-l-4 border-purple-500">
-                                    <div className="flex-1">
-                                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><i className="fas fa-clock text-purple-400"></i> Daily Man-Hour Log</h3>
-                                        <div className="flex gap-4">
-                                            <div className="flex-1">
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Date</label>
-                                                <input type="date" value={logDate} onChange={e=>setLogDate(e.target.value)} />
-                                            </div>
-                                            <div className="flex-1">
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Permanent Staff (Hrs)</label>
-                                                <input type="number" value={permHours} onChange={e=>setPermHours(e.target.value)} placeholder="0" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Contractor (Hrs)</label>
-                                                <input type="number" value={contHours} onChange={e=>setContHours(e.target.value)} placeholder="0" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <button onClick={handleLogHours} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3 rounded-lg h-[42px] mb-px shadow-lg transition transform active:scale-95">Log Hours</button>
-                                </div>
-
                             </div>
+
+                            {/* KPI Grid */}
+                            <h3 className="text-xl font-bold text-white mb-6">Key Performance Indicators</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
+                                <KPICard title="NMR (Near Miss Rate)" value={stats.nmr} subtext="Per 200k Hours" color="border-yellow-500" icon={<i className="fas fa-exclamation"></i>} />
+                                <KPICard title="FAIR (First Aid Rate)" value={stats.fair} subtext="Per 200k Hours" color="border-blue-500" icon={<i className="fas fa-user-nurse"></i>} />
+                                <KPICard title="LTIR (Lost Time Rate)" value={stats.ltir} subtext="Per 200k Hours" color="border-red-500" icon={<i className="fas fa-crutch"></i>} />
+                                <KPICard title="RIR (Recordable Rate)" value={stats.rir} subtext="OSHA Recordables" color="border-orange-500" icon={<i className="fas fa-file-medical"></i>} />
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 relative overflow-hidden">
+                                    <div className="flex justify-between items-start z-10 relative">
+                                        <div>
+                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">CAPA Closure</p>
+                                            <h3 className="text-3xl font-bold text-emerald-400">{stats.capa}%</h3>
+                                            <p className="text-[10px] text-slate-500 mt-2">Action Effectiveness</p>
+                                        </div>
+                                        <div className="text-2xl text-emerald-500/20"><i className="fas fa-check-circle"></i></div>
+                                    </div>
+                                    <div className="absolute bottom-0 left-0 h-1 bg-emerald-500/30 w-full"><div className="h-full bg-emerald-500" style={{width: `${stats.capa}%`}}></div></div>
+                                </div>
+                            </div>
+
+                            {/* Charts & Man Hours Row */}
+                            <div className="grid grid-cols-3 gap-6 mb-8">
+                                <div className="col-span-2 glass-panel p-6 rounded-xl border border-slate-700">
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase mb-4">Incident Trend (Selected Range)</h4>
+                                    <div className="h-64">
+                                        <canvas id="trendChart"></canvas>
+                                    </div>
+                                </div>
+                                <div className="glass-panel p-6 rounded-xl border border-slate-700">
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase mb-4">Total Man-Hours</h4>
+                                    <div className="flex items-center justify-center h-48 flex-col">
+                                        <span className="text-5xl font-bold text-white mb-2">{Math.round(stats.totalHours).toLocaleString()}</span>
+                                        <span className="text-sm text-slate-500 bg-slate-900 px-3 py-1 rounded-full">Cumulative Hours</span>
+                                    </div>
+                                    <div className="border-t border-slate-700 pt-4 mt-2">
+                                        <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Permanent Staff</span><span>{stats.permPercent}%</span></div>
+                                        <div className="w-full bg-slate-800 rounded-full h-1.5 mb-3"><div className="bg-blue-500 h-1.5 rounded-full" style={{width: `${stats.permPercent}%`}}></div></div>
+                                        <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Contractors</span><span>{stats.contPercent}%</span></div>
+                                        <div className="w-full bg-slate-800 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full" style={{width: `${stats.contPercent}%`}}></div></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Man Hour Logger */}
+                            <div className="glass-panel p-6 rounded-xl flex items-end gap-4 border-l-4 border-purple-500">
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><i className="fas fa-clock text-purple-400"></i> Daily Man-Hour Log</h3>
+                                    <div className="flex gap-4">
+                                        <div className="flex-1">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Date</label>
+                                            <input type="date" value={logDate} onChange={e=>setLogDate(e.target.value)} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Permanent Staff (Hrs)</label>
+                                            <input type="number" value={permHours} onChange={e=>setPermHours(e.target.value)} placeholder="0" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Contractor (Hrs)</label>
+                                            <input type="number" value={contHours} onChange={e=>setContHours(e.target.value)} placeholder="0" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={handleLogHours} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3 rounded-lg h-[42px] mb-px shadow-lg transition transform active:scale-95">Log Hours</button>
+                            </div>
+
                         </div>
                     </div>
                 </div>
