@@ -301,7 +301,7 @@
                             <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">From</label><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
                             <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">To</label><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
                             <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Site</label><select value={filterSite} onChange={e=>setFilterSite(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2">{uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Type</label><select value={filterType} onChange={e=>setFilterType(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2"><option value="All">All Types</option><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
+                            <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Type</label><select value={filterType} onChange={e=>setFilterType(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2"><option value="All">All Types</option><option>Near Miss</option><option>Property Damage</option><option>First Aid</option><option>Lost Time Injury</option><option>Reportable Injury</option></select></div>
                             <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">Severity</label><select value={filterLevel} onChange={e=>setFilterLevel(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2"><option value="All">All Levels</option><option value="Level A">Level A</option><option value="Level B">Level B</option><option value="Level C">Level C</option><option value="Level D">Level D</option></select></div>
                         </div>
                     </div>
@@ -377,10 +377,25 @@
 
             const getTypeCode = (type) => {
                 if(type === 'Near Miss') return 'NM';
-                if(type === 'Accident') return 'AC';
-                if(type === 'Hazard') return 'HA';
                 if(type === 'Property Damage') return 'PD';
+                if(type === 'First Aid') return 'FA';
+                if(type === 'Lost Time Injury') return 'LTI';
+                if(type === 'Reportable Injury') return 'RI';
                 return 'XX';
+            };
+
+            const autoClassify = (desc) => {
+                const lower = desc.toLowerCase();
+                if (lower.includes('fire') || lower.includes('smoke') || lower.includes('burn') || lower.includes('hot') || lower.includes('flame')) return 'Fire';
+                if (lower.includes('chem') || lower.includes('spill') || lower.includes('acid') || lower.includes('leak') || lower.includes('fume')) return 'Chemical Spill';
+                if (lower.includes('height') || lower.includes('fall') || lower.includes('ladder') || lower.includes('roof') || lower.includes('scaffold') || lower.includes('drop')) return 'Work at Height';
+                return data.smartType; 
+            };
+
+            const handleDescriptionChange = (e) => {
+                const newDesc = e.target.value;
+                const newType = autoClassify(newDesc);
+                setData(prev => ({ ...prev, description: newDesc, smartType: newType }));
             };
 
             useEffect(() => {
@@ -587,10 +602,10 @@
                                                 
                                                 <div><label className="text-[10px] uppercase font-bold text-blue-400">Smart Category (Auto-Suggest)</label><select value={data.smartType} onChange={e=>setData({...data, smartType:e.target.value})} disabled={!canEdit} className="border-blue-500 bg-blue-900/10"><option>Fire</option><option>Chemical Spill</option><option>Work at Height</option><option>Electrical</option><option>Machinery</option></select></div>
                                                 
-                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select value={data.type} onChange={e=>setData({...data, type:e.target.value})} disabled={!canEdit}><option>Near Miss</option><option>Accident</option><option>Hazard</option><option>Property Damage</option></select></div>
+                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select value={data.type} onChange={e=>setData({...data, type:e.target.value})} disabled={!canEdit}><option>Near Miss</option><option>Property Damage</option><option>First Aid</option><option>Lost Time Injury</option><option>Reportable Injury</option></select></div>
                                                 <div><label className="text-[10px] uppercase font-bold text-slate-500">Severity</label><select value={data.severity} onChange={e=>setData({...data, severity:e.target.value})} disabled={!canEdit}><option>Level A</option><option>Level B</option><option>Level C</option><option>Level D</option></select></div>
                                             </div>
-                                            <div className="mb-4"><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={e=>setData({...data, description:e.target.value})} className="w-full mt-1" disabled={!canEdit}></textarea></div>
+                                            <div className="mb-4"><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={handleDescriptionChange} className="w-full mt-1" disabled={!canEdit}></textarea></div>
                                             <div><label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Image Evidence</label>
                                                 {data.imageEvidence && <img src={data.imageEvidence} alt="Evidence" className="h-32 object-cover rounded mb-2 border border-slate-700" />}
                                                 <input type="file" onChange={handleImageUpload} disabled={!canEdit} className="text-xs" />
