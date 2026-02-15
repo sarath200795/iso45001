@@ -25,19 +25,21 @@
     </script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
-        
-        /* DIAGRAM STYLES */
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; outline: none; transition: border-color 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+        input:disabled, select:disabled, textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* DIAGRAM STYLES (Preserved) */
         .fishbone-container { position: relative; padding: 20px 0; overflow-x: auto; }
         .spine { position: absolute; top: 50%; left: 0; right: 120px; height: 3px; background: #64748b; z-index: 0; }
         .spine::after { content: ''; position: absolute; right: -20px; top: -10px; border-left: 20px solid #64748b; border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
         .head { position: absolute; top: 50%; right: 0; transform: translateY(-50%); width: 100px; height: 80px; border: 3px solid #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #1e293b; z-index: 10; color: #ef4444; font-weight: bold; text-align: center; font-size: 12px; }
         .ribs-top, .ribs-bottom { display: flex; justify-content: space-between; padding-right: 120px; }
         .rib-box { background: #1e293b; border: 1px solid #475569; padding: 8px; border-radius: 6px; width: 18%; position: relative; transition: all 0.2s; }
-        .ribs-top .rib-box { margin-bottom: 40px; }
-        .ribs-bottom .rib-box { margin-top: 40px; }
+        .ribs-top .rib-box { margin-bottom: 40px; } .ribs-bottom .rib-box { margin-top: 40px; }
         .ribs-top .rib-box::after { content: ''; position: absolute; bottom: -40px; left: 50%; width: 2px; height: 40px; background: #64748b; transform: skewX(-20deg); transform-origin: top; }
         .ribs-bottom .rib-box::before { content: ''; position: absolute; top: -40px; left: 50%; width: 2px; height: 40px; background: #64748b; transform: skewX(20deg); transform-origin: bottom; }
-
         .tree ul { padding-top: 20px; position: relative; display: flex; justify-content: center; transition: all 0.5s; }
         .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; transition: all 0.5s; }
         .tree li::before, .tree li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #64748b; width: 50%; height: 20px; }
@@ -49,30 +51,18 @@
         .tree li:first-child::after { border-radius: 5px 0 0 0; }
         .tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #64748b; width: 0; height: 20px; }
         .tree-node { display: inline-block; padding: 10px; border-radius: 8px; background: #1e293b; border: 1px solid #475569; min-width: 140px; position: relative; z-index: 10; transition: all 0.2s; }
-        
-        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        input, select, textarea { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; outline: none; width: 100%; transition: border-color 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
-        input:disabled, select:disabled, textarea:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        /* --- PDF GENERATION STYLES --- */
         @media print {
             @page { size: A4; margin: 10mm; }
-            body, html, #root, .app-container, .main-content { 
-                width: 100% !important; height: auto !important; overflow: visible !important; 
-                background: white !important; color: black !important; display: block !important; position: static !important;
-                -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
-            }
+            body, html, #root, .app-container, .main-content { width: 100% !important; height: auto !important; overflow: visible !important; background: white !important; color: black !important; display: block !important; position: static !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             .no-print, header, .repo-view, .form-view-tabs, .action-buttons { display: none !important; }
             .print-overlay { display: block !important; position: absolute; top: 0; left: 0; width: 100%; min-height: 100%; background: white; z-index: 9999; }
             .print-overlay * { visibility: visible !important; color: black !important; }
-            .print-overlay h1 { font-size: 24pt; font-weight: bold; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
-            .print-overlay h2 { font-size: 16pt; font-weight: bold; margin-top: 20px; border-bottom: 1px solid #ccc; background: #eee !important; padding: 5px; -webkit-print-color-adjust: exact; }
+            .print-overlay h1 { font-size: 24pt; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            .print-overlay h2 { font-size: 14pt; background: #eee !important; padding: 5px; margin-top: 20px; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact; }
             .print-overlay p, .print-overlay li, .print-overlay td { font-size: 11pt; }
-            /* Hide diagrams in print, show text summary instead */
             .fishbone-container, .tree { display: none !important; }
             .print-diagram-summary { display: block !important; }
-            
             .incident-image { max-width: 300px; max-height: 200px; border: 1px solid black; margin-top: 10px; }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th, td { border: 1px solid black !important; padding: 5px; }
@@ -102,57 +92,71 @@
             reader.onerror = error => reject(error);
         });
 
-        // --- SMART KNOWLEDGE BASE ---
+        // --- EXPANDED SMART KNOWLEDGE BASE (HSE ALIGNED) ---
         const SMART_DB = {
             "Fire": {
-                fishbone: {
-                    man: ["Lack of fire training", "Human error during hot work"],
-                    machine: ["Overheated equipment", "Faulty wiring"],
-                    material: ["Flammable liquids", "Combustible dust"],
-                    method: ["Hot work permit bypassed", "Poor housekeeping"],
-                    environment: ["High temperature", "Dry conditions"]
-                },
-                root_causes: ["Failure to follow hot work procedures", "Electrical short circuit due to lack of maintenance"],
-                capa: [
-                    "Conduct refresher Fire Safety Training for all staff",
-                    "Install automatic fire suppression system in critical areas",
-                    "Implement stricter Hot Work Permit audit process",
-                    "Conduct thermographic survey of all electrical panels"
-                ]
+                keywords: ["fire", "burn", "smoke", "flame", "hot", "ignition", "spark", "combustible", "extinguisher", "explosion"],
+                fishbone: { man: ["Lack of fire training", "Human error"], machine: ["Overheated equipment", "Faulty wiring"], material: ["Flammable liquids", "Waste buildup"], method: ["Hot work permit missing"], environment: ["High temp", "Dry"] },
+                root_causes: ["Failure to control ignition sources", "Inadequate housekeeping"],
+                capa: ["Refresher Fire Training", "Install suppression system", "Hot Work Permit Audit"]
             },
             "Chemical Spill": {
-                fishbone: {
-                    man: ["Improper handling", "Lack of PPE"],
-                    machine: ["Valve failure", "Pump leak"],
-                    material: ["Corrosive chemical", "Defective container"],
-                    method: ["Incorrect storage", "Transfer procedure violation"],
-                    environment: ["Slippery floor", "Poor lighting"]
-                },
-                root_causes: ["Inadequate preventative maintenance of valves", "Operator training gap"],
-                capa: [
-                    "Install secondary containment (bunding) for all tanks",
-                    "Provide chemical handling training to operators",
-                    "Update Spill Response Plan and conduct mock drill",
-                    "Replace all manual valves with automated shut-off valves"
-                ]
+                keywords: ["chemical", "spill", "leak", "acid", "corrosive", "fumes", "toxic", "gas", "solvent", "liquid"],
+                fishbone: { man: ["No PPE used", "Improper handling"], machine: ["Valve failure", "Pump leak"], material: ["Defective container"], method: ["Transfer procedure violation"], environment: ["Poor ventilation"] },
+                root_causes: ["Inadequate maintenance of valves", "Lack of secondary containment"],
+                capa: ["Install bunding", "Chemical Handling Training", "Spill Kits Check"]
             },
             "Work at Height": {
-                fishbone: {
-                    man: ["Failure to wear harness", "Fatigue"],
-                    machine: ["Scaffolding defect", "Ladder damage"],
-                    material: ["Loose tools", "Slippery surface"],
-                    method: ["No permit to work", "Unsafe climbing"],
-                    environment: ["Windy conditions", "Rain"]
-                },
-                root_causes: ["Lack of supervision", "Inadequate fall protection equipment"],
-                capa: [
-                    "Enforce 100% tie-off policy for heights above 1.8m",
-                    "Inspect and tag all scaffolding weekly",
-                    "Install permanent lifelines on rooftops",
-                    "Conduct 'Tool Box Talk' on gravity hazards daily"
-                ]
+                keywords: ["height", "fall", "ladder", "scaffold", "roof", "drop", "edge", "climb", "platform", "fragile"],
+                fishbone: { man: ["Unsafe act", "No harness"], machine: ["Damaged ladder", "Scaffold defect"], material: ["Loose tools"], method: ["No permit to work"], environment: ["Wind", "Rain"] },
+                root_causes: ["Lack of supervision", "Inadequate fall protection"],
+                capa: ["100% Tie-off policy", "Scaffold Inspections", "Tool Box Talks"]
+            },
+            "Slips, Trips & Falls": {
+                keywords: ["slip", "trip", "floor", "wet", "uneven", "cable", "obstruction", "trailing", "ice", "cleaning"],
+                fishbone: { man: ["Rushing", "Distracted"], machine: ["Leaking machine"], material: ["Spilled oil"], method: ["Poor housekeeping"], environment: ["Poor lighting", "Wet floor"] },
+                root_causes: ["Floor contamination not cleaned", "Walkways obstructed"],
+                capa: ["Improve Housekeeping", "Install Anti-slip flooring", "Cable Management"]
+            },
+            "Manual Handling": {
+                keywords: ["lift", "back", "carry", "strain", "heavy", "twist", "spine", "musculoskeletal", "load"],
+                fishbone: { man: ["Poor technique", "Existing injury"], machine: ["No trolley available"], material: ["Heavy load", "Awkward shape"], method: ["Lifting alone"], environment: ["Cramped space"] },
+                root_causes: ["Manual handling assessment missing", "Lack of mechanical aids"],
+                capa: ["Provide Trolleys/Hoists", "Manual Handling Training", "Two-person lift policy"]
+            },
+            "Machinery / Equipment": {
+                keywords: ["machine", "guard", "cut", "trap", "entangle", "crush", "nip", "blade", "roller", "conveyor"],
+                fishbone: { man: ["Bypassed guard", "Loose clothing"], machine: ["Missing guard", "E-stop failure"], material: ["Jammed part"], method: ["Maintenance on live machine"], environment: ["Noise"] },
+                root_causes: ["Inadequate guarding", "LOTO procedure violation"],
+                capa: ["Machine Guarding Audit", "LOTO Training", "Pre-start checks"]
+            },
+            "Vehicle / Transport": {
+                keywords: ["vehicle", "forklift", "truck", "reverse", "collision", "hit", "driver", "road", "speed"],
+                fishbone: { man: ["Speeding", "Blind spot"], machine: ["Brake failure", "No reverse alarm"], material: ["Unstable load"], method: ["No segregation"], environment: ["Busy yard"] },
+                root_causes: ["Lack of pedestrian segregation", "Driver error"],
+                capa: ["Install Barriers", "Forklift Refresher", "Traffic Management Plan"]
+            },
+            "Electrical": {
+                keywords: ["electric", "shock", "wire", "cable", "voltage", "panel", "fuse", "short", "arc"],
+                fishbone: { man: ["Unqualified person"], machine: ["Exposed wire", "Faulty tool"], material: ["Water ingress"], method: ["No isolation"], environment: ["Damp conditions"] },
+                root_causes: ["Equipment not PAT tested", "Working live"],
+                capa: ["PAT Testing Program", "LOTO Lockout", "Electrical Safety Training"]
+            },
+            "Confined Space": {
+                keywords: ["confined", "tank", "pit", "silo", "oxygen", "suffocate", "entry", "rescue"],
+                fishbone: { man: ["No gas test", "No sentry"], machine: ["Ventilation fail"], material: ["Toxic sludge"], method: ["No permit"], environment: ["Low oxygen"] },
+                root_causes: ["Failure to identify confined space", "No emergency plan"],
+                capa: ["Confined Space Mapping", "Permit to Enter System", "Rescue Drill"]
+            },
+            "Noise & Vibration": {
+                keywords: ["noise", "loud", "deaf", "ear", "vibration", "shake", "drill", "hammer"],
+                fishbone: { man: ["No ear defenders"], machine: ["Old equipment"], material: ["Hard material"], method: ["Prolonged exposure"], environment: ["Echo"] },
+                root_causes: ["No noise assessment", "PPE non-compliance"],
+                capa: ["Noise Survey", "Mandatory Hearing Protection", "Job Rotation"]
             }
         };
+
+        const SMART_CATEGORIES = Object.keys(SMART_DB);
 
         const UserSelect = ({ users, value, onChange, disabled, placeholder }) => (
             <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} className="w-full">
@@ -250,7 +254,6 @@
                 });
             }, [incidents, filterType, filterLevel, filterSite, dateFrom, dateTo]);
 
-            // --- CALCULATE ACTION STATS ---
             const stats = useMemo(() => {
                 let total = 0, closed = 0, open = 0;
                 incidents.forEach(inc => {
@@ -275,28 +278,14 @@
 
             return (
                 <div className="space-y-6 animate-fade-in glass-panel-filters repo-view">
-                    
-                    {/* KPI DASHBOARD */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
-                        <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
-                            <div><p className="text-xs text-slate-400 uppercase font-bold">Total CAPA Raised</p><h3 className="text-3xl font-bold">{stats.total}</h3></div>
-                            <i className="fas fa-list-check text-2xl text-blue-500/50"></i>
-                        </div>
-                        <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center">
-                            <div><p className="text-xs text-slate-400 uppercase font-bold">Actions Closed</p><h3 className="text-3xl font-bold text-emerald-400">{stats.closed}</h3></div>
-                            <i className="fas fa-check-circle text-2xl text-emerald-500/50"></i>
-                        </div>
-                        <div className="glass-panel p-6 rounded-xl border-l-4 border-orange-500 flex justify-between items-center">
-                            <div><p className="text-xs text-slate-400 uppercase font-bold">Actions Open</p><h3 className="text-3xl font-bold text-orange-400">{stats.open}</h3></div>
-                            <i className="fas fa-clock text-2xl text-orange-500/50"></i>
-                        </div>
+                        <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Total CAPA Raised</p><h3 className="text-3xl font-bold">{stats.total}</h3></div><i className="fas fa-list-check text-2xl text-blue-500/50"></i></div>
+                        <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Actions Closed</p><h3 className="text-3xl font-bold text-emerald-400">{stats.closed}</h3></div><i className="fas fa-check-circle text-2xl text-emerald-500/50"></i></div>
+                        <div className="glass-panel p-6 rounded-xl border-l-4 border-orange-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Actions Open</p><h3 className="text-3xl font-bold text-orange-400">{stats.open}</h3></div><i className="fas fa-clock text-2xl text-orange-500/50"></i></div>
                     </div>
 
                     <div className="p-6 rounded-xl bg-gradient-to-r from-purple-900/40 to-slate-900 border border-purple-500/30 mb-6">
-                        <div className="flex justify-between items-start mb-6">
-                            <div><h2 className="text-2xl font-bold text-white flex items-center gap-3"><span className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center text-lg"><i className="fas fa-database"></i></span>Incident Repository</h2><p className="text-slate-400 text-sm mt-1 ml-14">Central database of all reported incidents.</p></div>
-                            <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg"><i className="fas fa-file-excel"></i> Export</button>
-                        </div>
+                        <div className="flex justify-between items-start mb-6"><div><h2 className="text-2xl font-bold text-white flex items-center gap-3"><span className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center text-lg"><i className="fas fa-database"></i></span>Incident Repository</h2><p className="text-slate-400 text-sm mt-1 ml-14">Central database of all reported incidents.</p></div><button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg"><i className="fas fa-file-excel"></i> Export</button></div>
                         <div className="flex gap-4 items-end flex-wrap">
                             <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">From</label><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
                             <div><label className="text-[10px] text-purple-300 font-bold uppercase block mb-1">To</label><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-32 bg-slate-800 border-slate-600 text-xs rounded-lg p-2" /></div>
@@ -313,21 +302,9 @@
                                     const total = inc.capa ? inc.capa.length : 0;
                                     const closed = inc.capa ? inc.capa.filter(c => c.status === 'Closed').length : 0;
                                     const progress = total > 0 ? (closed/total)*100 : 0;
-
                                     return (
                                         <tr key={inc.id} className="hover:bg-slate-800/50 transition-colors">
-                                            <td className="p-4 font-mono font-bold text-white">{inc.id}</td>
-                                            <td className="p-4">{inc.date}</td>
-                                            <td className="p-4">{inc.type}</td>
-                                            <td className="p-4">
-                                                <div className="flex justify-between text-[10px] mb-1"><span>{closed}/{total} Closed</span><span>{Math.round(progress)}%</span></div>
-                                                <div className="w-full bg-slate-700 rounded-full h-1.5"><div className="bg-emerald-500 h-1.5 rounded-full" style={{width: `${progress}%`}}></div></div>
-                                            </td>
-                                            <td className="p-4 text-right flex justify-end gap-2">
-                                                <button onClick={()=>onPrint(inc)} className="text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 px-3 py-1.5 rounded transition" title="Print Report"><i className="fas fa-print"></i></button>
-                                                {!permissions.viewOnly && <button onClick={()=>onEdit(inc)} className="text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500 px-3 py-1.5 rounded transition">Edit</button>}
-                                                {permissions.canDelete && <button onClick={()=>onDelete(inc)} className="text-slate-400 hover:text-white bg-slate-700 hover:bg-red-600 px-3 py-1.5 rounded transition"><i className="fas fa-trash-alt"></i></button>}
-                                            </td>
+                                            <td className="p-4 font-mono font-bold text-white">{inc.id}</td><td className="p-4">{inc.date}</td><td className="p-4">{inc.type}</td><td className="p-4"><div className="flex justify-between text-[10px] mb-1"><span>{closed}/{total} Closed</span><span>{Math.round(progress)}%</span></div><div className="w-full bg-slate-700 rounded-full h-1.5"><div className="bg-emerald-500 h-1.5 rounded-full" style={{width: `${progress}%`}}></div></div></td><td className="p-4 text-right flex justify-end gap-2"><button onClick={()=>onPrint(inc)} className="text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 px-3 py-1.5 rounded transition" title="Print Report"><i className="fas fa-print"></i></button>{!permissions.viewOnly && <button onClick={()=>onEdit(inc)} className="text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-500 px-3 py-1.5 rounded transition">Edit</button>}{permissions.canDelete && <button onClick={()=>onDelete(inc)} className="text-slate-400 hover:text-white bg-slate-700 hover:bg-red-600 px-3 py-1.5 rounded transition"><i className="fas fa-trash-alt"></i></button>}</td>
                                         </tr>
                                     );
                                 })}
@@ -339,57 +316,33 @@
         };
 
         const App = () => {
-            const [view, setView] = useState('form'); 
-            const [step, setStep] = useState(1);
-            const [session, setSession] = useState(null);
-            const [isGlobal, setIsGlobal] = useState(false);
-            const [incidentsList, setIncidentsList] = useState([]);
-            const [seq, setSeq] = useState(0);
-            const [sites, setSites] = useState([]);
-            const [users, setUsers] = useState([]);
+            const [view, setView] = useState('form'); const [step, setStep] = useState(1);
+            const [session, setSession] = useState(null); const [isGlobal, setIsGlobal] = useState(false);
+            const [incidentsList, setIncidentsList] = useState([]); const [seq, setSeq] = useState(0);
+            const [sites, setSites] = useState([]); const [users, setUsers] = useState([]);
             const [permissions, setPermissions] = useState({ viewOnly: false, canEditOwnedActions: false, canDelete: false });
-            
-            // PRINT STATE
             const [printData, setPrintData] = useState(null);
 
-            const [data, setData] = useState({
-                id: '', siteId: '', date: new Date().toISOString().split('T')[0], time: '', 
-                type: 'Near Miss', description: '', 
-                smartType: 'Fire', 
-                severity: 'Level A', 
-                imageEvidence: null,
-                consultationSummary: '', 
-                investigation: { 
-                    fiveWhys: [ { id: 1, name: 'Analysis Path 1', whys: ['','','','',''] } ], 
-                    fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, 
-                    faultTree: { id:1, label:'Top Event', type:'AND', children:[] }, 
-                    rootCause: '' 
-                },
-                capa: [], riskUpdated: false
-            });
+            const [data, setData] = useState({ id: '', siteId: '', date: new Date().toISOString().split('T')[0], time: '', type: 'Near Miss', description: '', smartType: 'Fire', severity: 'Level A', imageEvidence: null, consultationSummary: '', investigation: { fiveWhys: [ { id: 1, name: 'Analysis Path 1', whys: ['','','','',''] } ], fishbone: { man:[], machine:[], material:[], method:[], environment:[] }, faultTree: { id:1, label:'Top Event', type:'AND', children:[] }, rootCause: '' }, capa: [], riskUpdated: false });
 
-            const siteUsers = useMemo(() => {
-                if (!data.siteId) return users;
-                return users.filter(u => u.role === 'Owner' || (u.accessibleSites && u.accessibleSites.includes(data.siteId)) || u.assignedSite === data.siteId);
-            }, [users, data.siteId]);
-
+            const siteUsers = useMemo(() => { if (!data.siteId) return users; return users.filter(u => u.role === 'Owner' || (u.accessibleSites && u.accessibleSites.includes(data.siteId)) || u.assignedSite === data.siteId); }, [users, data.siteId]);
             const canEdit = !permissions.viewOnly || (permissions.canEditOwnedActions && data.capa.some(c => c.own === session?.user));
 
-            const getTypeCode = (type) => {
-                if(type === 'Near Miss') return 'NM';
-                if(type === 'Property Damage') return 'PD';
-                if(type === 'First Aid') return 'FA';
-                if(type === 'Lost Time Injury') return 'LTI';
-                if(type === 'Reportable Injury') return 'RI';
-                return 'XX';
-            };
+            const getTypeCode = (type) => { if(type === 'Near Miss') return 'NM'; if(type === 'Property Damage') return 'PD'; if(type === 'First Aid') return 'FA'; if(type === 'Lost Time Injury') return 'LTI'; if(type === 'Reportable Injury') return 'RI'; return 'XX'; };
 
+            // --- KEYWORD LOGIC ---
             const autoClassify = (desc) => {
                 const lower = desc.toLowerCase();
-                if (lower.includes('fire') || lower.includes('smoke') || lower.includes('burn') || lower.includes('hot') || lower.includes('flame')) return 'Fire';
-                if (lower.includes('chem') || lower.includes('spill') || lower.includes('acid') || lower.includes('leak') || lower.includes('fume')) return 'Chemical Spill';
-                if (lower.includes('height') || lower.includes('fall') || lower.includes('ladder') || lower.includes('roof') || lower.includes('scaffold') || lower.includes('drop')) return 'Work at Height';
-                return data.smartType; 
+                let bestMatch = data.smartType;
+                let maxScore = 0;
+
+                for (const category in SMART_DB) {
+                    let score = 0;
+                    const keywords = SMART_DB[category].keywords || [];
+                    keywords.forEach(word => { if (lower.includes(word)) score++; });
+                    if (score > maxScore) { maxScore = score; bestMatch = category; }
+                }
+                return maxScore > 0 ? bestMatch : data.smartType;
             };
 
             const handleDescriptionChange = (e) => {
@@ -399,426 +352,62 @@
             };
 
             useEffect(() => {
-                const s = sessionStorage.getItem('isoSession');
-                if(!s) { window.location.href='index.html'; return; }
-                const sess = JSON.parse(s);
-                setSession(sess);
-
+                const s = sessionStorage.getItem('isoSession'); if(!s) { window.location.href='index.html'; return; }
+                const sess = JSON.parse(s); setSession(sess);
                 const params = new URLSearchParams(window.location.search);
-                let ctxSite = params.get('site');
-                if (!ctxSite || ctxSite === 'GLOBAL') { setIsGlobal(true); ctxSite = ''; } else { setIsGlobal(false); }
-
-                const viewOnly = params.get('viewOnly') === 'true';
-                const role = params.get('role') || sess.role;
-
-                setPermissions({
-                    viewOnly: viewOnly || role === 'User',
-                    canEditOwnedActions: role === 'Manager',
-                    canDelete: role === 'Owner'
-                });
-
-                const newSeq = Math.floor(100000 + Math.random() * 900000); 
-                setSeq(newSeq);
-                setData(prev => ({ ...prev, siteId: ctxSite }));
-
+                let ctxSite = params.get('site'); if (!ctxSite || ctxSite === 'GLOBAL') { setIsGlobal(true); ctxSite = ''; } else { setIsGlobal(false); }
+                const viewOnly = params.get('viewOnly') === 'true'; const role = params.get('role') || sess.role;
+                setPermissions({ viewOnly: viewOnly || role === 'User', canEditOwnedActions: role === 'Manager', canDelete: role === 'Owner' });
+                const newSeq = Math.floor(100000 + Math.random() * 900000); setSeq(newSeq); setData(prev => ({ ...prev, siteId: ctxSite }));
                 const dbRef = window.fb.ref(window.db, `organizations/${sess.orgId}`);
-                window.fb.get(dbRef).then(snap => {
-                    if(snap.exists()) {
-                        const orgData = snap.val();
-                        if(orgData.incidents) setIncidentsList(Object.entries(orgData.incidents).map(([k,v]) => ({firebaseKey:k, ...v})));
-                        if(orgData.sites) {
-                            const allSites = Object.values(orgData.sites);
-                            if (sess.role === 'Owner') setSites(allSites);
-                            else {
-                                const accessible = sess.accessibleSites || (sess.assignedSite ? [sess.assignedSite] : []);
-                                setSites(allSites.filter(s => accessible.includes(s.code)));
-                            }
-                        }
-                        if(orgData.users) setUsers(Object.entries(orgData.users).map(([k,v]) => ({id:k, ...v})).filter(u => u.status === 'Active'));
-                    }
-                });
+                window.fb.get(dbRef).then(snap => { if(snap.exists()) { const orgData = snap.val(); if(orgData.incidents) setIncidentsList(Object.entries(orgData.incidents).map(([k,v]) => ({firebaseKey:k, ...v}))); if(orgData.sites) { const allSites = Object.values(orgData.sites); if (sess.role === 'Owner') setSites(allSites); else { const accessible = sess.accessibleSites || (sess.assignedSite ? [sess.assignedSite] : []); setSites(allSites.filter(s => accessible.includes(s.code))); } } if(orgData.users) setUsers(Object.entries(orgData.users).map(([k,v]) => ({id:k, ...v})).filter(u => u.status === 'Active')); } });
             }, []);
 
-            useEffect(() => {
-                if(session && !data.firebaseKey) {
-                    const sId = data.siteId ? data.siteId : 'GEN';
-                    const typeCode = getTypeCode(data.type);
-                    const newId = `${session.orgId}-${sId}-${typeCode}-${seq}`;
-                    setData(prev => ({ ...prev, id: newId }));
-                }
-            }, [data.siteId, data.type, session, seq]);
+            useEffect(() => { if(session && !data.firebaseKey) { const sId = data.siteId ? data.siteId : 'GEN'; const typeCode = getTypeCode(data.type); const newId = `${session.orgId}-${sId}-${typeCode}-${seq}`; setData(prev => ({ ...prev, id: newId })); } }, [data.siteId, data.type, session, seq]);
 
-            const applySmartSuggestions = () => {
-                const suggestion = SMART_DB[data.smartType];
-                if(suggestion) {
-                    setData(prev => ({
-                        ...prev,
-                        investigation: {
-                            ...prev.investigation,
-                            fishbone: suggestion.fishbone,
-                            rootCause: suggestion.root_causes.join('. ')
-                        }
-                    }));
-                    alert("Analysis Auto-Filled from Knowledge Base!");
-                } else {
-                    alert("No smart data available for this category yet.");
-                }
-            };
-
-            const getSmartCAPA = () => {
-                const suggestion = SMART_DB[data.smartType];
-                if(suggestion) return suggestion.capa;
-                return [];
-            };
-
-            const addSuggestedCAPA = (actionText) => {
-                setData({
-                    ...data, 
-                    capa: [...data.capa, {act: actionText, own: '', due: '', status: 'Open'}]
-                });
-            };
-
-            const saveData = async () => {
-                if(!data.siteId) { alert("Please select a Site"); return; }
-                if(data.firebaseKey) {
-                    await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/incidents/${data.firebaseKey}`), data);
-                } else {
-                    await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/incidents`), data);
-                }
-                alert("Saved!");
-                window.location.reload();
-            };
-
-            const handleDelete = async (incident) => {
-                if(confirm("Delete this record?")) {
-                    await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/incidents/${incident.firebaseKey}`));
-                    alert("Deleted.");
-                    window.location.reload();
-                }
-            };
-
-            const handleEdit = (incident) => {
-                let updatedWhys = incident.investigation?.fiveWhys || [{ id: 1, name: 'Analysis Path 1', whys: ['','','','',''] }];
-                if (Array.isArray(updatedWhys) && typeof updatedWhys[0] === 'string') {
-                    updatedWhys = [{ id: Date.now(), name: 'Legacy Analysis', whys: updatedWhys }];
-                }
-                setData({ ...incident, investigation: { ...incident.investigation, fiveWhys: updatedWhys } });
-                setView('form');
-                setStep(1);
-            };
-
-            const handleRepoPrint = (incident) => {
-                let updatedWhys = incident.investigation?.fiveWhys || [{ id: 1, name: 'Analysis Path 1', whys: ['','','','',''] }];
-                if (Array.isArray(updatedWhys) && typeof updatedWhys[0] === 'string') {
-                    updatedWhys = [{ id: Date.now(), name: 'Legacy Analysis', whys: updatedWhys }];
-                }
-                const formattedIncident = { ...incident, investigation: { ...incident.investigation, fiveWhys: updatedWhys } };
-                setPrintData(formattedIncident);
-                setTimeout(() => window.print(), 500); 
-            };
-
-            const handleFormPrint = () => {
-                setPrintData(data);
-                setTimeout(() => window.print(), 500);
-            };
-
-            const handleImageUpload = async (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const base64 = await fileToBase64(file);
-                    setData({ ...data, imageEvidence: base64 });
-                }
-            };
-
-            const openInvestigationMeeting = () => {
-                if(!data.siteId) { alert("Please select a Site first."); return; }
-                const agendaText = `Discussion on Incident ${data.id} (${data.severity}): ${data.description.substring(0, 100)}...`;
-                const params = new URLSearchParams({ site: data.siteId, interaction: 'Consultation', category: 'Incident Investigation', date: data.date, time: data.time, agenda: agendaText });
-                window.open(`consultation.html?${params.toString()}`, '_blank');
-            };
-
+            const applySmartSuggestions = () => { const suggestion = SMART_DB[data.smartType]; if(suggestion) { setData(prev => ({ ...prev, investigation: { ...prev.investigation, fishbone: suggestion.fishbone, rootCause: suggestion.root_causes.join('. ') } })); alert("Analysis Auto-Filled!"); } else { alert("No smart data available."); } };
+            const getSmartCAPA = () => { const suggestion = SMART_DB[data.smartType]; return suggestion ? suggestion.capa : []; };
+            const addSuggestedCAPA = (actionText) => { setData({ ...data, capa: [...data.capa, {act: actionText, own: '', due: '', status: 'Open'}] }); };
+            const saveData = async () => { if(!data.siteId) { alert("Please select a Site"); return; } if(data.firebaseKey) { await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/incidents/${data.firebaseKey}`), data); } else { await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/incidents`), data); } alert("Saved!"); window.location.reload(); };
+            const handleDelete = async (incident) => { if(confirm("Delete this record?")) { await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/incidents/${incident.firebaseKey}`)); alert("Deleted."); window.location.reload(); } };
+            const handleEdit = (incident) => { let updatedWhys = incident.investigation?.fiveWhys || [{ id: 1, name: 'Analysis Path 1', whys: ['','','','',''] }]; if (Array.isArray(updatedWhys) && typeof updatedWhys[0] === 'string') { updatedWhys = [{ id: Date.now(), name: 'Legacy Analysis', whys: updatedWhys }]; } setData({ ...incident, investigation: { ...incident.investigation, fiveWhys: updatedWhys } }); setView('form'); setStep(1); };
+            const handleRepoPrint = (incident) => { let updatedWhys = incident.investigation?.fiveWhys || [{ id: 1, name: 'Analysis Path 1', whys: ['','','','',''] }]; if (Array.isArray(updatedWhys) && typeof updatedWhys[0] === 'string') { updatedWhys = [{ id: Date.now(), name: 'Legacy Analysis', whys: updatedWhys }]; } const formattedIncident = { ...incident, investigation: { ...incident.investigation, fiveWhys: updatedWhys } }; setPrintData(formattedIncident); setTimeout(() => window.print(), 500); };
+            const handleFormPrint = () => { setPrintData(data); setTimeout(() => window.print(), 500); };
+            const handleImageUpload = async (e) => { const file = e.target.files[0]; if (file) { const base64 = await fileToBase64(file); setData({ ...data, imageEvidence: base64 }); } };
+            const openInvestigationMeeting = () => { if(!data.siteId) { alert("Please select a Site first."); return; } const agendaText = `Discussion on Incident ${data.id} (${data.severity}): ${data.description.substring(0, 100)}...`; const params = new URLSearchParams({ site: data.siteId, interaction: 'Consultation', category: 'Incident Investigation', date: data.date, time: data.time, agenda: agendaText }); window.open(`consultation.html?${params.toString()}`, '_blank'); };
             const addFiveWhyPath = () => { const newCount = data.investigation.fiveWhys.length + 1; setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: [...prev.investigation.fiveWhys, { id: Date.now(), name: `Analysis Path ${newCount}`, whys: ['','','','',''] }] } })); };
             const updateFiveWhy = (pIdx, wIdx, val) => { const paths = [...data.investigation.fiveWhys]; paths[pIdx].whys[wIdx] = val; setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } })); };
             const updatePathName = (pIdx, val) => { const paths = [...data.investigation.fiveWhys]; paths[pIdx].name = val; setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: paths } })); };
             const removeFiveWhyPath = (idx) => { setData(prev => ({ ...prev, investigation: { ...prev.investigation, fiveWhys: prev.investigation.fiveWhys.filter((_, i) => i !== idx) } })); };
-
-            const addCapa = () => {
-                const act = document.getElementById('act').value;
-                const own = document.getElementById('own').value;
-                const due = document.getElementById('due').value;
-                if(act && own) { 
-                    setData({...data, capa:[...data.capa, {act, own, due, status:'Open'}]}); 
-                    document.getElementById('act').value=''; 
-                    document.getElementById('own').value='';
-                    document.getElementById('due').value='';
-                }
-            };
-
-            const removeCapa = (idx) => {
-                const newCapa = data.capa.filter((_, i) => i !== idx);
-                setData({...data, capa: newCapa});
-            };
-
-            const canEditCapa = (row) => {
-                if (!permissions.viewOnly) return true;
-                if (permissions.canEditOwnedActions && row.own === session?.user) return true;
-                return false;
-            };
+            const addCapa = () => { const act = document.getElementById('act').value; const own = document.getElementById('own').value; const due = document.getElementById('due').value; if(act && own) { setData({...data, capa:[...data.capa, {act, own, due, status:'Open'}]}); document.getElementById('act').value=''; document.getElementById('own').value=''; document.getElementById('due').value=''; } };
+            const removeCapa = (idx) => { const newCapa = data.capa.filter((_, i) => i !== idx); setData({...data, capa: newCapa}); };
+            const canEditCapa = (row) => { if (!permissions.viewOnly) return true; if (permissions.canEditOwnedActions && row.own === session?.user) return true; return false; };
 
             if(!session) return null;
-
-            const STEPS = [ { id: 1, label: 'Initial' }, ...(data.severity !== 'Level D' ? [{ id: 2, label: 'Team & Consult' }] : []), { id: 3, label: 'Investigate' }, { id: 4, label: 'CAPA' }, { id: 5, label: 'Review' } ];
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden main-content">
                     <header className="h-16 border-b border-slate-800 flex items-center justify-between px-6 no-print bg-slate-900">
-                        <div className="flex items-center gap-4">
-                            <a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a>
-                            <h1 className="font-bold text-lg">Incident Module</h1>
-                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded border border-blue-500/30">{session.role}</span>
-                            {permissions.viewOnly && <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded border border-yellow-500/30">View Only</span>}
-                        </div>
-                        <div className="flex bg-slate-800 p-1 rounded-lg">
-                            <button onClick={() => setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view === 'form' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>New Report</button>
-                            <button onClick={() => setView('repo')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view === 'repo' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Repository</button>
-                        </div>
+                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Incident Module</h1><span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded border border-blue-500/30">{session.role}</span>{permissions.viewOnly && <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded border border-yellow-500/30">View Only</span>}</div>
+                        <div className="flex bg-slate-800 p-1 rounded-lg"><button onClick={() => setView('form')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view === 'form' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>New Report</button><button onClick={() => setView('repo')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase ${view === 'repo' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>Repository</button></div>
                     </header>
 
                     <div className="flex-1 overflow-y-auto p-6">
                         {view === 'repo' ? <IncidentRepository incidents={incidentsList} onEdit={handleEdit} onPrint={handleRepoPrint} onDelete={handleDelete} permissions={permissions} /> : (
                             <div className="max-w-5xl mx-auto">
-                                <div className="flex gap-2 mb-8 no-print tab-buttons form-view-tabs">
-                                    {STEPS.map((s, i) => (<button key={s.id} onClick={() => setStep(s.id)} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${step === s.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{i + 1}. {s.label}</button>))}
-                                </div>
-
+                                <div className="flex gap-2 mb-8 no-print tab-buttons form-view-tabs">{STEPS.map((s, i) => (<button key={s.id} onClick={() => setStep(s.id)} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${step === s.id ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{i + 1}. {s.label}</button>))}</div>
                                 {step === 1 && (
-                                    <div className="report-section-edit">
-                                            <h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-clipboard-list"></i> 1. Initial Report</h2>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><SiteSelect sites={sites} value={data.siteId} onChange={v => setData({...data, siteId: v})} disabled={!canEdit || !isGlobal} /></div>
-                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" value={data.date} onChange={e=>setData({...data, date:e.target.value})} disabled={!canEdit} /></div>
-                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" value={data.time} onChange={e=>setData({...data, time:e.target.value})} disabled={!canEdit} /></div>
-                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">ID</label><input value={data.id} className="font-mono bg-slate-800" disabled /></div>
-                                                
-                                                <div><label className="text-[10px] uppercase font-bold text-blue-400">Smart Category (Auto-Suggest)</label><select value={data.smartType} onChange={e=>setData({...data, smartType:e.target.value})} disabled={!canEdit} className="border-blue-500 bg-blue-900/10"><option>Fire</option><option>Chemical Spill</option><option>Work at Height</option><option>Electrical</option><option>Machinery</option></select></div>
-                                                
-                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select value={data.type} onChange={e=>setData({...data, type:e.target.value})} disabled={!canEdit}><option>Near Miss</option><option>Property Damage</option><option>First Aid</option><option>Lost Time Injury</option><option>Reportable Injury</option></select></div>
-                                                <div><label className="text-[10px] uppercase font-bold text-slate-500">Severity</label><select value={data.severity} onChange={e=>setData({...data, severity:e.target.value})} disabled={!canEdit}><option>Level A</option><option>Level B</option><option>Level C</option><option>Level D</option></select></div>
-                                            </div>
-                                            <div className="mb-4"><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={handleDescriptionChange} className="w-full mt-1" disabled={!canEdit}></textarea></div>
-                                            <div><label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Image Evidence</label>
-                                                {data.imageEvidence && <img src={data.imageEvidence} alt="Evidence" className="h-32 object-cover rounded mb-2 border border-slate-700" />}
-                                                <input type="file" onChange={handleImageUpload} disabled={!canEdit} className="text-xs" />
-                                            </div>
-                                    </div>
+                                    <div className="report-section-edit"><h2 className="section-heading text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 border-b border-blue-500/20 pb-4"><i className="fas fa-clipboard-list"></i> 1. Initial Report</h2><div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"><div><label className="text-[10px] uppercase font-bold text-slate-500">Site ID</label><SiteSelect sites={sites} value={data.siteId} onChange={v => setData({...data, siteId: v})} disabled={!canEdit || !isGlobal} /></div><div><label className="text-[10px] uppercase font-bold text-slate-500">Date</label><input type="date" value={data.date} onChange={e=>setData({...data, date:e.target.value})} disabled={!canEdit} /></div><div><label className="text-[10px] uppercase font-bold text-slate-500">Time</label><input type="time" value={data.time} onChange={e=>setData({...data, time:e.target.value})} disabled={!canEdit} /></div><div><label className="text-[10px] uppercase font-bold text-slate-500">ID</label><input value={data.id} className="font-mono bg-slate-800" disabled /></div><div><label className="text-[10px] uppercase font-bold text-blue-400">Smart Category (Auto-Suggest)</label><select value={data.smartType} onChange={e=>setData({...data, smartType:e.target.value})} disabled={!canEdit} className="border-blue-500 bg-blue-900/10">{SMART_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div><div><label className="text-[10px] uppercase font-bold text-slate-500">Type</label><select value={data.type} onChange={e=>setData({...data, type:e.target.value})} disabled={!canEdit}><option>Near Miss</option><option>Property Damage</option><option>First Aid</option><option>Lost Time Injury</option><option>Reportable Injury</option></select></div><div><label className="text-[10px] uppercase font-bold text-slate-500">Severity</label><select value={data.severity} onChange={e=>setData({...data, severity:e.target.value})} disabled={!canEdit}><option>Level A</option><option>Level B</option><option>Level C</option><option>Level D</option></select></div></div><div className="mb-4"><label className="text-[10px] uppercase font-bold text-slate-500">Description</label><textarea rows="4" value={data.description} onChange={handleDescriptionChange} className="w-full mt-1" disabled={!canEdit}></textarea></div><div><label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Image Evidence</label>{data.imageEvidence && <img src={data.imageEvidence} alt="Evidence" className="h-32 object-cover rounded mb-2 border border-slate-700" />}<input type="file" onChange={handleImageUpload} disabled={!canEdit} className="text-xs" /></div></div>
                                 )}
-
-                                {step === 2 && data.severity !== 'Level D' && (
-                                    <div className="report-section-edit">
-                                            <h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4"><i className="fas fa-users"></i> 2. Team & Consultation</h2>
-                                            <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center text-center space-y-6 no-print">
-                                                <div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-3xl text-teal-400"><i className="fas fa-comments"></i></div>
-                                                <div><h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3><p className="text-slate-400 text-sm max-w-lg mx-auto">Open Consultation module to record minutes for "Incident Investigation".</p></div>
-                                                {canEdit && <button onClick={openInvestigationMeeting} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition transform hover:-translate-y-1 flex items-center gap-3">Launch Meeting <i className="fas fa-external-link-alt"></i></button>}
-                                            </div>
-                                            <div className="mt-6">
-                                                <label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Consultation Key Outcomes & Team Inputs</label>
-                                                <textarea className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white h-32 focus:border-teal-500 outline-none resize-none" value={data.consultationSummary} onChange={e=>setData({...data, consultationSummary:e.target.value})} placeholder="Paste key points from the consultation meeting here for the report..." disabled={!canEdit}></textarea>
-                                            </div>
-                                    </div>
-                                )}
-
-                                {step === 3 && (
-                                    <div className="report-section-edit">
-                                            <div className="flex justify-between items-center mb-6 border-b border-purple-500/20 pb-4">
-                                                <h2 className="section-heading text-xl font-bold text-purple-400 flex items-center gap-3"><i className="fas fa-search"></i> 3. Root Cause Analysis</h2>
-                                                {canEdit && <button onClick={applySmartSuggestions} className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2"><i className="fas fa-magic"></i> Auto-Suggest Analysis</button>}
-                                            </div>
-                                            
-                                            <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
-                                                <div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500 text-black print:text-black">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} disabled={!canEdit} /></div>
-                                                <div className="border-t border-slate-700 pt-8 mt-8"><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500 text-black print:text-black">Fault Tree Analysis</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} disabled={!canEdit} /></ul></div></div>
-                                                <div className="border-t border-slate-700 pt-8 mt-8">
-                                                    <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white pl-2 border-l-4 border-purple-500 text-black print:text-black">5 Whys Analysis</h3>{canEdit && <button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Analysis Path</button>}</div>
-                                                    {data.investigation.fiveWhys.map((path, pIdx) => (
-                                                        <div key={path.id} className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative group">
-                                                            <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2"><input value={path.name || `Analysis Path ${pIdx+1}`} onChange={e => updatePathName(pIdx, e.target.value)} disabled={!canEdit} className="bg-transparent text-[10px] font-bold text-purple-300 uppercase tracking-wider outline-none border-b border-transparent focus:border-purple-500 w-64 transition-all" />{canEdit && data.investigation.fiveWhys.length > 1 && <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print hover:bg-red-900/20 px-2 py-1 rounded transition"><i className="fas fa-trash-alt mr-1"></i> Remove</button>}</div>
-                                                            {path.whys.map((w, i) => (<div key={i} className="flex gap-4 mb-3 items-center"><span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span><input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" value={w} onChange={e => updateFiveWhy(pIdx, i, e.target.value)} placeholder="Enter cause..." disabled={!canEdit} /></div>))}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div className="border-t border-slate-700 pt-8"><label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Final Root Cause</label><textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-4 rounded-xl text-white h-24 focus:ring-1 focus:ring-emerald-500 outline-none" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})} disabled={!canEdit}></textarea></div>
-                                            </div>
-                                    </div>
-                                )}
-
-                                {step === 4 && (
-                                    <div className="report-section-edit">
-                                            <h2 className="section-heading text-xl font-bold text-orange-400 mb-6 flex items-center gap-3 border-b border-orange-500/20 pb-4"><i className="fas fa-clipboard-check"></i> 4. CAPA (Action Plan)</h2>
-                                            
-                                            {/* SMART CAPA SUGGESTIONS */}
-                                            {canEdit && (
-                                                <div className="mb-6">
-                                                    <h4 className="text-xs font-bold text-blue-400 uppercase mb-2">Smart Suggestions (Click to Add)</h4>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {getSmartCAPA().map((sugg, i) => (
-                                                            <button key={i} onClick={()=>addSuggestedCAPA(sugg)} className="bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-300 text-xs px-3 py-2 rounded-lg border border-slate-700 transition flex items-center gap-2">
-                                                                <i className="fas fa-plus-circle"></i> {sugg}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
-                                                {canEdit && (
-                                                    <div className="grid grid-cols-4 gap-4 mb-6 no-print">
-                                                        <input id="act" placeholder="Action Description" className="col-span-2 bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
-                                                        <div><UserSelect users={siteUsers} value="" onChange={() => {}} disabled={false} placeholder="Action Owner..." /></div>
-                                                        <input id="due" type="date" className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/>
-                                                    </div>
-                                                )}
-                                                {canEdit && <button onClick={addCapa} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-bold w-full mb-8 no-print shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2"><i className="fas fa-plus"></i> Add Action Item</button>}
-                                                <div className="overflow-hidden rounded-xl border border-slate-700">
-                                                    <table className="w-full text-left text-sm text-slate-300">
-                                                        <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Action</th><th className="p-4">Owner</th><th className="p-4">Due Date</th><th className="p-4">Status</th><th className="p-4 w-10"></th></tr></thead>
-                                                        <tbody className="divide-y divide-slate-700">
-                                                            {data.capa.map((c,i)=>(
-                                                                <tr key={i}>
-                                                                    <td className="p-4">{c.act}</td>
-                                                                    <td className="p-4 text-blue-400">{c.own}</td>
-                                                                    <td className="p-4">{c.due}</td>
-                                                                    <td className="p-4">
-                                                                        {canEditCapa(c) ? (
-                                                                            <select value={c.status} onChange={e => { const newCapa = [...data.capa]; newCapa[i].status = e.target.value; setData({...data, capa: newCapa}); }} className="bg-slate-800 text-xs px-2 py-1 rounded">
-                                                                                <option>Open</option><option>In Progress</option><option>Closed</option>
-                                                                            </select>
-                                                                        ) : <span className="bg-orange-500/10 text-orange-400 px-2 py-1 rounded text-[10px]">{c.status}</span>}
-                                                                    </td>
-                                                                    <td className="p-4 text-center">{canEditCapa(c) && <button onClick={()=>removeCapa(i)} className="text-red-400 hover:text-white"><i className="fas fa-trash-alt"></i></button>}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                    </div>
-                                )}
-
-                                {step === 5 && (
-                                    <div className="report-section-edit">
-                                            <h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4"><i className="fas fa-check-double"></i> 5. Review</h2>
-                                            <div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">
-                                                <div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner">
-                                                    <div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required for {data.siteId}?</p></div>
-                                                    
-                                                    {/* FIXED BUTTON: Redirects to risk.html with site param in SAME TAB */}
-                                                    <a href={`risk.html?site=${data.siteId}`} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2">Open Risk Module <i className="fas fa-external-link-alt"></i></a>
-                                                
-                                                </div>
-                                                <div className="flex gap-4 items-start mb-10 p-6 border border-slate-700 rounded-xl bg-slate-900/30">
-                                                    <input type="checkbox" className="w-6 h-6 mt-0.5 accent-emerald-500 cursor-pointer" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} disabled={!canEdit} />
-                                                    <div><label className="text-base font-bold text-white block cursor-pointer" onClick={()=>canEdit && setData({...data, riskUpdated:!data.riskUpdated})}>I confirm that the Risk Assessment has been reviewed.</label></div>
-                                                </div>
-                                                <div className="flex justify-end no-print pt-6 border-t border-slate-700 action-buttons">
-                                                    <button onClick={handleFormPrint} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-6 py-4 rounded-xl mr-4"><i className="fas fa-print mr-2"></i>Print PDF</button>
-                                                    {canEdit && <button onClick={saveData} className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold px-10 py-4 rounded-xl shadow-lg transition-all transform hover:-translate-y-1 flex items-center gap-3"><i className="fas fa-save"></i> Submit Final Report</button>}
-                                                </div>
-                                            </div>
-                                    </div>
-                                )}
+                                {step === 2 && data.severity !== 'Level D' && (<div className="report-section-edit"><h2 className="section-heading text-xl font-bold text-teal-400 mb-6 flex items-center gap-3 border-b border-teal-500/20 pb-4"><i className="fas fa-users"></i> 2. Team & Consultation</h2><div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center text-center space-y-6 no-print"><div className="w-16 h-16 rounded-full bg-teal-500/10 flex items-center justify-center text-3xl text-teal-400"><i className="fas fa-comments"></i></div><div><h3 className="text-xl font-bold text-white mb-2">Record Investigation Meeting</h3><p className="text-slate-400 text-sm max-w-lg mx-auto">Open Consultation module to record minutes for "Incident Investigation".</p></div>{canEdit && <button onClick={openInvestigationMeeting} className="bg-teal-600 hover:bg-teal-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition transform hover:-translate-y-1 flex items-center gap-3">Launch Meeting <i className="fas fa-external-link-alt"></i></button>}</div><div className="mt-6"><label className="text-[11px] uppercase font-bold text-slate-500 block mb-2 tracking-wider">Consultation Key Outcomes & Team Inputs</label><textarea className="w-full bg-slate-900 border border-slate-700 p-4 rounded-xl text-white h-32 focus:border-teal-500 outline-none resize-none" value={data.consultationSummary} onChange={e=>setData({...data, consultationSummary:e.target.value})} placeholder="Paste key points from the consultation meeting here for the report..." disabled={!canEdit}></textarea></div></div>)}
+                                {step === 3 && (<div className="report-section-edit"><div className="flex justify-between items-center mb-6 border-b border-purple-500/20 pb-4"><h2 className="section-heading text-xl font-bold text-purple-400 flex items-center gap-3"><i className="fas fa-search"></i> 3. Root Cause Analysis</h2>{canEdit && <button onClick={applySmartSuggestions} className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2"><i className="fas fa-magic"></i> Auto-Suggest Analysis</button>}</div><div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl"><div><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-blue-500 text-black print:text-black">Fishbone Diagram</h3><Fishbone data={data.investigation.fishbone} onChange={fb => setData({...data, investigation:{...data.investigation, fishbone:fb}})} disabled={!canEdit} /></div><div className="border-t border-slate-700 pt-8 mt-8"><h3 className="font-bold text-white mb-2 pl-2 border-l-4 border-orange-500 text-black print:text-black">Fault Tree Analysis</h3><div className="tree overflow-x-auto pb-4"><ul><FaultTreeNode node={data.investigation.faultTree} onUpdate={rt => setData({...data, investigation:{...data.investigation, faultTree:rt}})} disabled={!canEdit} /></ul></div></div><div className="border-t border-slate-700 pt-8 mt-8"><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-white pl-2 border-l-4 border-purple-500 text-black print:text-black">5 Whys Analysis</h3>{canEdit && <button onClick={addFiveWhyPath} className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded-lg transition no-print">+ Add Analysis Path</button>}</div>{data.investigation.fiveWhys.map((path, pIdx) => (<div key={path.id} className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative group"><div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2"><input value={path.name || `Analysis Path ${pIdx+1}`} onChange={e => updatePathName(pIdx, e.target.value)} disabled={!canEdit} className="bg-transparent text-[10px] font-bold text-purple-300 uppercase tracking-wider outline-none border-b border-transparent focus:border-purple-500 w-64 transition-all" />{canEdit && data.investigation.fiveWhys.length > 1 && <button onClick={() => removeFiveWhyPath(pIdx)} className="text-red-400 hover:text-red-300 text-xs no-print hover:bg-red-900/20 px-2 py-1 rounded transition"><i className="fas fa-trash-alt mr-1"></i> Remove</button>}</div>{path.whys.map((w, i) => (<div key={i} className="flex gap-4 mb-3 items-center"><span className="text-slate-500 font-mono text-xs w-16 text-right font-bold">WHY {i+1}?</span><input className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-blue-500 outline-none shadow-sm" value={w} onChange={e => updateFiveWhy(pIdx, i, e.target.value)} placeholder="Enter cause..." disabled={!canEdit} /></div>))}</div>))}</div><div className="border-t border-slate-700 pt-8"><label className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 block">Final Root Cause</label><textarea className="w-full bg-emerald-900/10 border border-emerald-500/30 p-4 rounded-xl text-white h-24 focus:ring-1 focus:ring-emerald-500 outline-none" value={data.investigation.rootCause} onChange={e=>setData({...data, investigation:{...data.investigation, rootCause:e.target.value}})} disabled={!canEdit}></textarea></div></div></div>)}
+                                {step === 4 && (<div className="report-section-edit"><h2 className="section-heading text-xl font-bold text-orange-400 mb-6 flex items-center gap-3 border-b border-orange-500/20 pb-4"><i className="fas fa-clipboard-check"></i> 4. CAPA (Action Plan)</h2>{canEdit && (<div className="mb-6"><h4 className="text-xs font-bold text-blue-400 uppercase mb-2">Smart Suggestions (Click to Add)</h4><div className="flex flex-wrap gap-2">{getSmartCAPA().map((sugg, i) => (<button key={i} onClick={()=>addSuggestedCAPA(sugg)} className="bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-300 text-xs px-3 py-2 rounded-lg border border-slate-700 transition flex items-center gap-2"><i className="fas fa-plus-circle"></i> {sugg}</button>))}</div></div>)}<div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl">{canEdit && (<div className="grid grid-cols-4 gap-4 mb-6 no-print"><input id="act" placeholder="Action Description" className="col-span-2 bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/><div><UserSelect users={siteUsers} value="" onChange={() => {}} disabled={false} placeholder="Action Owner..." /></div><input id="due" type="date" className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none"/></div>)}{canEdit && <button onClick={addCapa} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-bold w-full mb-8 no-print shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2"><i className="fas fa-plus"></i> Add Action Item</button>}<div className="overflow-hidden rounded-xl border border-slate-700"><table className="w-full text-left text-sm text-slate-300"><thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4">Action</th><th className="p-4">Owner</th><th className="p-4">Due Date</th><th className="p-4">Status</th><th className="p-4 w-10"></th></tr></thead><tbody className="divide-y divide-slate-700">{data.capa.map((c,i)=>(<tr key={i}><td className="p-4">{c.act}</td><td className="p-4 text-blue-400">{c.own}</td><td className="p-4">{c.due}</td><td className="p-4">{canEditCapa(c) ? (<select value={c.status} onChange={e => { const newCapa = [...data.capa]; newCapa[i].status = e.target.value; setData({...data, capa: newCapa}); }} className="bg-slate-800 text-xs px-2 py-1 rounded"><option>Open</option><option>In Progress</option><option>Closed</option></select>) : <span className="bg-orange-500/10 text-orange-400 px-2 py-1 rounded text-[10px]">{c.status}</span>}</td><td className="p-4 text-center">{canEditCapa(c) && <button onClick={()=>removeCapa(i)} className="text-red-400 hover:text-white"><i className="fas fa-trash-alt"></i></button>}</td></tr>))}</tbody></table></div></div></div>)}
+                                {step === 5 && (<div className="report-section-edit"><h2 className="section-heading text-xl font-bold text-emerald-400 mb-6 flex items-center gap-3 border-b border-emerald-500/20 pb-4"><i className="fas fa-check-double"></i> 5. Review</h2><div className="bg-slate-800/50 p-8 rounded-2xl border border-slate-700 shadow-xl"><div className="flex justify-between items-center bg-slate-900 p-6 rounded-xl border border-slate-700 mb-8 no-print shadow-inner"><div><h4 className="font-bold text-white text-lg">Update Risk Assessment</h4><p className="text-sm text-slate-400 mt-1">HIRA Update Required for {data.siteId}?</p></div><a href={`risk.html?site=${data.siteId}`} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2">Open Risk Module <i className="fas fa-external-link-alt"></i></a></div><div className="flex gap-4 items-start mb-10 p-6 border border-slate-700 rounded-xl bg-slate-900/30"><input type="checkbox" className="w-6 h-6 mt-0.5 accent-emerald-500 cursor-pointer" checked={data.riskUpdated} onChange={e=>setData({...data, riskUpdated:e.target.checked})} disabled={!canEdit} /><div><label className="text-base font-bold text-white block cursor-pointer" onClick={()=>canEdit && setData({...data, riskUpdated:!data.riskUpdated})}>I confirm that the Risk Assessment has been reviewed.</label></div></div><div className="flex justify-end no-print pt-6 border-t border-slate-700 action-buttons"><button onClick={handleFormPrint} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-6 py-4 rounded-xl mr-4"><i className="fas fa-print mr-2"></i>Print PDF</button>{canEdit && <button onClick={saveData} className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold px-10 py-4 rounded-xl shadow-lg transition-all transform hover:-translate-y-1 flex items-center gap-3"><i className="fas fa-save"></i> Submit Final Report</button>}</div></div></div>)}
                             </div>
                         )}
                     </div>
 
-                    {/* --- DEDICATED PRINT OVERLAY CONTAINER --- */}
-                    {printData && (
-                        <div className="print-overlay">
-                            <div className="pdf-header">
-                                <div><h1 className="text-2xl font-bold uppercase">Incident Report</h1><p>Site: {printData.siteId} | Type: {printData.type}</p></div>
-                                <div className="text-right"><p className="font-mono text-xl font-bold">{printData.id}</p><p>Date: {printData.date}</p></div>
-                            </div>
-
-                            <div className="report-section">
-                                <h2 className="section-heading">1. Initial Report</h2>
-                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <div><strong>Date:</strong> {printData.date}</div>
-                                    <div><strong>Time:</strong> {printData.time}</div>
-                                    <div><strong>Severity:</strong> {printData.severity}</div>
-                                </div>
-                                <div className="mb-4"><strong>Description:</strong><br/>{printData.description}</div>
-                                {printData.imageEvidence && (
-                                    <div><strong>Evidence:</strong><br/><img src={printData.imageEvidence} className="incident-image" alt="Evidence" /></div>
-                                )}
-                            </div>
-
-                            {printData.severity !== 'Level D' && (
-                                <div className="report-section">
-                                    <h2 className="section-heading">2. Consultation</h2>
-                                    <div>{printData.consultationSummary || 'No consultation recorded.'}</div>
-                                </div>
-                            )}
-
-                            <div className="report-section">
-                                <h2 className="section-heading">3. Root Cause Analysis</h2>
-                                <div className="mb-6">
-                                    <strong>Fishbone Diagram:</strong>
-                                    <div style={{transform:'scale(0.8)', transformOrigin:'top left'}}>
-                                        <Fishbone data={printData.investigation.fishbone} onChange={()=>{}} disabled={true} />
-                                    </div>
-                                </div>
-                                <div className="mb-6">
-                                    <strong>Fault Tree Analysis:</strong>
-                                    <div style={{transform:'scale(0.8)', transformOrigin:'top left'}} className="tree">
-                                        <ul><FaultTreeNode node={printData.investigation.faultTree} onUpdate={()=>{}} disabled={true} /></ul>
-                                    </div>
-                                </div>
-                                <div className="mb-4">
-                                    <strong>5 Whys:</strong>
-                                    {printData.investigation.fiveWhys.map((p,i) => (
-                                        <div key={i} style={{marginBottom:'10px', fontSize:'10pt'}}>
-                                            <em>{p.name}:</em> {p.whys.filter(w=>w).join(' -> ')}
-                                        </div>
-                                    ))}
-                                </div>
-                                <div><strong>Final Root Cause:</strong> {printData.investigation.rootCause}</div>
-                            </div>
-
-                            <div className="report-section">
-                                <h2 className="section-heading">4. CAPA Plan</h2>
-                                <table className="w-full border border-black">
-                                    <thead><tr className="bg-gray-200">
-                                        <th className="border border-black p-1">Action</th>
-                                        <th className="border border-black p-1">Owner</th>
-                                        <th className="border border-black p-1">Due Date</th>
-                                        <th className="border border-black p-1">Status</th>
-                                    </tr></thead>
-                                    <tbody>
-                                        {printData.capa.map((c, i) => (
-                                            <tr key={i}>
-                                                <td className="border border-black p-1">{c.act}</td>
-                                                <td className="border border-black p-1">{c.own}</td>
-                                                <td className="border border-black p-1">{c.due}</td>
-                                                <td className="border border-black p-1">{c.status}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div className="report-section">
-                                <h2 className="section-heading">5. Review & Signoff</h2>
-                                <div className="mb-4">
-                                    <strong>Risk Assessment Updated:</strong> {printData.riskUpdated ? 'Yes' : 'No'}
-                                </div>
-                                <div className="flex justify-between mt-10">
-                                    <div className="border-t border-black w-1/3 pt-2 text-center">Safety Officer Signature</div>
-                                    <div className="border-t border-black w-1/3 pt-2 text-center">Site Manager Signature</div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
+                    {printData && (<div className="print-overlay"><div className="pdf-header"><div><h1 className="text-2xl font-bold uppercase">Incident Report</h1><p>Site: {printData.siteId} | Type: {printData.type}</p></div><div className="text-right"><p className="font-mono text-xl font-bold">{printData.id}</p><p>Date: {printData.date}</p></div></div><div className="report-section"><h2 className="section-heading">1. Initial Report</h2><div className="grid grid-cols-2 gap-4 mb-4"><div><strong>Date:</strong> {printData.date}</div><div><strong>Time:</strong> {printData.time}</div><div><strong>Severity:</strong> {printData.severity}</div></div><div className="mb-4"><strong>Description:</strong><br/>{printData.description}</div>{printData.imageEvidence && (<div><strong>Evidence:</strong><br/><img src={printData.imageEvidence} className="incident-image" alt="Evidence" /></div>)}</div>{printData.severity !== 'Level D' && (<div className="report-section"><h2 className="section-heading">2. Consultation</h2><div>{printData.consultationSummary || 'No consultation recorded.'}</div></div>)}<div className="report-section"><h2 className="section-heading">3. Root Cause Analysis</h2><div className="mb-6"><strong>Fishbone Diagram:</strong><div style={{transform:'scale(0.8)', transformOrigin:'top left'}}><Fishbone data={printData.investigation.fishbone} onChange={()=>{}} disabled={true} /></div></div><div className="mb-6"><strong>Fault Tree Analysis:</strong><div style={{transform:'scale(0.8)', transformOrigin:'top left'}} className="tree"><ul><FaultTreeNode node={printData.investigation.faultTree} onUpdate={()=>{}} disabled={true} /></ul></div></div><div className="mb-4"><strong>5 Whys:</strong>{printData.investigation.fiveWhys.map((p,i) => (<div key={i} style={{marginBottom:'10px', fontSize:'10pt'}}><em>{p.name}:</em> {p.whys.filter(w=>w).join(' -> ')}</div>))}</div><div><strong>Final Root Cause:</strong> {printData.investigation.rootCause}</div></div><div className="report-section"><h2 className="section-heading">4. CAPA Plan</h2><table className="w-full border border-black"><thead><tr className="bg-gray-200"><th className="border border-black p-1">Action</th><th className="border border-black p-1">Owner</th><th className="border border-black p-1">Due Date</th><th className="border border-black p-1">Status</th></tr></thead><tbody>{printData.capa.map((c, i) => (<tr key={i}><td className="border border-black p-1">{c.act}</td><td className="border border-black p-1">{c.own}</td><td className="border border-black p-1">{c.due}</td><td className="border border-black p-1">{c.status}</td></tr>))}</tbody></table></div><div className="report-section"><h2 className="section-heading">5. Review & Signoff</h2><div className="mb-4"><strong>Risk Assessment Updated:</strong> {printData.riskUpdated ? 'Yes' : 'No'}</div><div className="flex justify-between mt-10"><div className="border-t border-black w-1/3 pt-2 text-center">Safety Officer Signature</div><div className="border-t border-black w-1/3 pt-2 text-center">Site Manager Signature</div></div></div></div>)}
                 </div>
             );
         };
