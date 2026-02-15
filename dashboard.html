@@ -30,6 +30,10 @@
         .kpi-card:hover { transform: translateY(-5px); }
         input { background: #0f172a; border: 1px solid #334155; color: white; padding: 8px; border-radius: 6px; width: 100%; outline: none; }
         input:focus { border-color: #3b82f6; }
+        /* Custom Scrollbar for the main area */
+        .custom-scroll::-webkit-scrollbar { width: 8px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #0f172a; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -67,6 +71,11 @@
             const [incidents, setIncidents] = useState([]);
             const [manHours, setManHours] = useState([]);
             
+            // --- DATE FILTER STATE ---
+            // Default to current year: Jan 1st to Today
+            const [filterStart, setFilterStart] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
+            const [filterEnd, setFilterEnd] = useState(new Date().toISOString().split('T')[0]);
+
             // Man Hour Logging Form
             const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
             const [permHours, setPermHours] = useState(0);
@@ -90,24 +99,35 @@
                 fetchData();
             }, []);
 
-            // --- KPI CALCULATIONS ---
+            // --- FILTERING DATA BASED ON DATE RANGE ---
+            const filteredIncidents = useMemo(() => {
+                if (!filterStart || !filterEnd) return incidents;
+                return incidents.filter(i => i.date >= filterStart && i.date <= filterEnd);
+            }, [incidents, filterStart, filterEnd]);
+
+            const filteredManHours = useMemo(() => {
+                if (!filterStart || !filterEnd) return manHours;
+                return manHours.filter(m => m.date >= filterStart && m.date <= filterEnd);
+            }, [manHours, filterStart, filterEnd]);
+
+            // --- KPI CALCULATIONS (Using Filtered Data) ---
             const stats = useMemo(() => {
-                const totalManHours = manHours.reduce((acc, curr) => acc + parseFloat(curr.perm || 0) + parseFloat(curr.cont || 0), 0) || 1; // Avoid divide by zero
+                const totalManHours = filteredManHours.reduce((acc, curr) => acc + parseFloat(curr.perm || 0) + parseFloat(curr.cont || 0), 0) || 1; // Avoid divide by zero
                 
                 // Incident Counts
-                const nearMiss = incidents.filter(i => i.type === 'Near Miss').length;
-                const firstAid = incidents.filter(i => i.type === 'First Aid injury').length;
-                const lti = incidents.filter(i => i.type === 'Lost Time injury').length;
-                const recordable = incidents.filter(i => ['Lost Time injury', 'Reportable Injury', 'Medical Treatment'].includes(i.type)).length;
+                const nearMiss = filteredIncidents.filter(i => i.type === 'Near Miss').length;
+                const firstAid = filteredIncidents.filter(i => i.type === 'First Aid injury').length;
+                const lti = filteredIncidents.filter(i => i.type === 'Lost Time injury').length;
+                const recordable = filteredIncidents.filter(i => ['Lost Time injury', 'Reportable Injury', 'Medical Treatment'].includes(i.type)).length;
 
                 // Rates (Per 200,000 Hours)
                 // Formula: (Count * 200,000) / Total Man Hours
                 const calcRate = (count) => ((count * 200000) / totalManHours).toFixed(2);
 
-                // CAPA Closure
+                // CAPA Closure (Based on filtered incidents or global? Usually filtered incidents)
                 let totalActions = 0;
                 let closedActions = 0;
-                incidents.forEach(inc => {
+                filteredIncidents.forEach(inc => {
                     if(inc.capa) {
                         inc.capa.forEach(c => {
                             totalActions++;
@@ -117,15 +137,23 @@
                 });
                 const closureRate = totalActions === 0 ? 100 : Math.round((closedActions / totalActions) * 100);
 
+                // Man Hour Splits
+                const totalPerm = filteredManHours.reduce((acc, curr) => acc + parseFloat(curr.perm || 0), 0);
+                const totalCont = filteredManHours.reduce((acc, curr) => acc + parseFloat(curr.cont || 0), 0);
+                const permPercent = totalManHours > 1 ? Math.round((totalPerm / totalManHours) * 100) : 0;
+                const contPercent = totalManHours > 1 ? Math.round((totalCont / totalManHours) * 100) : 0;
+
                 return {
                     nmr: calcRate(nearMiss),
                     fair: calcRate(firstAid),
                     ltir: calcRate(lti),
                     rir: calcRate(recordable),
                     capa: closureRate,
-                    totalHours: totalManHours
+                    totalHours: totalManHours,
+                    permPercent,
+                    contPercent
                 };
-            }, [incidents, manHours]);
+            }, [filteredIncidents, filteredManHours]);
 
             const handleLogHours = async () => {
                 if(permHours < 0 || contHours < 0) return alert("Hours cannot be negative");
@@ -148,33 +176,33 @@
                 setContHours(0);
             };
 
-            // Initialize Charts
+            // --- CHART LOGIC (Updates with Filter) ---
             useEffect(() => {
                 if(!loading) {
-                    // Prepare Chart Data
-                    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                    const currentYear = new Date().getFullYear();
-                    
-                    // Incident Trend Data
-                    const incidentCounts = new Array(12).fill(0);
-                    incidents.forEach(inc => {
-                        const d = new Date(inc.date);
-                        if(d.getFullYear() === currentYear) incidentCounts[d.getMonth()]++;
-                    });
-
-                    // Render Chart
                     const ctx = document.getElementById('trendChart');
                     if(ctx) {
-                        // Destroy existing if any (simple check)
                         if(window.myChart) window.myChart.destroy();
                         
+                        // Prepare Monthly Buckets for the selected Range (Simplification: Buckets by Month Name)
+                        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                        const monthlyCounts = new Array(12).fill(0);
+                        
+                        filteredIncidents.forEach(inc => {
+                            const d = new Date(inc.date);
+                            // Only plot if it falls within selected range (FilteredIncidents handles this, but mapping to Jan-Dec assumes year overlap)
+                            // For simplicity in this view, we aggregate by month regardless of year to show seasonality, 
+                            // or ideally, we just plot the months in the range. 
+                            // Let's stick to standard 12-month bucket for simplicity given it's a dashboard summary.
+                            monthlyCounts[d.getMonth()]++;
+                        });
+
                         window.myChart = new Chart(ctx, {
                             type: 'line',
                             data: {
                                 labels: months,
                                 datasets: [{
-                                    label: 'Total Incidents (2024)',
-                                    data: incidentCounts,
+                                    label: 'Incidents in Period',
+                                    data: monthlyCounts,
                                     borderColor: '#3b82f6',
                                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
                                     fill: true,
@@ -193,7 +221,7 @@
                         });
                     }
                 }
-            }, [loading, incidents]);
+            }, [loading, filteredIncidents]); // Re-render chart when filtered incidents change
 
             if(loading) return <div className="flex h-screen items-center justify-center text-white text-xl font-bold animate-pulse">Loading Dashboard...</div>;
 
@@ -227,8 +255,63 @@
                         <div className="flex-1 overflow-y-auto p-8 custom-scroll">
                             <div className="max-w-7xl mx-auto">
                                 
+                                {/* --- DATE FILTER BAR --- */}
+                                <div className="glass-panel p-4 rounded-xl mb-8 flex justify-between items-center border border-slate-700">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400"><i className="fas fa-calendar-alt"></i></div>
+                                        <div><h3 className="font-bold text-white text-sm">Date Range Filter</h3><p className="text-[10px] text-slate-400">Adjust range to update KPIs</p></div>
+                                    </div>
+                                    <div className="flex gap-4 items-center">
+                                        <div className="flex flex-col"><label className="text-[10px] text-slate-500 font-bold uppercase">From</label><input type="date" value={filterStart} onChange={e=>setFilterStart(e.target.value)} className="bg-slate-900 border-slate-700 py-1" /></div>
+                                        <div className="flex flex-col"><label className="text-[10px] text-slate-500 font-bold uppercase">To</label><input type="date" value={filterEnd} onChange={e=>setFilterEnd(e.target.value)} className="bg-slate-900 border-slate-700 py-1" /></div>
+                                    </div>
+                                </div>
+
+                                {/* KPI Grid */}
+                                <h3 className="text-xl font-bold text-white mb-6">Safety Performance Indicators</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
+                                    <KPICard title="NMR (Near Miss Rate)" value={stats.nmr} subtext="Per 200k Hours" color="border-yellow-500" icon={<i className="fas fa-exclamation"></i>} />
+                                    <KPICard title="FAIR (First Aid Rate)" value={stats.fair} subtext="Per 200k Hours" color="border-blue-500" icon={<i className="fas fa-user-nurse"></i>} />
+                                    <KPICard title="LTIR (Lost Time Rate)" value={stats.ltir} subtext="Per 200k Hours" color="border-red-500" icon={<i className="fas fa-crutch"></i>} />
+                                    <KPICard title="RIR (Recordable Rate)" value={stats.rir} subtext="OSHA Recordables" color="border-orange-500" icon={<i className="fas fa-file-medical"></i>} />
+                                    <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 relative overflow-hidden">
+                                        <div className="flex justify-between items-start z-10 relative">
+                                            <div>
+                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">CAPA Closure</p>
+                                                <h3 className="text-3xl font-bold text-emerald-400">{stats.capa}%</h3>
+                                                <p className="text-[10px] text-slate-500 mt-2">Action Effectiveness</p>
+                                            </div>
+                                            <div className="text-2xl text-emerald-500/20"><i className="fas fa-check-circle"></i></div>
+                                        </div>
+                                        <div className="absolute bottom-0 left-0 h-1 bg-emerald-500/30 w-full"><div className="h-full bg-emerald-500" style={{width: `${stats.capa}%`}}></div></div>
+                                    </div>
+                                </div>
+
+                                {/* Charts & Man Hours Row */}
+                                <div className="grid grid-cols-3 gap-6 mb-8">
+                                    <div className="col-span-2 glass-panel p-6 rounded-xl border border-slate-700">
+                                        <h4 className="text-sm font-bold text-slate-400 uppercase mb-4">Incident Trend (Selected Period)</h4>
+                                        <div className="h-64">
+                                            <canvas id="trendChart"></canvas>
+                                        </div>
+                                    </div>
+                                    <div className="glass-panel p-6 rounded-xl border border-slate-700">
+                                        <h4 className="text-sm font-bold text-slate-400 uppercase mb-4">Total Man-Hours (Range)</h4>
+                                        <div className="flex items-center justify-center h-48 flex-col">
+                                            <span className="text-5xl font-bold text-white mb-2">{Math.round(stats.totalHours).toLocaleString()}</span>
+                                            <span className="text-sm text-slate-500 bg-slate-900 px-3 py-1 rounded-full">Cumulative Hours</span>
+                                        </div>
+                                        <div className="border-t border-slate-700 pt-4 mt-2">
+                                            <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Permanent Staff</span><span>{stats.permPercent}%</span></div>
+                                            <div className="w-full bg-slate-800 rounded-full h-1.5 mb-3"><div className="bg-blue-500 h-1.5 rounded-full" style={{width: `${stats.permPercent}%`}}></div></div>
+                                            <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Contractors</span><span>{stats.contPercent}%</span></div>
+                                            <div className="w-full bg-slate-800 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full" style={{width: `${stats.contPercent}%`}}></div></div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* Man Hour Logger */}
-                                <div className="glass-panel p-6 rounded-xl mb-8 flex items-end gap-4 border-l-4 border-purple-500">
+                                <div className="glass-panel p-6 rounded-xl flex items-end gap-4 border-l-4 border-purple-500">
                                     <div className="flex-1">
                                         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><i className="fas fa-clock text-purple-400"></i> Daily Man-Hour Log</h3>
                                         <div className="flex gap-4">
@@ -247,52 +330,6 @@
                                         </div>
                                     </div>
                                     <button onClick={handleLogHours} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3 rounded-lg h-[42px] mb-px shadow-lg transition transform active:scale-95">Log Hours</button>
-                                </div>
-
-                                {/* KPI Grid */}
-                                <h3 className="text-xl font-bold text-white mb-6">Safety Performance Indicators (YTD)</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-                                    <KPICard title="NMR (Near Miss Rate)" value={stats.nmr} subtext="Per 200k Hours" color="border-yellow-500" icon={<i className="fas fa-exclamation"></i>} />
-                                    <KPICard title="FAIR (First Aid Rate)" value={stats.fair} subtext="Minor Injuries" color="border-blue-500" icon={<i className="fas fa-user-nurse"></i>} />
-                                    <KPICard title="LTIR (Lost Time Rate)" value={stats.ltir} subtext="Lost Time Injuries" color="border-red-500" icon={<i className="fas fa-crutch"></i>} />
-                                    <KPICard title="RIR (Recordable Rate)" value={stats.rir} subtext="OSHA Recordables" color="border-orange-500" icon={<i className="fas fa-file-medical"></i>} />
-                                    <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 relative overflow-hidden">
-                                        <div className="flex justify-between items-start z-10 relative">
-                                            <div>
-                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">CAPA Closure</p>
-                                                <h3 className="text-3xl font-bold text-emerald-400">{stats.capa}%</h3>
-                                                <p className="text-[10px] text-slate-500 mt-2">Action Effectiveness</p>
-                                            </div>
-                                            <div className="text-2xl text-emerald-500/20"><i className="fas fa-check-circle"></i></div>
-                                        </div>
-                                        {/* Progress Bar Background */}
-                                        <div className="absolute bottom-0 left-0 h-1 bg-emerald-500/30 w-full">
-                                            <div className="h-full bg-emerald-500" style={{width: `${stats.capa}%`}}></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Charts & Stats Row */}
-                                <div className="grid grid-cols-3 gap-6">
-                                    <div className="col-span-2 glass-panel p-6 rounded-xl border border-slate-700">
-                                        <h4 className="text-sm font-bold text-slate-400 uppercase mb-4">Incident Trend (2024)</h4>
-                                        <div className="h-64">
-                                            <canvas id="trendChart"></canvas>
-                                        </div>
-                                    </div>
-                                    <div className="glass-panel p-6 rounded-xl border border-slate-700">
-                                        <h4 className="text-sm font-bold text-slate-400 uppercase mb-4">Total Man-Hours Worked</h4>
-                                        <div className="flex items-center justify-center h-48 flex-col">
-                                            <span className="text-5xl font-bold text-white mb-2">{Math.round(stats.totalHours).toLocaleString()}</span>
-                                            <span className="text-sm text-slate-500 bg-slate-900 px-3 py-1 rounded-full">Safe Hours Cumulative</span>
-                                        </div>
-                                        <div className="border-t border-slate-700 pt-4 mt-2">
-                                            <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Permanent Staff</span><span>65%</span></div>
-                                            <div className="w-full bg-slate-800 rounded-full h-1.5 mb-3"><div className="bg-blue-500 h-1.5 rounded-full" style={{width: '65%'}}></div></div>
-                                            <div className="flex justify-between text-xs text-slate-400 mb-1"><span>Contractors</span><span>35%</span></div>
-                                            <div className="w-full bg-slate-800 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full" style={{width: '35%'}}></div></div>
-                                        </div>
-                                    </div>
                                 </div>
 
                             </div>
