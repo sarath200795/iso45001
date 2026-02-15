@@ -31,10 +31,9 @@
         .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        .checkbox-wrapper input:checked + div { background-color: #3b82f6; border-color: #3b82f6; }
         .loader { border: 2px solid #f3f3f3; border-top: 2px solid #eab308; border-radius: 50%; width: 12px; height: 12px; animation: spin 1s linear infinite; display: inline-block; margin-right: 5px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* Checkbox Style */
-        .checkbox-wrapper input:checked + div { background-color: #3b82f6; border-color: #3b82f6; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -60,14 +59,23 @@
             reader.onerror = error => reject(error);
         });
 
+        // ROLE REQUIREMENTS MAPPING (Example Configuration)
+        const ROLE_REQUIREMENTS = {
+            "Office Staff": ["Fire Safety", "First Aid"],
+            "Driver": ["Fire Safety", "First Aid", "Forklift Safety", "Chemical Handling"],
+            "Manager": ["Fire Safety", "First Aid", "LOTO", "Work at Height", "Chemical Handling"]
+            // If role not listed, assume ALL topics required
+        };
+
         const TrainingApp = () => {
             const [session, setSession] = useState(null);
-            const [view, setView] = useState('matrix'); 
+            const [view, setView] = useState('matrix'); // matrix | bulk-log | history | calendar
             const [users, setUsers] = useState([]);
             const [records, setRecords] = useState([]);
             const [topics, setTopics] = useState(["LOTO", "Fire Safety", "First Aid", "Work at Height", "Chemical Handling", "Forklift Safety"]);
             
-            // Filter State
+            // Search & Filter
+            const [searchTerm, setSearchTerm] = useState('');
             const [visibleTopics, setVisibleTopics] = useState([]); 
             const [isFilterOpen, setIsFilterOpen] = useState(false);
             const filterRef = useRef(null);
@@ -77,12 +85,7 @@
             const [editingRecord, setEditingRecord] = useState(null);
 
             const [bulkForm, setBulkForm] = useState({
-                topic: '',
-                date: new Date().toISOString().split('T')[0],
-                trainer: '',
-                evidence: null,
-                selectedUsers: [], 
-                manualAttendees: [] 
+                topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [] 
             });
             const [newExternalName, setNewExternalName] = useState('');
 
@@ -104,7 +107,7 @@
 
                         if(val.trainingTopics) {
                             setTopics(val.trainingTopics);
-                            setVisibleTopics(val.trainingTopics); 
+                            setVisibleTopics(val.trainingTopics);
                         } else {
                             setVisibleTopics(["LOTO", "Fire Safety", "First Aid", "Work at Height", "Chemical Handling", "Forklift Safety"]);
                         }
@@ -122,29 +125,15 @@
                 const sess = JSON.parse(s);
                 setSession(sess);
                 loadData(sess);
-
                 document.addEventListener("mousedown", handleClickOutside);
                 return () => document.removeEventListener("mousedown", handleClickOutside);
             }, []);
 
             const handleClickOutside = (event) => {
-                if (filterRef.current && !filterRef.current.contains(event.target)) {
-                    setIsFilterOpen(false);
-                }
+                if (filterRef.current && !filterRef.current.contains(event.target)) setIsFilterOpen(false);
             };
 
-            // --- FILTER LOGIC ---
-            const toggleTopicFilter = (t) => {
-                setVisibleTopics(prev => 
-                    prev.includes(t) ? prev.filter(item => item !== t) : [...prev, t]
-                );
-            };
-
-            const selectAllTopics = () => setVisibleTopics(topics);
-            const clearAllTopics = () => setVisibleTopics([]);
-
-
-            // --- DATE HELPER ---
+            // --- DATE & STATUS HELPERS ---
             const formatDate = (dateString) => {
                 if (!dateString) return '';
                 return new Date(dateString).toISOString().split('T')[0];
@@ -156,10 +145,29 @@
                 return d;
             };
 
-            // --- STATUS & MATRIX CELL LOGIC ---
-            const getMatrixCell = (user, topic) => {
+            const getStatus = (recordDate) => {
+                const trainingDate = new Date(recordDate);
+                const today = new Date();
+                const diffTime = Math.abs(today - trainingDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                
+                if (diffDays > 180) return 'Expired';
+                if (diffDays > 150) return 'Expiring Soon'; // Warn 1 month before (150-180 days)
+                return 'Valid';
+            };
+
+            const getMatrixCell = (userObj, topic) => {
+                // Role-Based Check
+                const userName = typeof userObj === 'object' ? userObj.name : userObj;
+                const userRole = typeof userObj === 'object' ? userObj.role : 'External';
+
+                if (ROLE_REQUIREMENTS[userRole] && !ROLE_REQUIREMENTS[userRole].includes(topic)) {
+                    return { status: 'N/A', color: 'bg-slate-800 text-slate-600 border-slate-700 italic', dateGiven: '-', dateExpires: '-' };
+                }
+
+                // Check Records
                 const userRecords = records
-                    .filter(r => r.user === user && r.topic === topic)
+                    .filter(r => r.user === userName && r.topic === topic)
                     .sort((a,b) => new Date(b.date) - new Date(a.date));
                 
                 if(userRecords.length === 0) return { status: 'Not Trained', color: 'text-slate-500 bg-slate-900 border-slate-800' };
@@ -167,13 +175,15 @@
                 const latest = userRecords[0];
                 const trainingDate = new Date(latest.date);
                 const expiryDate = addMonths(trainingDate, 6);
-                const today = new Date();
-                
-                const isExpired = today > expiryDate;
+                const status = getStatus(latest.date);
+
+                let color = 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30';
+                if(status === 'Expired') color = 'text-red-400 bg-red-900/20 border-red-500/30';
+                if(status === 'Expiring Soon') color = 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30';
 
                 return {
-                    status: isExpired ? 'Expired' : 'Valid',
-                    color: isExpired ? 'text-red-400 bg-red-900/20 border-red-500/30' : 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30',
+                    status: status,
+                    color: color,
                     dateGiven: formatDate(latest.date),
                     dateExpires: formatDate(expiryDate)
                 };
@@ -185,24 +195,20 @@
                 if(newTopic && !topics.includes(newTopic)) {
                     const updated = [...topics, newTopic];
                     setTopics(updated);
-                    setVisibleTopics(updated); 
+                    setVisibleTopics(updated);
                     try {
                         await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}`), { trainingTopics: updated });
-                    } catch(e) {
-                        alert("Could not save topic: " + e.message);
-                    }
+                    } catch(e) { alert("Could not save topic: " + e.message); }
                 }
             };
 
             const handleBulkSubmit = async () => {
                 const allAttendees = [...bulkForm.selectedUsers, ...bulkForm.manualAttendees];
-                
                 if(!bulkForm.topic) return alert("❌ Error: Please select a Training Topic.");
                 if(!bulkForm.date) return alert("❌ Error: Please select a Date.");
                 if(allAttendees.length === 0) return alert("❌ Error: Please select at least one Attendee.");
 
                 setSaving(true);
-
                 try {
                     const entries = allAttendees.map(name => ({
                         user: name,
@@ -213,21 +219,14 @@
                         createdBy: session.user,
                         timestamp: new Date().toISOString()
                     }));
-
                     const updates = entries.map(e => window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords`), e));
                     await Promise.all(updates);
-                    
-                    alert(`✅ Successfully saved ${entries.length} training records!`);
-                    
-                    setBulkForm(prev => ({ ...prev, topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [] }));
+                    alert(`✅ Successfully saved ${entries.length} records!`);
+                    setBulkForm({ topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [] });
                     setNewExternalName('');
-                    
                     await loadData(session); 
                     setView('history'); 
-
-                } catch (error) {
-                    alert("❌ Error saving data: " + error.message);
-                }
+                } catch (error) { alert("❌ Error saving data: " + error.message); }
                 setSaving(false);
             };
 
@@ -250,58 +249,88 @@
                 }
             };
 
+            const viewEvidence = (base64) => {
+                if (!base64) return alert("No evidence attached.");
+                const win = window.open();
+                win.document.write('<iframe src="' + base64 + '" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>');
+            };
+
+            // Toggle Selection logic (Same as before)
             const toggleUserSelection = (userName) => {
                 setBulkForm(prev => {
                     const isSelected = prev.selectedUsers.includes(userName);
                     return { ...prev, selectedUsers: isSelected ? prev.selectedUsers.filter(u => u !== userName) : [...prev.selectedUsers, userName] };
                 });
             };
+            const selectAllUsers = () => setBulkForm(prev => ({ ...prev, selectedUsers: prev.selectedUsers.length === users.length ? [] : users.map(u => u.name) }));
+            const addExternalAttendee = () => { if(newExternalName.trim()) { setBulkForm(prev => ({...prev, manualAttendees: [...prev.manualAttendees, newExternalName.trim()]})); setNewExternalName(''); } };
+            const removeManualAttendee = (idx) => { setBulkForm(prev => ({...prev, manualAttendees: prev.manualAttendees.filter((_, i) => i !== idx)})); };
+            const handleEvidenceUpload = async (e) => { if(e.target.files[0]) { const base64 = await fileToBase64(e.target.files[0]); setBulkForm(prev => ({ ...prev, evidence: base64 })); } };
 
-            const selectAllUsers = () => {
-                setBulkForm(prev => ({ ...prev, selectedUsers: prev.selectedUsers.length === users.length ? [] : users.map(u => u.name) }));
-            };
+            const toggleTopicFilter = (t) => setVisibleTopics(prev => prev.includes(t) ? prev.filter(item => item !== t) : [...prev, t]);
+            const selectAllTopics = () => setVisibleTopics(topics);
+            const clearAllTopics = () => setVisibleTopics([]);
 
-            const addExternalAttendee = () => {
-                if(newExternalName.trim()) {
-                    setBulkForm(prev => ({...prev, manualAttendees: [...prev.manualAttendees, newExternalName.trim()]}));
-                    setNewExternalName('');
-                }
-            };
-
-            const removeManualAttendee = (idx) => {
-                setBulkForm(prev => ({...prev, manualAttendees: prev.manualAttendees.filter((_, i) => i !== idx)}));
-            };
-
-            const handleEvidenceUpload = async (e) => {
-                const file = e.target.files[0];
-                if(file) {
-                    const base64 = await fileToBase64(file);
-                    setBulkForm(prev => ({ ...prev, evidence: base64 }));
-                }
-            };
-
-            // --- EXPORT ---
             const downloadMatrix = () => {
                 const allNames = [...new Set([...users.map(u=>u.name), ...records.map(r=>r.user)])];
                 const data = allNames.map(name => {
                     const row = { Name: name };
                     visibleTopics.forEach(t => {
                         const cell = getMatrixCell(name, t);
-                        row[t] = cell.status === 'Not Trained' ? 'Not Trained' : `${cell.status} (Exp: ${cell.dateExpires})`;
+                        row[t] = cell.status === 'Not Trained' ? 'Not Trained' : cell.status === 'N/A' ? 'N/A' : `${cell.status} (Exp: ${cell.dateExpires})`;
                     }); 
                     return row;
                 });
                 XLSX.writeFile(XLSX.utils.json_to_sheet(data), "Training_Matrix.xlsx");
             };
 
-            // --- COMPLIANCE STATS ---
-            const allMatrixRows = useMemo(() => [...new Set([...users.map(u=>u.name), ...records.map(r=>r.user)])].sort(), [users, records]);
+            // --- DATA PREP ---
+            // Combine system users and any external names found in records
+            const allMatrixRows = useMemo(() => {
+                const recordedNames = records.map(r => r.user);
+                const systemUsers = users.map(u => ({ name: u.name, role: u.role }));
+                
+                // Merge lists distinct
+                const merged = [...systemUsers];
+                recordedNames.forEach(name => {
+                    if (!merged.find(u => u.name === name)) {
+                        merged.push({ name: name, role: 'External' });
+                    }
+                });
+                
+                // Filter by search
+                if (!searchTerm) return merged.sort((a,b) => a.name.localeCompare(b.name));
+                return merged.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).sort((a,b) => a.name.localeCompare(b.name));
+            }, [users, records, searchTerm]);
+
             const compliance = useMemo(() => {
                 if(!allMatrixRows.length) return 0;
                 let valid = 0;
-                allMatrixRows.forEach(n => topics.forEach(t => { if(getMatrixCell(n,t).status === 'Valid') valid++; }));
-                return Math.round((valid / (allMatrixRows.length * topics.length)) * 100);
+                let totalReq = 0;
+                allMatrixRows.forEach(u => topics.forEach(t => { 
+                    const cell = getMatrixCell(u, t);
+                    if (cell.status !== 'N/A') {
+                        totalReq++;
+                        if(cell.status === 'Valid') valid++;
+                    }
+                }));
+                return totalReq === 0 ? 0 : Math.round((valid / totalReq) * 100);
             }, [allMatrixRows, records, topics]);
+
+            // Calendar Data
+            const calendarData = useMemo(() => {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = today.getMonth();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const days = Array.from({length: daysInMonth}, (_, i) => i + 1);
+                
+                return days.map(day => {
+                    const dateStr = new Date(year, month, day).toISOString().split('T')[0];
+                    const daysEvents = records.filter(r => r.date === dateStr);
+                    return { day, events: daysEvents };
+                });
+            }, [records]);
 
             if(loading) return <div className="flex h-screen items-center justify-center text-white"><div className="loader"></div> Loading Training Data...</div>;
 
@@ -311,8 +340,9 @@
                         <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Training & Competency</h1></div>
                         <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
                             <button onClick={()=>setView('matrix')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='matrix'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>Matrix</button>
-                            <button onClick={()=>setView('history')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='history'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>History / Edit</button>
-                            <button onClick={()=>setView('bulk-log')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='bulk-log'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>Log Training</button>
+                            <button onClick={()=>setView('history')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='history'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>Log/Edit</button>
+                            <button onClick={()=>setView('calendar')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='calendar'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>Calendar</button>
+                            <button onClick={()=>setView('bulk-log')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='bulk-log'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>+ Log Training</button>
                         </div>
                     </div>
 
@@ -322,17 +352,22 @@
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Total Records</p><h3 className="text-3xl font-bold">{records.length}</h3></div><i className="fas fa-file-signature text-2xl text-yellow-500/50"></i></div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Compliance</p><h3 className="text-3xl font-bold text-emerald-400">{compliance}%</h3></div><i className="fas fa-chart-pie text-2xl text-emerald-500/50"></i></div>
-                                <div className="glass-panel p-6 rounded-xl border-l-4 border-red-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Expired</p><h3 className="text-3xl font-bold text-red-400">{allMatrixRows.reduce((a,n)=>a+topics.filter(t=>getMatrixCell(n,t).status==='Expired').length,0)}</h3></div><i className="fas fa-history text-2xl text-red-500/50"></i></div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-red-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Expiring Soon</p><h3 className="text-3xl font-bold text-red-400">{allMatrixRows.reduce((a,u)=>a+topics.filter(t=>{const s=getMatrixCell(u,t).status; return s==='Expired'||s==='Expiring Soon'}).length,0)}</h3></div><i className="fas fa-history text-2xl text-red-500/50"></i></div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Staff</p><h3 className="text-3xl font-bold">{allMatrixRows.length}</h3></div><i className="fas fa-users text-2xl text-blue-500/50"></i></div>
                             </div>
 
                             {/* MATRIX VIEW */}
                             {view === 'matrix' && (
                                 <div className="glass-panel rounded-xl overflow-hidden border border-slate-700 animate-fade-in relative">
-                                    <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                                    <div className="p-4 border-b border-slate-700 flex justify-between items-center gap-4">
                                         <h3 className="text-lg font-bold text-white">Competency Matrix</h3>
-                                        <div className="flex gap-2 relative">
-                                            
+                                        <div className="flex gap-2 flex-1 justify-end items-center">
+                                            {/* Search Bar */}
+                                            <div className="relative">
+                                                <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500"></i>
+                                                <input type="text" placeholder="Search Employee..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="bg-slate-900 border border-slate-600 rounded-full pl-9 pr-4 py-1 text-sm w-48 focus:border-blue-500" />
+                                            </div>
+
                                             {/* FILTER DROPDOWN */}
                                             <div ref={filterRef} className="relative">
                                                 <button onClick={() => setIsFilterOpen(!isFilterOpen)} className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded text-sm font-bold flex items-center gap-2 border border-slate-600">
@@ -358,7 +393,6 @@
                                                     </div>
                                                 )}
                                             </div>
-
                                             <button onClick={downloadMatrix} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center gap-2"><i className="fas fa-file-excel"></i> Export</button>
                                         </div>
                                     </div>
@@ -367,22 +401,24 @@
                                             <thead className="bg-slate-900 text-xs font-bold text-slate-500 uppercase">
                                                 <tr>
                                                     <th className="p-4 sticky left-0 bg-slate-900 border-r border-slate-700 z-10 w-48">Name</th>
-                                                    {visibleTopics.map(t => <th key={t} className="p-4 text-center border-r border-slate-800 min-w-[120px]">{t}</th>)}
+                                                    <th className="p-4 border-r border-slate-700 w-32">Role</th>
+                                                    {visibleTopics.map(t => <th key={t} className="p-4 text-center border-r border-slate-800 min-w-[140px]">{t}</th>)}
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-800">
-                                                {allMatrixRows.map(name => (
-                                                    <tr key={name} className="hover:bg-slate-800/50 transition-colors">
-                                                        <td className="p-4 font-bold text-white sticky left-0 bg-slate-900/90 border-r border-slate-700">{name}</td>
+                                                {allMatrixRows.map(u => (
+                                                    <tr key={u.name} className="hover:bg-slate-800/50 transition-colors">
+                                                        <td className="p-4 font-bold text-white sticky left-0 bg-slate-900/90 border-r border-slate-700">{u.name}</td>
+                                                        <td className="p-4 text-xs text-slate-400 border-r border-slate-700">{u.role}</td>
                                                         {visibleTopics.map(t => {
-                                                            const cell = getMatrixCell(name, t);
+                                                            const cell = getMatrixCell(u, t);
                                                             return (
                                                                 <td key={t} className="p-2 text-center border-r border-slate-800/50">
                                                                     <div className={`px-2 py-1 rounded text-[10px] font-bold border ${cell.color} w-full text-center`}>{cell.status}</div>
-                                                                    {cell.status !== 'Not Trained' && (
+                                                                    {cell.status !== 'Not Trained' && cell.status !== 'N/A' && (
                                                                         <div className="text-[9px] text-slate-400 mt-1 flex flex-col gap-0.5">
-                                                                            <span className="opacity-75">Done: {cell.dateGiven}</span>
-                                                                            <span className={`font-bold ${cell.status === 'Expired' ? 'text-red-400' : 'text-emerald-400'}`}>Valid: {cell.dateExpires}</span>
+                                                                            <span className="opacity-60">Done: {cell.dateGiven}</span>
+                                                                            <span className={`font-bold ${cell.status === 'Expired' ? 'text-red-400' : cell.status === 'Expiring Soon' ? 'text-yellow-400' : 'text-emerald-400'}`}>Valid: {cell.dateExpires}</span>
                                                                         </div>
                                                                     )}
                                                                 </td>
@@ -390,7 +426,7 @@
                                                         })}
                                                     </tr>
                                                 ))}
-                                                {allMatrixRows.length === 0 && <tr><td colSpan={visibleTopics.length + 1} className="p-6 text-center italic text-slate-500">No data found.</td></tr>}
+                                                {allMatrixRows.length === 0 && <tr><td colSpan={visibleTopics.length + 2} className="p-6 text-center italic text-slate-500">No data found.</td></tr>}
                                             </tbody>
                                         </table>
                                     </div>
@@ -401,12 +437,32 @@
                             {view === 'history' && (
                                 <div className="glass-panel rounded-xl overflow-hidden border border-slate-700 animate-fade-in">
                                     <div className="p-4 border-b border-slate-700"><h3 className="text-lg font-bold text-white">Training History (Log)</h3></div>
-                                    <table className="w-full text-left text-sm text-slate-300"><thead className="bg-slate-900 text-xs font-bold text-slate-500 uppercase"><tr><th className="p-4">Date</th><th className="p-4">Attendee</th><th className="p-4">Topic</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr></thead><tbody className="divide-y divide-slate-800">
+                                    <table className="w-full text-left text-sm text-slate-300"><thead className="bg-slate-900 text-xs font-bold text-slate-500 uppercase"><tr><th className="p-4">Date</th><th className="p-4">Attendee</th><th className="p-4">Topic</th><th className="p-4">Status</th><th className="p-4">Evidence</th><th className="p-4 text-right">Actions</th></tr></thead><tbody className="divide-y divide-slate-800">
                                         {records.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(r=>{
-                                            const cell = getMatrixCell(r.user, r.topic); // Use same logic to check status
-                                            return (<tr key={r.firebaseKey} className="hover:bg-slate-800/50"><td className="p-4">{r.date}</td><td className="p-4 font-bold text-white">{r.user}</td><td className="p-4">{r.topic}</td><td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${cell.status==='Expired'?'bg-red-900/30 text-red-400':'bg-emerald-900/30 text-emerald-400'}`}>{cell.status}</span></td><td className="p-4 text-right"><button onClick={()=>setEditingRecord(r)} className="text-blue-400 bg-blue-900/20 px-2 py-1 rounded mr-2 hover:bg-blue-900/40">Edit</button><button onClick={()=>handleDeleteRecord(r.firebaseKey)} className="text-red-400 bg-red-900/20 px-2 py-1 rounded hover:bg-red-900/40">Delete</button></td></tr>);
+                                            const status = getStatus(r.date);
+                                            return (<tr key={r.firebaseKey} className="hover:bg-slate-800/50"><td className="p-4">{r.date}</td><td className="p-4 font-bold text-white">{r.user}</td><td className="p-4">{r.topic}</td><td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${status==='Expired'?'bg-red-900/30 text-red-400':status==='Expiring Soon'?'bg-yellow-900/30 text-yellow-400':'bg-emerald-900/30 text-emerald-400'}`}>{status}</span></td><td className="p-4">{r.evidence && <button onClick={()=>viewEvidence(r.evidence)} className="text-blue-400 hover:text-white" title="View Evidence"><i className="fas fa-eye"></i></button>}</td><td className="p-4 text-right"><button onClick={()=>setEditingRecord(r)} className="text-blue-400 bg-blue-900/20 px-2 py-1 rounded mr-2 hover:bg-blue-900/40">Edit</button><button onClick={()=>handleDeleteRecord(r.firebaseKey)} className="text-red-400 bg-red-900/20 px-2 py-1 rounded hover:bg-red-900/40">Delete</button></td></tr>);
                                         })}
                                     </tbody></table>
+                                </div>
+                            )}
+
+                            {/* CALENDAR VIEW */}
+                            {view === 'calendar' && (
+                                <div className="glass-panel p-6 rounded-xl animate-fade-in border border-slate-700">
+                                    <h3 className="text-lg font-bold text-white mb-4">Training Calendar (This Month)</h3>
+                                    <div className="grid grid-cols-7 gap-2">
+                                        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><div key={d} className="text-center text-slate-500 text-xs font-bold uppercase">{d}</div>)}
+                                        {calendarData.map((d, i) => (
+                                            <div key={i} className={`h-24 border border-slate-700 rounded p-1 flex flex-col ${d.events.length>0?'bg-slate-800':'bg-slate-900/50'}`}>
+                                                <span className="text-xs font-bold text-slate-400 mb-1">{d.day}</span>
+                                                <div className="flex-1 overflow-y-auto custom-scroll space-y-1">
+                                                    {[...new Set(d.events.map(e=>e.topic))].map((topic, k) => (
+                                                        <div key={k} className="text-[9px] bg-blue-600/30 text-blue-200 px-1 rounded truncate" title={topic}>{topic}</div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 
@@ -416,7 +472,7 @@
                                     <h2 className="text-2xl font-bold mb-6 text-yellow-400 flex items-center gap-3"><i className="fas fa-clipboard-check"></i> Log Training Session</h2>
                                     <div className="grid grid-cols-2 gap-6 mb-8">
                                         <div className="space-y-4">
-                                            <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Topic</label><div className="flex gap-2"><select value={bulkForm.topic} onChange={e=>setBulkForm(prev=>({...prev, topic:e.target.value}))} className="bg-slate-900 border-slate-700 flex-1"><option value="">Select...</option>{topics.map(t=><option key={t} value={t}>{t}</option>)}</select><button onClick={handleAddTopic} className="bg-slate-800 px-3 rounded text-yellow-400 font-bold">+</button></div></div>
+                                            <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Topic</label><div className="flex gap-2"><select value={bulkForm.topic} onChange={e=>setBulkForm(prev=>({...prev, topic:e.target.value}))} className="bg-slate-900 border-slate-700 flex-1"><option value="">Select Topic...</option>{topics.map(t=><option key={t} value={t}>{t}</option>)}</select><button onClick={handleAddTopic} className="bg-slate-800 px-3 rounded text-yellow-400 font-bold">+</button></div></div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Date</label><input type="date" value={bulkForm.date} onChange={e=>setBulkForm(prev=>({...prev, date:e.target.value}))} className="bg-slate-900 border-slate-700"/></div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Trainer</label><input value={bulkForm.trainer} onChange={e=>setBulkForm(prev=>({...prev, trainer:e.target.value}))} className="bg-slate-900 border-slate-700"/></div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Evidence</label><input type="file" onChange={handleEvidenceUpload} className="text-xs text-slate-400"/></div>
