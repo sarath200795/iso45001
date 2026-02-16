@@ -3,240 +3,264 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Hub | Login</title>
-    
+    <title>ISO 45001 | Enterprise Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    fontFamily: { sans: ['Space Grotesk', 'sans-serif'] },
-                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' },
-                    animation: { 'fade-in': 'fadeIn 0.5s ease-out' },
-                    keyframes: { fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } } }
+                    fontFamily: {
+                        'display': ['Space Grotesk', 'sans-serif'],
+                        'mono': ['JetBrains Mono', 'monospace'],
+                    }
                 }
             }
         }
     </script>
     <style>
-        body { background-color: #020617; color: #f8fafc; overflow: hidden; }
-        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .hero-gradient { background: radial-gradient(circle at 50% 50%, rgba(37, 99, 235, 0.15), transparent 60%); }
-        input { background: #0f172a; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; width: 100%; outline: none; transition: border-color 0.2s; }
-        input:focus { border-color: #3b82f6; }
-        .btn-primary { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; font-weight: bold; padding: 12px; border-radius: 8px; width: 100%; transition: all 0.2s; }
-        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+        body { font-family: 'Space Grotesk', sans-serif; }
+        .glass-panel { 
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%);
+            backdrop-filter: blur(20px); 
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        .glow-effect {
+            box-shadow: 0 0 60px rgba(59, 130, 246, 0.3), 0 0 120px rgba(59, 130, 246, 0.1);
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        .animate-float-delayed { animation: float 6s ease-in-out infinite 2s; }
+        .input-field { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .input-field:focus { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
     </style>
 </head>
-<body class="h-screen flex items-center justify-center relative">
+<body class="bg-slate-950 min-h-screen flex items-center justify-center overflow-hidden relative">
 
-    <div class="absolute inset-0 hero-gradient pointer-events-none"></div>
-    <div id="root" class="z-10 w-full max-w-md p-4"></div>
+    <div class="absolute inset-0 z-0 overflow-hidden">
+        <div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-[150px] animate-float"></div>
+        <div class="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-emerald-600/15 rounded-full blur-[120px] animate-float-delayed"></div>
+        <div class="absolute inset-0" style="background-image: radial-gradient(circle at 1px 1px, rgba(59, 130, 246, 0.05) 1px, transparent 0); background-size: 40px 40px;"></div>
+    </div>
+
+    <div id="root" class="z-10 w-full max-w-md px-6"></div>
 
     <script type="module">
-        // Import Firebase Auth & Database
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getDatabase, ref, set, push, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // CONFIGURATION (PASTE YOUR KEYS HERE)
-        const firebaseConfig = { 
-            apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
-            authDomain: "ohsms-fa534.firebaseapp.com", 
-            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", 
-            projectId: "ohsms-fa534", 
-            storageBucket: "ohsms-fa534.appspot.com", 
-            messagingSenderId: "YOUR_SENDER_ID", 
-            appId: "YOUR_APP_ID" 
+        // --- FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY", // <--- PASTE YOUR API KEY HERE
+            apiKey: "YOUR_API_KEY", 
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", // Updated DB URL
+            databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
         const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
         
-        // Expose Firebase services to the window object for React to access
-        window.fbAuth = getAuth(app);
-        window.fbDb = getDatabase(app);
-        window.fbMethods = { signInWithEmailAndPassword, createUserWithEmailAndPassword, ref, set, push, get, child };
+        // Expose Firebase functions
+        window.firebase_get = get;
+        window.firebase_ref = ref;
+        window.firebase_child = child;
     </script>
 
     <script type="text/babel">
-        const { useState } = React;
+        const { useState, useEffect } = React;
+        const { ref, get, child } = window.firebase ? window.firebase.database : { ref:()=>{}, get:()=>{}, child:()=>{} };
 
-        const AuthApp = () => {
-            const [isLogin, setIsLogin] = useState(true);
+        // FIXED: InputField is now defined OUTSIDE the Login component
+        const InputField = ({ type = "text", id, label, icon, placeholder, value, onChange, uppercase = false, onFocus, onBlur, focusedId }) => (
+            <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 ml-1 flex items-center gap-2">
+                    <i className={`fas ${icon} text-blue-400`}></i> {label}
+                </label>
+                <input 
+                    type={type}
+                    required
+                    className={`input-field w-full bg-slate-900/50 border-2 ${focusedId === id ? 'border-blue-500' : 'border-slate-700/50'} rounded-xl py-4 px-5 outline-none text-white font-medium ${uppercase ? 'uppercase tracking-wider font-mono' : ''} placeholder:text-slate-500`}
+                    placeholder={placeholder}
+                    value={value}
+                    onChange={e => onChange(uppercase ? e.target.value.toUpperCase() : e.target.value)}
+                    onFocus={() => onFocus(id)}
+                    onBlur={() => onBlur(null)}
+                />
+            </div>
+        );
+
+        const Login = () => {
+            const [formData, setFormData] = useState({ orgId: '', email: '', password: '' });
             const [loading, setLoading] = useState(false);
-            const [formData, setFormData] = useState({ orgName: '', name: '', email: '', password: '', confirmPass: '' });
+            const [error, setError] = useState('');
+            const [focusedField, setFocusedField] = useState(null);
 
-            const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+            useEffect(() => {
+                if (sessionStorage.getItem('isoSession')) {
+                    window.location.href = "home.html";
+                }
+            }, []);
 
-            // --- SECURE LOGIN LOGIC ---
             const handleLogin = async (e) => {
                 e.preventDefault();
                 setLoading(true);
+                setError('');
+
+                const cleanOrgId = formData.orgId.toUpperCase().replace(/[^A-Z0-9-]/g, '');
 
                 try {
-                    // 1. Authenticate with Firebase Auth
-                    const userCredential = await window.fbMethods.signInWithEmailAndPassword(window.fbAuth, formData.email, formData.password);
-                    const user = userCredential.user;
+                    const dbRef = window.firebase ? window.firebase.database.ref(window.db) : null;
+                    const snapshot = await window.firebase_get(window.firebase_child(window.firebase_ref(window.db), `organizations/${cleanOrgId}`));
+                    const dbRef = window.firebase_ref(window.db);
+                    const snapshot = await window.firebase_get(window.firebase_child(dbRef, `organizations/${cleanOrgId}`));
 
-                    // 2. Find User's Organization in Database
-                    const dbRef = window.fbMethods.ref(window.fbDb);
-                    const snapshot = await window.fbMethods.get(window.fbMethods.child(dbRef, `organizations`));
-
-                    if (snapshot.exists()) {
-                        const orgs = snapshot.val();
-                        let foundOrgId = null;
-                        let foundUserData = null;
-
-                        // Scan: find the org where this Auth UID exists
-                        for (const [orgId, orgData] of Object.entries(orgs)) {
-                            if (orgData.users && orgData.users[user.uid]) {
-                                foundOrgId = orgId; // CAPTURE THE ORG ID HERE
-                                foundUserData = orgData.users[user.uid];
-                                break;
-                            }
-                        }
-
-                        if (foundOrgId && foundUserData) {
-                            if (foundUserData.status === 'Inactive') {
-                                alert("Account is inactive. Contact Admin.");
-                            } else {
-                                // SUCCESS - Explicitly storing orgId
-                                const sessionData = {
-                                    uid: user.uid,
-                                    user: foundUserData.name,
-                                    email: user.email,
-                                    role: foundUserData.role,
-                                    orgId: foundOrgId, // CRITICAL: This allows modules to find data
-                                    assignedSite: foundUserData.assignedSite || 'GLOBAL'
-                                };
-                                sessionStorage.setItem('isoSession', JSON.stringify(sessionData));
-                                window.location.href = "home.html";
-                            }
-                        } else {
-                            alert("Login successful, but user record missing in database.");
-                        }
-                    } else {
-                        alert("No organizations found. Please register.");
+                    if (!snapshot.exists()) {
+                        setError("Organization ID not found.");
+                        setLoading(false);
+                        return;
                     }
-                } catch (error) {
-                    console.error(error);
-                    alert("Login Failed: " + error.message);
-                }
-                setLoading(false);
-            };
 
-            // --- SECURE SIGNUP LOGIC ---
-            const handleSignup = async (e) => {
-                e.preventDefault();
-                if(formData.password !== formData.confirmPass) return alert("Passwords do not match.");
-                
-                setLoading(true);
-                try {
-                    // 1. Create User in Firebase Auth System
-                    const userCredential = await window.fbMethods.createUserWithEmailAndPassword(window.fbAuth, formData.email, formData.password);
-                    const user = userCredential.user;
-                    
-                    // 2. Create New Organization in Database
-                    const orgsRef = window.fbMethods.ref(window.fbDb, 'organizations');
-                    const newOrgRef = window.fbMethods.push(orgsRef);
-                    const orgId = newOrgRef.key; // CRITICAL: Capture the generated key
+                    const orgData = snapshot.val();
+                    const users = orgData.users || [];
+                    const users = orgData.users || {};
+                    const userList = Array.isArray(users) ? users : Object.values(users);
 
-                    // 3. Prepare Data Payload (Using Auth UID as key)
-                    const payload = {
-                        details: {
-                            name: formData.orgName,
-                            created: new Date().toISOString(),
-                            ownerId: user.uid
-                        },
-                        users: {
-                            [user.uid]: { // THIS UID MATCHES AUTH
-                                id: user.uid,
-                                name: formData.name,
-                                email: formData.email,
-                                role: 'Owner',
-                                status: 'Active',
-                                assignedSite: 'GLOBAL'
-                            }
-                        },
-                        sites: {
-                            'SITE-001': { code: 'SITE-HQ', name: 'Headquarters', location: 'Main' }
-                        }
+                    const user = userList.find(u => 
+                        u.email.toLowerCase() === formData.email.toLowerCase() && 
+                        u.password === formData.password
+                    );
+
+                    if (!user) {
+                        setError("Invalid email or password.");
+                        setLoading(false);
+                        return;
+                    }
+
+                    const session = {
+                        orgId: cleanOrgId,
+                        orgName: orgData.meta.name,
+                        user: user.name,
+                        email: user.email,
+                        role: user.role,
+                        assignedSite: user.assignedSite || '',
+                        token: Date.now().toString(36)
                     };
 
-                    // 4. Save to Database
-                    await window.fbMethods.set(newOrgRef, payload);
-
-                    // 5. Store Session & Redirect
-                    const sessionData = {
-                        uid: user.uid,
-                        user: formData.name,
-                        email: formData.email,
-                        role: 'Owner',
-                        orgId: orgId, // CRITICAL: Store it immediately
-                        assignedSite: 'GLOBAL'
-                    };
-                    sessionStorage.setItem('isoSession', JSON.stringify(sessionData));
-                    
-                    alert("Organization Created Successfully!");
+                    sessionStorage.setItem('isoSession', JSON.stringify(session));
+                    localStorage.setItem('orgId', cleanOrgId);
                     window.location.href = "home.html";
 
-                } catch (error) {
-                    console.error(error);
-                    alert("Registration Failed: " + error.message);
+                } catch (err) {
+                    console.error(err);
+                    setError("Connection failed. Check API Key/Config.");
+                    setLoading(false);
                 }
-                setLoading(false);
             };
 
+            const InputField = ({ type = "text", id, label, icon, placeholder, value, onChange, uppercase = false }) => (
+                <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 ml-1 flex items-center gap-2">
+                        <i className={`fas ${icon} text-blue-400`}></i> {label}
+                    </label>
+                    <input 
+                        type={type}
+                        required
+                        className={`input-field w-full bg-slate-900/50 border-2 ${focusedField === id ? 'border-blue-500' : 'border-slate-700/50'} rounded-xl py-4 px-5 outline-none text-white font-medium ${uppercase ? 'uppercase tracking-wider font-mono' : ''} placeholder:text-slate-500`}
+                        placeholder={placeholder}
+                        value={value}
+                        onChange={e => onChange(uppercase ? e.target.value.toUpperCase() : e.target.value)}
+                        onFocus={() => setFocusedField(id)}
+                        onBlur={() => setFocusedField(null)}
+                    />
+                </div>
+            );
+
             return (
-                <div className="animate-fade-in">
-                    <div className="text-center mb-8">
-                        <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center text-3xl text-white mb-4 shadow-xl shadow-blue-500/20">
-                            <i className="fas fa-shield-halved"></i>
+                <div className="glass-panel rounded-3xl p-10 shadow-2xl glow-effect relative overflow-hidden">
+                    <div className="text-center mb-10 relative">
+                        <div className="relative inline-block">
+                            <div className="absolute inset-0 bg-blue-500/30 rounded-2xl blur-xl"></div>
+                            <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl mx-auto flex items-center justify-center shadow-xl">
+                                <i className="fas fa-shield-halved text-4xl text-white"></i>
+                            </div>
                         </div>
-                        <h1 className="text-3xl font-bold text-white tracking-tight">Enterprise Safety Hub</h1>
-                        <p className="text-slate-400 mt-2 text-sm">Secure ISO 45001 Compliance</p>
+                        <h1 className="text-3xl font-bold text-white mt-6 tracking-tight">ISO 45001</h1>
+                        <p className="text-blue-400 text-xs font-mono uppercase tracking-[0.3em] mt-2">Enterprise Login</p>
                     </div>
 
-                    <div className="glass-panel p-8 rounded-2xl shadow-2xl">
-                        
-                        <div className="flex bg-slate-900/50 p-1 rounded-lg mb-6 border border-slate-700/50">
-                            <button onClick={() => setIsLogin(true)} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${isLogin ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Login</button>
-                            <button onClick={() => setIsLogin(false)} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${!isLogin ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Register Org</button>
-                        </div>
-
-                        {isLogin ? (
-                            <form onSubmit={handleLogin} className="space-y-4">
-                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Email</label><input type="email" name="email" required onChange={handleChange} placeholder="user@company.com" /></div>
-                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Password</label><input type="password" name="password" required onChange={handleChange} placeholder="••••••••" /></div>
-                                <button type="submit" disabled={loading} className="btn-primary mt-4">{loading ? 'Verifying...' : 'Secure Access'}</button>
-                            </form>
-                        ) : (
-                            <form onSubmit={handleSignup} className="space-y-4">
-                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Organization Name</label><input type="text" name="orgName" required onChange={handleChange} placeholder="e.g. Acme Corp" /></div>
-                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Admin Name</label><input type="text" name="name" required onChange={handleChange} placeholder="Your Full Name" /></div>
-                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Email</label><input type="email" name="email" required onChange={handleChange} placeholder="admin@company.com" /></div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Password</label><input type="password" name="password" required onChange={handleChange} placeholder="••••••" /></div>
-                                    <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Confirm</label><input type="password" name="confirmPass" required onChange={handleChange} placeholder="••••••" /></div>
-                                </div>
-                                <button type="submit" disabled={loading} className="btn-primary mt-4">{loading ? 'Initializing...' : 'Create Secure Org'}</button>
-                            </form>
+                    <form onSubmit={handleLogin} className="space-y-5 relative">
+                        {error && (
+                            <div className="bg-red-500/20 border border-red-500/50 p-4 rounded-xl text-sm text-red-200 text-center font-medium flex items-center gap-3 justify-center">
+                                <i className="fas fa-exclamation-circle"></i> {error}
+                            </div>
                         )}
-                        <div className="mt-6 text-center"><p className="text-[10px] text-slate-500">Protected by Google Firebase Auth.</p></div>
+                        <InputField id="org" label="Organization ID" icon="fa-building" placeholder="ORG-001" value={formData.orgId} onChange={(v) => setFormData({...formData, orgId: v})} uppercase={true} />
+                        <InputField id="email" type="email" label="User Email" icon="fa-envelope" placeholder="admin@company.com" value={formData.email} onChange={(v) => setFormData({...formData, email: v})} />
+                        <InputField id="password" type="password" label="Password" icon="fa-lock" placeholder="••••••••" value={formData.password} onChange={(v) => setFormData({...formData, password: v})} />
+
+                        <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-blue-500/25 transition-all duration-300 mt-4 flex items-center justify-center gap-3">
+                        
+                        <InputField 
+                            id="org" label="Organization ID" icon="fa-building" placeholder="ORG-001"
+                            value={formData.orgId} 
+                            onChange={(v) => setFormData(prev => ({...prev, orgId: v}))} 
+                            uppercase={true}
+                            onFocus={setFocusedField} onBlur={setFocusedField} focusedId={focusedField}
+                        />
+
+                        <InputField 
+                            id="email" type="email" label="User Email" icon="fa-envelope" placeholder="admin@company.com"
+                            value={formData.email} 
+                            onChange={(v) => setFormData(prev => ({...prev, email: v}))}
+                            onFocus={setFocusedField} onBlur={setFocusedField} focusedId={focusedField}
+                        />
+
+                        <InputField 
+                            id="password" type="password" label="Password" icon="fa-lock" placeholder="••••••••"
+                            value={formData.password} 
+                            onChange={(v) => setFormData(prev => ({...prev, password: v}))}
+                            onFocus={setFocusedField} onBlur={setFocusedField} focusedId={focusedField}
+                        />
+
+                        <button 
+                            type="submit" disabled={loading}
+                            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-blue-500/25 transition-all duration-300 mt-4 flex items-center justify-center gap-3"
+                        >
+                            {loading ? <i className="fas fa-circle-notch fa-spin text-lg"></i> : <span>Secure Login</span>}
+                        </button>
+                    </form>
+
+                    <div className="mt-10 text-center pt-6 border-t border-slate-700/50">
+                        <p className="text-slate-500 text-xs mb-3">New Organization?</p>
+                        <a href="register.html" className="inline-flex items-center gap-2 text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors group">
+                            Initialize System <i className="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </a>
                     </div>
                 </div>
             );
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<AuthApp />);
+        root.render(<Login />);
+    </script>
+    
+    <script type="module">
+        import { getDatabase, ref, child, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        window.firebase_get = get;
+        window.firebase_ref = ref;
+        window.firebase_child = child;
     </script>
 </body>
 </html>
