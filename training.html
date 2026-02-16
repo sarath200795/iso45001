@@ -59,22 +59,26 @@
             reader.onerror = error => reject(error);
         });
 
-        // ROLE REQUIREMENTS MAPPING (Example Configuration)
+        // ROLE REQUIREMENTS MAPPING
         const ROLE_REQUIREMENTS = {
             "Office Staff": ["Fire Safety", "First Aid"],
             "Driver": ["Fire Safety", "First Aid", "Forklift Safety", "Chemical Handling"],
             "Manager": ["Fire Safety", "First Aid", "LOTO", "Work at Height", "Chemical Handling"]
-            // If role not listed, assume ALL topics required
         };
 
         const TrainingApp = () => {
             const [session, setSession] = useState(null);
-            const [view, setView] = useState('matrix'); // matrix | bulk-log | history | calendar
-            const [users, setUsers] = useState([]);
+            const [view, setView] = useState('matrix'); 
+            const [allUsers, setAllUsers] = useState([]); 
             const [records, setRecords] = useState([]);
             const [topics, setTopics] = useState(["LOTO", "Fire Safety", "First Aid", "Work at Height", "Chemical Handling", "Forklift Safety"]);
+            const [sites, setSites] = useState([]);
             
-            // Search & Filter
+            // Context State
+            const [selectedSite, setSelectedSite] = useState('GLOBAL');
+            const [isGlobal, setIsGlobal] = useState(true);
+
+            // Filter State
             const [searchTerm, setSearchTerm] = useState('');
             const [visibleTopics, setVisibleTopics] = useState([]); 
             const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -85,7 +89,8 @@
             const [editingRecord, setEditingRecord] = useState(null);
 
             const [bulkForm, setBulkForm] = useState({
-                topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [] 
+                topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [],
+                siteId: '' // NEW: Site Selection in Form
             });
             const [newExternalName, setNewExternalName] = useState('');
 
@@ -96,15 +101,14 @@
                     const snap = await window.fb.get(window.fb.ref(window.db, `organizations/${sess.orgId}`));
                     if(snap.exists()) {
                         const val = snap.val();
-                        if(val.users) setUsers(Object.values(val.users).filter(u => u.status === 'Active'));
-                        
+                        if(val.users) setAllUsers(Object.values(val.users).filter(u => u.status === 'Active'));
                         if(val.trainingRecords) {
                             const recArray = Object.entries(val.trainingRecords).map(([k, v]) => ({ ...v, firebaseKey: k }));
                             setRecords(recArray);
                         } else {
                             setRecords([]);
                         }
-
+                        if(val.sites) setSites(Object.values(val.sites));
                         if(val.trainingTopics) {
                             setTopics(val.trainingTopics);
                             setVisibleTopics(val.trainingTopics);
@@ -124,6 +128,19 @@
                 if(!s) { window.location.href='index.html'; return; }
                 const sess = JSON.parse(s);
                 setSession(sess);
+
+                const params = new URLSearchParams(window.location.search);
+                const ctxSite = params.get('site');
+                if (ctxSite && ctxSite !== 'GLOBAL') {
+                    setSelectedSite(ctxSite);
+                    setIsGlobal(false);
+                    // Pre-fill form site if context is specific
+                    setBulkForm(prev => ({...prev, siteId: ctxSite}));
+                } else {
+                    setSelectedSite('GLOBAL');
+                    setIsGlobal(true);
+                }
+
                 loadData(sess);
                 document.addEventListener("mousedown", handleClickOutside);
                 return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -133,60 +150,69 @@
                 if (filterRef.current && !filterRef.current.contains(event.target)) setIsFilterOpen(false);
             };
 
-            // --- DATE & STATUS HELPERS ---
+            // --- FILTER LOGIC ---
+            const filteredUsers = useMemo(() => {
+                if (selectedSite === 'GLOBAL') return allUsers;
+                return allUsers.filter(u => u.assignedSite === selectedSite);
+            }, [allUsers, selectedSite]);
+
+            const filteredRecords = useMemo(() => {
+                const validNames = new Set(filteredUsers.map(u => u.name));
+                if (selectedSite === 'GLOBAL') return records;
+                return records.filter(r => validNames.has(r.user) || r.siteId === selectedSite); 
+            }, [records, filteredUsers, selectedSite]);
+
+            const allMatrixRows = useMemo(() => {
+                const matrixData = filteredUsers.map(u => ({ name: u.name, role: u.role, type: 'Internal' }));
+                const registeredNames = new Set(filteredUsers.map(u => u.name));
+                
+                filteredRecords.forEach(r => {
+                    if (!registeredNames.has(r.user)) {
+                        if (!matrixData.find(m => m.name === r.user)) {
+                            matrixData.push({ name: r.user, role: 'External', type: 'External' });
+                        }
+                    }
+                });
+
+                if (!searchTerm) return matrixData.sort((a,b) => a.name.localeCompare(b.name));
+                return matrixData.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).sort((a,b) => a.name.localeCompare(b.name));
+            }, [filteredUsers, filteredRecords, searchTerm]);
+
+            // --- DATE HELPERS ---
             const formatDate = (dateString) => {
                 if (!dateString) return '';
                 return new Date(dateString).toISOString().split('T')[0];
             };
-
             const addMonths = (date, months) => {
                 const d = new Date(date);
                 d.setMonth(d.getMonth() + months);
                 return d;
             };
-
             const getStatus = (recordDate) => {
                 const trainingDate = new Date(recordDate);
                 const today = new Date();
                 const diffTime = Math.abs(today - trainingDate);
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                
                 if (diffDays > 180) return 'Expired';
-                if (diffDays > 150) return 'Expiring Soon'; // Warn 1 month before (150-180 days)
+                if (diffDays > 150) return 'Expiring Soon'; 
                 return 'Valid';
             };
 
             const getMatrixCell = (userObj, topic) => {
-                // Role-Based Check
-                const userName = typeof userObj === 'object' ? userObj.name : userObj;
-                const userRole = typeof userObj === 'object' ? userObj.role : 'External';
-
-                if (ROLE_REQUIREMENTS[userRole] && !ROLE_REQUIREMENTS[userRole].includes(topic)) {
-                    return { status: 'N/A', color: 'bg-slate-800 text-slate-600 border-slate-700 italic', dateGiven: '-', dateExpires: '-' };
+                const userName = userObj.name;
+                const userRole = userObj.role;
+                if (userRole !== 'External' && ROLE_REQUIREMENTS[userRole] && !ROLE_REQUIREMENTS[userRole].includes(topic)) {
+                    return { status: 'N/A', color: 'bg-slate-900/50 text-slate-700 border-slate-800 italic', dateGiven: '-', dateExpires: '-' };
                 }
-
-                // Check Records
-                const userRecords = records
-                    .filter(r => r.user === userName && r.topic === topic)
-                    .sort((a,b) => new Date(b.date) - new Date(a.date));
-                
+                const userRecords = filteredRecords.filter(r => r.user === userName && r.topic === topic).sort((a,b) => new Date(b.date) - new Date(a.date));
                 if(userRecords.length === 0) return { status: 'Not Trained', color: 'text-slate-500 bg-slate-900 border-slate-800' };
-                
                 const latest = userRecords[0];
-                const trainingDate = new Date(latest.date);
-                const expiryDate = addMonths(trainingDate, 6);
+                const expiryDate = addMonths(latest.date, 6);
                 const status = getStatus(latest.date);
-
                 let color = 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30';
                 if(status === 'Expired') color = 'text-red-400 bg-red-900/20 border-red-500/30';
                 if(status === 'Expiring Soon') color = 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30';
-
-                return {
-                    status: status,
-                    color: color,
-                    dateGiven: formatDate(latest.date),
-                    dateExpires: formatDate(expiryDate)
-                };
+                return { status: status, color: color, dateGiven: formatDate(latest.date), dateExpires: formatDate(expiryDate) };
             };
 
             // --- ACTIONS ---
@@ -196,14 +222,13 @@
                     const updated = [...topics, newTopic];
                     setTopics(updated);
                     setVisibleTopics(updated);
-                    try {
-                        await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}`), { trainingTopics: updated });
-                    } catch(e) { alert("Could not save topic: " + e.message); }
+                    try { await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}`), { trainingTopics: updated }); } catch(e) {}
                 }
             };
 
             const handleBulkSubmit = async () => {
                 const allAttendees = [...bulkForm.selectedUsers, ...bulkForm.manualAttendees];
+                if(!bulkForm.siteId) return alert("❌ Error: Please select the Site where training took place.");
                 if(!bulkForm.topic) return alert("❌ Error: Please select a Training Topic.");
                 if(!bulkForm.date) return alert("❌ Error: Please select a Date.");
                 if(allAttendees.length === 0) return alert("❌ Error: Please select at least one Attendee.");
@@ -216,13 +241,17 @@
                         date: bulkForm.date,
                         trainer: bulkForm.trainer,
                         evidence: bulkForm.evidence,
+                        siteId: bulkForm.siteId, // Explicitly saving site
                         createdBy: session.user,
                         timestamp: new Date().toISOString()
                     }));
                     const updates = entries.map(e => window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords`), e));
                     await Promise.all(updates);
-                    alert(`✅ Successfully saved ${entries.length} records!`);
-                    setBulkForm({ topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [] });
+                    alert(`✅ Successfully saved ${entries.length} records for ${bulkForm.siteId}!`);
+                    
+                    // Reset form but keep site if context is specific
+                    const defaultSite = selectedSite === 'GLOBAL' ? '' : selectedSite;
+                    setBulkForm({ topic: '', date: new Date().toISOString().split('T')[0], trainer: '', evidence: null, selectedUsers: [], manualAttendees: [], siteId: defaultSite });
                     setNewExternalName('');
                     await loadData(session); 
                     setView('history'); 
@@ -230,22 +259,9 @@
                 setSaving(false);
             };
 
-            const handleUpdateRecord = async () => {
-                if(!editingRecord) return;
-                try {
-                    await window.fb.update(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords/${editingRecord.firebaseKey}`), editingRecord);
-                    alert("Record Updated Successfully!");
-                    await loadData(session); 
-                    setEditingRecord(null);
-                } catch(e) { alert("Update failed: " + e.message); }
-            };
-
             const handleDeleteRecord = async (key) => {
                 if(confirm("Delete this record permanently?")) {
-                    try {
-                        await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords/${key}`));
-                        await loadData(session); 
-                    } catch(e) { alert("Delete failed: " + e.message); }
+                    try { await window.fb.remove(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords/${key}`)); await loadData(session); } catch(e) {}
                 }
             };
 
@@ -255,93 +271,55 @@
                 win.document.write('<iframe src="' + base64 + '" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>');
             };
 
-            // Toggle Selection logic (Same as before)
             const toggleUserSelection = (userName) => {
                 setBulkForm(prev => {
                     const isSelected = prev.selectedUsers.includes(userName);
                     return { ...prev, selectedUsers: isSelected ? prev.selectedUsers.filter(u => u !== userName) : [...prev.selectedUsers, userName] };
                 });
             };
-            const selectAllUsers = () => setBulkForm(prev => ({ ...prev, selectedUsers: prev.selectedUsers.length === users.length ? [] : users.map(u => u.name) }));
+            const selectAllUsers = () => setBulkForm(prev => ({ ...prev, selectedUsers: prev.selectedUsers.length === filteredUsers.length ? [] : filteredUsers.map(u => u.name) }));
             const addExternalAttendee = () => { if(newExternalName.trim()) { setBulkForm(prev => ({...prev, manualAttendees: [...prev.manualAttendees, newExternalName.trim()]})); setNewExternalName(''); } };
             const removeManualAttendee = (idx) => { setBulkForm(prev => ({...prev, manualAttendees: prev.manualAttendees.filter((_, i) => i !== idx)})); };
             const handleEvidenceUpload = async (e) => { if(e.target.files[0]) { const base64 = await fileToBase64(e.target.files[0]); setBulkForm(prev => ({ ...prev, evidence: base64 })); } };
-
             const toggleTopicFilter = (t) => setVisibleTopics(prev => prev.includes(t) ? prev.filter(item => item !== t) : [...prev, t]);
             const selectAllTopics = () => setVisibleTopics(topics);
             const clearAllTopics = () => setVisibleTopics([]);
-
             const downloadMatrix = () => {
-                const allNames = [...new Set([...users.map(u=>u.name), ...records.map(r=>r.user)])];
-                const data = allNames.map(name => {
-                    const row = { Name: name };
-                    visibleTopics.forEach(t => {
-                        const cell = getMatrixCell(name, t);
-                        row[t] = cell.status === 'Not Trained' ? 'Not Trained' : cell.status === 'N/A' ? 'N/A' : `${cell.status} (Exp: ${cell.dateExpires})`;
-                    }); 
+                const data = allMatrixRows.map(u => {
+                    const row = { Name: u.name, Role: u.role };
+                    visibleTopics.forEach(t => { const cell = getMatrixCell(u, t); row[t] = cell.status === 'Not Trained' ? 'Not Trained' : `${cell.status} (Exp: ${cell.dateExpires})`; }); 
                     return row;
                 });
-                XLSX.writeFile(XLSX.utils.json_to_sheet(data), "Training_Matrix.xlsx");
+                XLSX.writeFile(XLSX.utils.json_to_sheet(data), `Training_Matrix_${selectedSite}.xlsx`);
             };
-
-            // --- DATA PREP ---
-            // Combine system users and any external names found in records
-            const allMatrixRows = useMemo(() => {
-                const recordedNames = records.map(r => r.user);
-                const systemUsers = users.map(u => ({ name: u.name, role: u.role }));
-                
-                // Merge lists distinct
-                const merged = [...systemUsers];
-                recordedNames.forEach(name => {
-                    if (!merged.find(u => u.name === name)) {
-                        merged.push({ name: name, role: 'External' });
-                    }
-                });
-                
-                // Filter by search
-                if (!searchTerm) return merged.sort((a,b) => a.name.localeCompare(b.name));
-                return merged.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).sort((a,b) => a.name.localeCompare(b.name));
-            }, [users, records, searchTerm]);
 
             const compliance = useMemo(() => {
                 if(!allMatrixRows.length) return 0;
-                let valid = 0;
-                let totalReq = 0;
-                allMatrixRows.forEach(u => topics.forEach(t => { 
-                    const cell = getMatrixCell(u, t);
-                    if (cell.status !== 'N/A') {
-                        totalReq++;
-                        if(cell.status === 'Valid') valid++;
-                    }
-                }));
+                let valid = 0; let totalReq = 0;
+                allMatrixRows.forEach(u => topics.forEach(t => { const cell = getMatrixCell(u, t); if (cell.status !== 'N/A') { totalReq++; if(cell.status === 'Valid') valid++; } }));
                 return totalReq === 0 ? 0 : Math.round((valid / totalReq) * 100);
-            }, [allMatrixRows, records, topics]);
+            }, [allMatrixRows, filteredRecords, topics]);
 
-            // Calendar Data
-            const calendarData = useMemo(() => {
-                const today = new Date();
-                const year = today.getFullYear();
-                const month = today.getMonth();
-                const daysInMonth = new Date(year, month + 1, 0).getDate();
-                const days = Array.from({length: daysInMonth}, (_, i) => i + 1);
-                
-                return days.map(day => {
-                    const dateStr = new Date(year, month, day).toISOString().split('T')[0];
-                    const daysEvents = records.filter(r => r.date === dateStr);
-                    return { day, events: daysEvents };
-                });
-            }, [records]);
+            const changeSite = (newSite) => { window.location.href = `training.html?site=${newSite}`; };
 
-            if(loading) return <div className="flex h-screen items-center justify-center text-white"><div className="loader"></div> Loading Training Data...</div>;
+            if(loading) return <div className="flex h-screen items-center justify-center text-white"><div className="loader"></div> Loading...</div>;
 
             return (
                 <div className="flex flex-col h-screen bg-slate-950 text-white font-sans overflow-hidden">
                     <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-6">
-                        <div className="flex items-center gap-4"><a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a><h1 className="font-bold text-lg">Training & Competency</h1></div>
+                        <div className="flex items-center gap-4">
+                            <a href="home.html" className="text-slate-400 hover:text-white flex items-center gap-2"><i className="fas fa-arrow-left"></i> Back</a>
+                            <h1 className="font-bold text-lg">Training Matrix</h1>
+                            <div className="ml-4">
+                                <select value={selectedSite} onChange={e => changeSite(e.target.value)} disabled={session.role !== 'Owner' && session.role !== 'Lead Auditor'} className="bg-slate-800 border border-slate-700 text-xs py-1 px-3 rounded font-bold text-emerald-400">
+                                    {(session.role === 'Owner' || session.role === 'Lead Auditor') && <option value="GLOBAL">Global (All Sites)</option>}
+                                    {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
+                                </select>
+                            </div>
+                        </div>
                         <div className="flex bg-slate-800 p-1 rounded-lg gap-1">
                             <button onClick={()=>setView('matrix')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='matrix'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>Matrix</button>
                             <button onClick={()=>setView('history')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='history'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>Log/Edit</button>
-                            <button onClick={()=>setView('calendar')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='calendar'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>Calendar</button>
                             <button onClick={()=>setView('bulk-log')} className={`px-4 py-1.5 rounded text-xs font-bold uppercase transition ${view==='bulk-log'?'bg-yellow-600 text-white':'text-slate-400 hover:text-white'}`}>+ Log Training</button>
                         </div>
                     </div>
@@ -350,83 +328,34 @@
                         <div className="max-w-7xl mx-auto">
                             {/* KPI */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                                <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Total Records</p><h3 className="text-3xl font-bold">{records.length}</h3></div><i className="fas fa-file-signature text-2xl text-yellow-500/50"></i></div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-yellow-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Records ({selectedSite})</p><h3 className="text-3xl font-bold">{filteredRecords.length}</h3></div><i className="fas fa-file-signature text-2xl text-yellow-500/50"></i></div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-emerald-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Compliance</p><h3 className="text-3xl font-bold text-emerald-400">{compliance}%</h3></div><i className="fas fa-chart-pie text-2xl text-emerald-500/50"></i></div>
                                 <div className="glass-panel p-6 rounded-xl border-l-4 border-red-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Expiring Soon</p><h3 className="text-3xl font-bold text-red-400">{allMatrixRows.reduce((a,u)=>a+topics.filter(t=>{const s=getMatrixCell(u,t).status; return s==='Expired'||s==='Expiring Soon'}).length,0)}</h3></div><i className="fas fa-history text-2xl text-red-500/50"></i></div>
-                                <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Staff</p><h3 className="text-3xl font-bold">{allMatrixRows.length}</h3></div><i className="fas fa-users text-2xl text-blue-500/50"></i></div>
+                                <div className="glass-panel p-6 rounded-xl border-l-4 border-blue-500 flex justify-between items-center"><div><p className="text-xs text-slate-400 uppercase font-bold">Staff ({selectedSite})</p><h3 className="text-3xl font-bold">{allMatrixRows.length}</h3></div><i className="fas fa-users text-2xl text-blue-500/50"></i></div>
                             </div>
 
                             {/* MATRIX VIEW */}
                             {view === 'matrix' && (
                                 <div className="glass-panel rounded-xl overflow-hidden border border-slate-700 animate-fade-in relative">
                                     <div className="p-4 border-b border-slate-700 flex justify-between items-center gap-4">
-                                        <h3 className="text-lg font-bold text-white">Competency Matrix</h3>
+                                        <h3 className="text-lg font-bold text-white">Competency Matrix: <span className="text-emerald-400">{selectedSite}</span></h3>
                                         <div className="flex gap-2 flex-1 justify-end items-center">
-                                            {/* Search Bar */}
-                                            <div className="relative">
-                                                <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500"></i>
-                                                <input type="text" placeholder="Search Employee..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="bg-slate-900 border border-slate-600 rounded-full pl-9 pr-4 py-1 text-sm w-48 focus:border-blue-500" />
-                                            </div>
-
-                                            {/* FILTER DROPDOWN */}
-                                            <div ref={filterRef} className="relative">
-                                                <button onClick={() => setIsFilterOpen(!isFilterOpen)} className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded text-sm font-bold flex items-center gap-2 border border-slate-600">
-                                                    <i className="fas fa-filter text-blue-400"></i> Filter Columns
-                                                </button>
-                                                {isFilterOpen && (
-                                                    <div className="absolute right-0 top-10 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-4 z-50">
-                                                        <div className="flex justify-between mb-3 border-b border-slate-700 pb-2">
-                                                            <button onClick={selectAllTopics} className="text-[10px] text-blue-400 hover:underline">Select All</button>
-                                                            <button onClick={clearAllTopics} className="text-[10px] text-red-400 hover:underline">Clear All</button>
-                                                        </div>
-                                                        <div className="space-y-2 max-h-60 overflow-y-auto custom-scroll">
-                                                            {topics.map(t => (
-                                                                <label key={t} className="flex items-center gap-3 cursor-pointer checkbox-wrapper hover:bg-slate-800 p-1 rounded">
-                                                                    <div className="relative flex items-center">
-                                                                        <input type="checkbox" className="hidden" checked={visibleTopics.includes(t)} onChange={() => toggleTopicFilter(t)} />
-                                                                        <div className="w-4 h-4 rounded border border-slate-500 bg-slate-950 transition"></div>
-                                                                    </div>
-                                                                    <span className="text-xs text-white">{t}</span>
-                                                                </label>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            <div className="relative"><i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500"></i><input type="text" placeholder="Search Employee..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="bg-slate-900 border border-slate-600 rounded-full pl-9 pr-4 py-1 text-sm w-48 focus:border-blue-500" /></div>
+                                            <div ref={filterRef} className="relative"><button onClick={() => setIsFilterOpen(!isFilterOpen)} className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded text-sm font-bold flex items-center gap-2 border border-slate-600"><i className="fas fa-filter text-blue-400"></i> Columns</button>{isFilterOpen && (<div className="absolute right-0 top-10 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-4 z-50"><div className="flex justify-between mb-3 border-b border-slate-700 pb-2"><button onClick={selectAllTopics} className="text-[10px] text-blue-400 hover:underline">Select All</button><button onClick={clearAllTopics} className="text-[10px] text-red-400 hover:underline">Clear All</button></div><div className="space-y-2 max-h-60 overflow-y-auto custom-scroll">{topics.map(t => (<label key={t} className="flex items-center gap-3 cursor-pointer checkbox-wrapper hover:bg-slate-800 p-1 rounded"><div className="relative flex items-center"><input type="checkbox" className="hidden" checked={visibleTopics.includes(t)} onChange={() => toggleTopicFilter(t)} /><div className="w-4 h-4 rounded border border-slate-500 bg-slate-950 transition"></div></div><span className="text-xs text-white">{t}</span></label>))}</div></div>)}</div>
                                             <button onClick={downloadMatrix} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold flex items-center gap-2"><i className="fas fa-file-excel"></i> Export</button>
                                         </div>
                                     </div>
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left text-sm text-slate-300">
-                                            <thead className="bg-slate-900 text-xs font-bold text-slate-500 uppercase">
-                                                <tr>
-                                                    <th className="p-4 sticky left-0 bg-slate-900 border-r border-slate-700 z-10 w-48">Name</th>
-                                                    <th className="p-4 border-r border-slate-700 w-32">Role</th>
-                                                    {visibleTopics.map(t => <th key={t} className="p-4 text-center border-r border-slate-800 min-w-[140px]">{t}</th>)}
-                                                </tr>
-                                            </thead>
+                                            <thead className="bg-slate-900 text-xs font-bold text-slate-500 uppercase"><tr><th className="p-4 sticky left-0 bg-slate-900 border-r border-slate-700 z-10 w-48">Name</th><th className="p-4 border-r border-slate-700 w-32">Role</th>{visibleTopics.map(t => <th key={t} className="p-4 text-center border-r border-slate-800 min-w-[140px]">{t}</th>)}</tr></thead>
                                             <tbody className="divide-y divide-slate-800">
                                                 {allMatrixRows.map(u => (
                                                     <tr key={u.name} className="hover:bg-slate-800/50 transition-colors">
-                                                        <td className="p-4 font-bold text-white sticky left-0 bg-slate-900/90 border-r border-slate-700">{u.name}</td>
-                                                        <td className="p-4 text-xs text-slate-400 border-r border-slate-700">{u.role}</td>
-                                                        {visibleTopics.map(t => {
-                                                            const cell = getMatrixCell(u, t);
-                                                            return (
-                                                                <td key={t} className="p-2 text-center border-r border-slate-800/50">
-                                                                    <div className={`px-2 py-1 rounded text-[10px] font-bold border ${cell.color} w-full text-center`}>{cell.status}</div>
-                                                                    {cell.status !== 'Not Trained' && cell.status !== 'N/A' && (
-                                                                        <div className="text-[9px] text-slate-400 mt-1 flex flex-col gap-0.5">
-                                                                            <span className="opacity-60">Done: {cell.dateGiven}</span>
-                                                                            <span className={`font-bold ${cell.status === 'Expired' ? 'text-red-400' : cell.status === 'Expiring Soon' ? 'text-yellow-400' : 'text-emerald-400'}`}>Valid: {cell.dateExpires}</span>
-                                                                        </div>
-                                                                    )}
-                                                                </td>
-                                                            );
-                                                        })}
+                                                        <td className="p-4 font-bold text-white sticky left-0 bg-slate-900/90 border-r border-slate-700">{u.name}</td><td className="p-4 text-xs text-slate-400 border-r border-slate-700">{u.role}</td>
+                                                        {visibleTopics.map(t => { const cell = getMatrixCell(u, t); return (<td key={t} className="p-2 text-center border-r border-slate-800/50"><div className={`px-2 py-1 rounded text-[10px] font-bold border ${cell.color} w-full text-center`}>{cell.status}</div>{cell.status !== 'Not Trained' && cell.status !== 'N/A' && (<div className="text-[9px] text-slate-400 mt-1 flex flex-col gap-0.5"><span className="opacity-60">Done: {cell.dateGiven}</span><span className={`font-bold ${cell.status === 'Expired' ? 'text-red-400' : cell.status === 'Expiring Soon' ? 'text-yellow-400' : 'text-emerald-400'}`}>Valid: {cell.dateExpires}</span></div>)}</td>); })}
                                                     </tr>
                                                 ))}
-                                                {allMatrixRows.length === 0 && <tr><td colSpan={visibleTopics.length + 2} className="p-6 text-center italic text-slate-500">No data found.</td></tr>}
+                                                {allMatrixRows.length === 0 && <tr><td colSpan={visibleTopics.length + 2} className="p-6 text-center italic text-slate-500">No staff found for this site.</td></tr>}
                                             </tbody>
                                         </table>
                                     </div>
@@ -438,31 +367,8 @@
                                 <div className="glass-panel rounded-xl overflow-hidden border border-slate-700 animate-fade-in">
                                     <div className="p-4 border-b border-slate-700"><h3 className="text-lg font-bold text-white">Training History (Log)</h3></div>
                                     <table className="w-full text-left text-sm text-slate-300"><thead className="bg-slate-900 text-xs font-bold text-slate-500 uppercase"><tr><th className="p-4">Date</th><th className="p-4">Attendee</th><th className="p-4">Topic</th><th className="p-4">Status</th><th className="p-4">Evidence</th><th className="p-4 text-right">Actions</th></tr></thead><tbody className="divide-y divide-slate-800">
-                                        {records.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(r=>{
-                                            const status = getStatus(r.date);
-                                            return (<tr key={r.firebaseKey} className="hover:bg-slate-800/50"><td className="p-4">{r.date}</td><td className="p-4 font-bold text-white">{r.user}</td><td className="p-4">{r.topic}</td><td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${status==='Expired'?'bg-red-900/30 text-red-400':status==='Expiring Soon'?'bg-yellow-900/30 text-yellow-400':'bg-emerald-900/30 text-emerald-400'}`}>{status}</span></td><td className="p-4">{r.evidence && <button onClick={()=>viewEvidence(r.evidence)} className="text-blue-400 hover:text-white" title="View Evidence"><i className="fas fa-eye"></i></button>}</td><td className="p-4 text-right"><button onClick={()=>setEditingRecord(r)} className="text-blue-400 bg-blue-900/20 px-2 py-1 rounded mr-2 hover:bg-blue-900/40">Edit</button><button onClick={()=>handleDeleteRecord(r.firebaseKey)} className="text-red-400 bg-red-900/20 px-2 py-1 rounded hover:bg-red-900/40">Delete</button></td></tr>);
-                                        })}
+                                        {filteredRecords.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(r=>{ const status = getStatus(r.date); return (<tr key={r.firebaseKey} className="hover:bg-slate-800/50"><td className="p-4">{r.date}</td><td className="p-4 font-bold text-white">{r.user}</td><td className="p-4">{r.topic}</td><td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${status==='Expired'?'bg-red-900/30 text-red-400':status==='Expiring Soon'?'bg-yellow-900/30 text-yellow-400':'bg-emerald-900/30 text-emerald-400'}`}>{status}</span></td><td className="p-4">{r.evidence && <button onClick={()=>viewEvidence(r.evidence)} className="text-blue-400 hover:text-white" title="View Evidence"><i className="fas fa-eye"></i></button>}</td><td className="p-4 text-right"><button onClick={()=>setEditingRecord(r)} className="text-blue-400 bg-blue-900/20 px-2 py-1 rounded mr-2 hover:bg-blue-900/40">Edit</button><button onClick={()=>handleDeleteRecord(r.firebaseKey)} className="text-red-400 bg-red-900/20 px-2 py-1 rounded hover:bg-red-900/40">Delete</button></td></tr>); })}
                                     </tbody></table>
-                                </div>
-                            )}
-
-                            {/* CALENDAR VIEW */}
-                            {view === 'calendar' && (
-                                <div className="glass-panel p-6 rounded-xl animate-fade-in border border-slate-700">
-                                    <h3 className="text-lg font-bold text-white mb-4">Training Calendar (This Month)</h3>
-                                    <div className="grid grid-cols-7 gap-2">
-                                        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><div key={d} className="text-center text-slate-500 text-xs font-bold uppercase">{d}</div>)}
-                                        {calendarData.map((d, i) => (
-                                            <div key={i} className={`h-24 border border-slate-700 rounded p-1 flex flex-col ${d.events.length>0?'bg-slate-800':'bg-slate-900/50'}`}>
-                                                <span className="text-xs font-bold text-slate-400 mb-1">{d.day}</span>
-                                                <div className="flex-1 overflow-y-auto custom-scroll space-y-1">
-                                                    {[...new Set(d.events.map(e=>e.topic))].map((topic, k) => (
-                                                        <div key={k} className="text-[9px] bg-blue-600/30 text-blue-200 px-1 rounded truncate" title={topic}>{topic}</div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
                                 </div>
                             )}
 
@@ -472,6 +378,14 @@
                                     <h2 className="text-2xl font-bold mb-6 text-yellow-400 flex items-center gap-3"><i className="fas fa-clipboard-check"></i> Log Training Session</h2>
                                     <div className="grid grid-cols-2 gap-6 mb-8">
                                         <div className="space-y-4">
+                                            {/* NEW SITE SELECTOR */}
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Site</label>
+                                                <select value={bulkForm.siteId} onChange={e=>setBulkForm(prev=>({...prev, siteId: e.target.value}))} className="bg-slate-900 border-slate-700 w-full" disabled={!isGlobal}>
+                                                    <option value="">Select Site...</option>
+                                                    {sites.map(s => <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
+                                                </select>
+                                            </div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Topic</label><div className="flex gap-2"><select value={bulkForm.topic} onChange={e=>setBulkForm(prev=>({...prev, topic:e.target.value}))} className="bg-slate-900 border-slate-700 flex-1"><option value="">Select Topic...</option>{topics.map(t=><option key={t} value={t}>{t}</option>)}</select><button onClick={handleAddTopic} className="bg-slate-800 px-3 rounded text-yellow-400 font-bold">+</button></div></div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Date</label><input type="date" value={bulkForm.date} onChange={e=>setBulkForm(prev=>({...prev, date:e.target.value}))} className="bg-slate-900 border-slate-700"/></div>
                                             <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Trainer</label><input value={bulkForm.trainer} onChange={e=>setBulkForm(prev=>({...prev, trainer:e.target.value}))} className="bg-slate-900 border-slate-700"/></div>
@@ -482,7 +396,7 @@
                                             <div className="flex gap-2 mb-3"><input placeholder="External Name..." value={newExternalName} onChange={e=>setNewExternalName(e.target.value)} className="bg-slate-800 border-none text-xs p-2 flex-1 rounded"/><button onClick={addExternalAttendee} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs font-bold">Add</button></div>
                                             <div className="flex-1 overflow-y-auto custom-scroll space-y-2 pr-2 max-h-64">
                                                 {bulkForm.manualAttendees.map((n,i)=>(<div key={`m-${i}`} className="p-2 rounded bg-purple-900/20 border border-purple-500/30 flex justify-between"><span className="text-sm font-bold text-purple-200">{n} (Ext)</span><button onClick={()=>removeManualAttendee(i)} className="text-red-400 text-xs hover:text-white">x</button></div>))}
-                                                {users.map(u=>(<div key={u.id} onClick={()=>{toggleUserSelection(u.name)}} className={`p-2 rounded cursor-pointer border flex justify-between ${bulkForm.selectedUsers.includes(u.name)?'bg-blue-600/20 border-blue-500 text-blue-200':'bg-slate-800 border-transparent'}`}><span className="text-sm font-bold">{u.name}</span><span className="text-[10px] opacity-70">{u.role}</span></div>))}
+                                                {filteredUsers.map(u=>(<div key={u.id} onClick={()=>{toggleUserSelection(u.name)}} className={`p-2 rounded cursor-pointer border flex justify-between ${bulkForm.selectedUsers.includes(u.name)?'bg-blue-600/20 border-blue-500 text-blue-200':'bg-slate-800 border-transparent'}`}><span className="text-sm font-bold">{u.name}</span><span className="text-[10px] opacity-70">{u.role}</span></div>))}
                                             </div>
                                         </div>
                                     </div>
