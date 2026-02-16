@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant | Enterprise Hub</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'sans': ['Space Grotesk', 'sans-serif'], 'mono': ['JetBrains Mono', 'monospace'] },
+                    colors: { 'slate-850': '#1e293b', 'slate-950': '#020617' },
+                    animation: { 'bounce-slow': 'bounce 3s infinite' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .chat-bubble { max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; animation: fadeIn 0.3s ease-out; }
+        .user-bubble { background: #3b82f6; color: white; border-bottom-right-radius: 2px; align-self: flex-end; }
+        .bot-bubble { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; border-bottom-left-radius: 2px; align-self: flex-start; }
+        .typing-dot { width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; display: inline-block; animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, get, child, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", authDomain: "ohsms-fa534.firebaseapp.com", databaseURL: "https://ohsms-fa534-default-rtdb.firebaseio.com/", projectId: "ohsms-fa534", storageBucket: "ohsms-fa534.appspot.com", messagingSenderId: "YOUR_SENDER_ID", appId: "YOUR_APP_ID" };
+        const app = initializeApp(firebaseConfig);
+        window.db = getDatabase(app);
+        window.fb = { ref, push, get, child, update };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useLayoutEffect } = React;
+
+        // --- BOT LOGIC & SCENARIOS ---
+        const SCENARIOS = {
+            IDLE: 'IDLE',
+            INCIDENT_TYPE: 'INCIDENT_TYPE',
+            INCIDENT_DESC: 'INCIDENT_DESC',
+            INCIDENT_SEVERITY: 'INCIDENT_SEVERITY',
+            INCIDENT_REVIEW: 'INCIDENT_REVIEW',
+            
+            DOC_SEARCH: 'DOC_SEARCH',
+            
+            TRAINING_TOPIC: 'TRAINING_TOPIC',
+            TRAINING_ATTENDEES: 'TRAINING_ATTENDEES', // Simplified for chat
+            TRAINING_REVIEW: 'TRAINING_REVIEW'
+        };
+
+        const ChatBot = () => {
+            const [session, setSession] = useState(null);
+            const [messages, setMessages] = useState([]);
+            const [input, setInput] = useState('');
+            const [isTyping, setIsTyping] = useState(false);
+            const [state, setState] = useState(SCENARIOS.IDLE);
+            const [draft, setDraft] = useState({}); // Stores the object being built
+            const chatEndRef = useRef(null);
+
+            // Load Session
+            useEffect(() => {
+                const s = sessionStorage.getItem('isoSession');
+                if(!s) { window.location.href='index.html'; return; }
+                const sess = JSON.parse(s);
+                setSession(sess);
+                // Initial Greeting
+                addBotMessage(`Hello ${sess.user.split(' ')[0]}! I am your Safety Assistant. What would you like to do today?`, [
+                    { label: 'Report Incident', value: 'START_INCIDENT' },
+                    { label: 'Find Document', value: 'START_DOC' },
+                    { label: 'Log Training', value: 'START_TRAINING' }
+                ]);
+            }, []);
+
+            // Auto-scroll to bottom
+            useLayoutEffect(() => {
+                chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            }, [messages, isTyping]);
+
+            // Helper to add messages
+            const addBotMessage = (text, options = null, type = 'text', data = null) => {
+                setIsTyping(true);
+                setTimeout(() => {
+                    setMessages(prev => [...prev, { sender: 'bot', text, options, type, data }]);
+                    setIsTyping(false);
+                }, 600); // Simulate thinking
+            };
+
+            const addUserMessage = (text) => {
+                setMessages(prev => [...prev, { sender: 'user', text }]);
+            };
+
+            // --- CORE LOGIC ENGINE ---
+            const handleInput = (text, payload = null) => {
+                if(!text.trim() && !payload) return;
+                
+                // If user typed something, add it to chat. If payload (button click), optional to show text.
+                if(text) addUserMessage(text);
+                
+                const val = payload || text; // Value to process
+
+                // STATE MACHINE
+                switch(state) {
+                    // --- MENU SELECTION ---
+                    case SCENARIOS.IDLE:
+                        if (val === 'START_INCIDENT') {
+                            setState(SCENARIOS.INCIDENT_TYPE);
+                            setDraft({ siteId: session.assignedSite || 'GLOBAL', date: new Date().toISOString().split('T')[0] });
+                            addBotMessage("Okay, let's report an incident. What type of incident was it?", [
+                                { label: 'Near Miss', value: 'Near Miss' },
+                                { label: 'First Aid', value: 'First Aid injury' },
+                                { label: 'Property Damage', value: 'Property Damage' },
+                                { label: 'Lost Time', value: 'Lost Time injury' }
+                            ]);
+                        } else if (val === 'START_DOC') {
+                            setState(SCENARIOS.DOC_SEARCH);
+                            addBotMessage("I can search the Standards & Files library. Please type a keyword (e.g., 'Fire', 'Policy', 'ISO').");
+                        } else if (val === 'START_TRAINING') {
+                            setState(SCENARIOS.TRAINING_TOPIC);
+                            setDraft({ date: new Date().toISOString().split('T')[0], trainer: session.user });
+                            addBotMessage("Logging a new training session. What was the topic?", [
+                                { label: 'LOTO', value: 'LOTO' },
+                                { label: 'Fire Safety', value: 'Fire Safety' },
+                                { label: 'First Aid', value: 'First Aid' },
+                                { label: 'Work at Height', value: 'Work at Height' }
+                            ]);
+                        } else {
+                            addBotMessage("I didn't understand. Please select an option:", [
+                                { label: 'Report Incident', value: 'START_INCIDENT' },
+                                { label: 'Find Document', value: 'START_DOC' }
+                            ]);
+                        }
+                        break;
+
+                    // --- INCIDENT FLOW ---
+                    case SCENARIOS.INCIDENT_TYPE:
+                        setDraft(prev => ({ ...prev, type: val }));
+                        setState(SCENARIOS.INCIDENT_DESC);
+                        addBotMessage("Got it. Please describe what happened in detail.");
+                        break;
+
+                    case SCENARIOS.INCIDENT_DESC:
+                        setDraft(prev => ({ ...prev, description: val }));
+                        setState(SCENARIOS.INCIDENT_SEVERITY);
+                        addBotMessage("How would you rate the severity?", [
+                            { label: 'Level A (Minor)', value: 'Level A' },
+                            { label: 'Level B (Moderate)', value: 'Level B' },
+                            { label: 'Level C (Serious)', value: 'Level C' },
+                            { label: 'Level D (Critical)', value: 'Level D' }
+                        ]);
+                        break;
+
+                    case SCENARIOS.INCIDENT_SEVERITY:
+                        const finalDraft = { ...draft, severity: val };
+                        setDraft(finalDraft);
+                        setState(SCENARIOS.INCIDENT_REVIEW);
+                        // Show Review Card
+                        addBotMessage("Please review the incident details before I submit it:", [
+                            { label: '✅ Confirm & Submit', value: 'SUBMIT_INCIDENT' },
+                            { label: '❌ Cancel', value: 'CANCEL' }
+                        ], 'review_incident', finalDraft);
+                        break;
+
+                    case SCENARIOS.INCIDENT_REVIEW:
+                        if (val === 'SUBMIT_INCIDENT') {
+                            saveIncident(draft);
+                        } else if (val.startsWith('EDIT_')) {
+                            // User wants to edit a specific field
+                            const field = val.split('_')[1];
+                            setState(`EDIT_INCIDENT_${field}`); // Temporary edit state
+                            addBotMessage(`Please enter the new value for ${field}:`);
+                        } else {
+                            setState(SCENARIOS.IDLE);
+                            addBotMessage("Cancelled. What else can I do?", [
+                                { label: 'Report Incident', value: 'START_INCIDENT' },
+                                { label: 'Find Document', value: 'START_DOC' }
+                            ]);
+                        }
+                        break;
+
+                    // --- GENERIC EDIT HANDLER (For Incident) ---
+                    case 'EDIT_INCIDENT_DESCRIPTION':
+                        setDraft(prev => ({ ...prev, description: val }));
+                        setState(SCENARIOS.INCIDENT_REVIEW);
+                        addBotMessage("Updated. Please review:", [{ label: '✅ Confirm', value: 'SUBMIT_INCIDENT' }], 'review_incident', { ...draft, description: val });
+                        break;
+
+                    // --- DOC SEARCH FLOW ---
+                    case SCENARIOS.DOC_SEARCH:
+                        searchDocuments(val);
+                        setState(SCENARIOS.IDLE); // Reset after search
+                        break;
+
+                    // --- TRAINING FLOW ---
+                    case SCENARIOS.TRAINING_TOPIC:
+                        setDraft(prev => ({...prev, topic: val}));
+                        setState(SCENARIOS.TRAINING_ATTENDEES);
+                        addBotMessage("Who attended? Enter names separated by commas (e.g., 'John Doe, Jane Smith').");
+                        break;
+                    
+                    case SCENARIOS.TRAINING_ATTENDEES:
+                        // Simple parser for names
+                        const names = val.split(',').map(n => n.trim()).filter(n => n);
+                        const trDraft = { ...draft, attendees: names };
+                        setDraft(trDraft);
+                        setState(SCENARIOS.TRAINING_REVIEW);
+                        addBotMessage(`Review Training Log: Topic: ${trDraft.topic}, Attendees: ${names.length}`, [
+                            { label: '✅ Save Log', value: 'SUBMIT_TRAINING' },
+                            { label: '❌ Cancel', value: 'CANCEL' }
+                        ]);
+                        break;
+
+                    case SCENARIOS.TRAINING_REVIEW:
+                        if (val === 'SUBMIT_TRAINING') {
+                            saveTraining(draft);
+                        } else {
+                            setState(SCENARIOS.IDLE);
+                            addBotMessage("Cancelled.");
+                        }
+                        break;
+                }
+            };
+
+            // --- FIREBASE ACTIONS ---
+            const saveIncident = async (data) => {
+                try {
+                    await window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/incidents`), {
+                        ...data,
+                        id: `INC-BOT-${Date.now().toString().slice(-4)}`,
+                        timestamp: new Date().toISOString()
+                    });
+                    addBotMessage("✅ Incident reported successfully! Reference ID created.", [
+                        { label: 'Main Menu', value: 'MENU' }
+                    ]);
+                    setState(SCENARIOS.IDLE);
+                } catch(e) {
+                    addBotMessage("Error saving incident: " + e.message);
+                }
+            };
+
+            const saveTraining = async (data) => {
+                try {
+                    // Create multiple records for attendees
+                    const batch = data.attendees.map(name => window.fb.push(window.fb.ref(window.db, `organizations/${session.orgId}/trainingRecords`), {
+                        topic: data.topic,
+                        date: data.date,
+                        user: name,
+                        trainer: data.trainer,
+                        siteId: session.assignedSite || 'GEN',
+                        createdBy: session.user,
+                        timestamp: new Date().toISOString()
+                    }));
+                    await Promise.all(batch);
+                    addBotMessage(`✅ Successfully logged training for ${data.attendees.length} people.`);
+                    setState(SCENARIOS.IDLE);
+                } catch(e) {
+                    addBotMessage("Error: " + e.message);
+                }
+            };
+
+            const searchDocuments = async (query) => {
+                addBotMessage(`Searching for "${query}"...`);
+                try {
+                    const snap = await window.fb.get(window.fb.ref(window.db, `organizations/${session.orgId}/standards`));
+                    if(snap.exists()) {
+                        const results = Object.values(snap.val()).filter(d => 
+                            d.title.toLowerCase().includes(query.toLowerCase()) || 
+                            d.category.toLowerCase().includes(query.toLowerCase())
+                        );
+                        
+                        if(results.length > 0) {
+                            addBotMessage(`I found ${results.length} document(s):`, null, 'doc_list', results);
+                        } else {
+                            addBotMessage("No documents found matching that keyword.");
+                        }
+                    } else {
+                        addBotMessage("The document library is empty.");
+                    }
+                } catch(e) {
+                    addBotMessage("Search error: " + e.message);
+                }
+            };
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950">
+                    {/* Header */}
+                    <div className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 shadow-lg z-10">
+                        <div className="flex items-center gap-3">
+                            <a href="home.html" className="text-slate-400 hover:text-white"><i className="fas fa-arrow-left"></i></a>
+                            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white"><i className="fas fa-robot"></i></div>
+                            <div>
+                                <h1 className="font-bold text-white text-sm">Safety Assistant</h1>
+                                <p className="text-[10px] text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Online</p>
+                            </div>
+                        </div>
+                        <button onClick={() => window.location.reload()} className="text-slate-500 hover:text-white" title="Reset Chat"><i className="fas fa-rotate-right"></i></button>
+                    </div>
+
+                    {/* Chat Area */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 chat-scroll bg-gradient-to-b from-slate-950 to-slate-900">
+                        {messages.map((m, i) => (
+                            <div key={i} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                                <div className={`chat-bubble ${m.sender === 'user' ? 'user-bubble' : 'bot-bubble'}`}>
+                                    {m.text}
+                                    
+                                    {/* RENDER REVIEW CARD (For Incident) */}
+                                    {m.type === 'review_incident' && (
+                                        <div className="mt-3 bg-slate-800/50 rounded-lg p-3 border border-slate-700 text-xs w-64">
+                                            <div className="flex justify-between items-center mb-1 py-1 border-b border-slate-700/50">
+                                                <span className="text-slate-400">Type:</span>
+                                                <span className="font-bold">{m.data.type}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center mb-1 py-1 border-b border-slate-700/50">
+                                                <span className="text-slate-400">Severity:</span>
+                                                <span className={`font-bold ${m.data.severity === 'Level D' ? 'text-red-400' : 'text-yellow-400'}`}>{m.data.severity}</span>
+                                            </div>
+                                            <div className="mb-2 py-1">
+                                                <span className="text-slate-400 block mb-1">Description:</span>
+                                                <p className="bg-slate-900 p-2 rounded text-slate-300 italic">{m.data.description}</p>
+                                                <button onClick={() => handleInput(null, 'EDIT_INCIDENT_DESCRIPTION')} className="text-[10px] text-blue-400 mt-1 hover:underline"><i className="fas fa-pencil"></i> Edit Description</button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* RENDER DOC LIST */}
+                                    {m.type === 'doc_list' && (
+                                        <div className="mt-2 space-y-2">
+                                            {m.data.map((doc, idx) => (
+                                                <a key={idx} href={doc.file} download target="_blank" className="block bg-slate-800 hover:bg-slate-700 p-2 rounded border border-slate-600 flex items-center gap-3 transition">
+                                                    <div className="text-indigo-400 text-lg"><i className="fas fa-file-pdf"></i></div>
+                                                    <div>
+                                                        <div className="font-bold text-white text-xs">{doc.title}</div>
+                                                        <div className="text-[10px] text-slate-400">{doc.category} • v{doc.version}</div>
+                                                    </div>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Quick Replies */}
+                                {m.options && (
+                                    <div className="flex flex-wrap gap-2 mt-2 max-w-[85%]">
+                                        {m.options.map((opt, k) => (
+                                            <button 
+                                                key={k} 
+                                                onClick={() => handleInput(null, opt.value)} 
+                                                className="bg-slate-800 hover:bg-indigo-600 border border-slate-700 text-white text-xs px-3 py-2 rounded-full transition-all shadow-sm"
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        
+                        {isTyping && (
+                            <div className="bot-bubble chat-bubble w-16 flex items-center justify-center gap-1">
+                                <div className="typing-dot"></div><div className="typing-dot"></div><div className="typing-dot"></div>
+                            </div>
+                        )}
+                        <div ref={chatEndRef}></div>
+                    </div>
+
+                    {/* Input Area */}
+                    <div className="p-4 bg-slate-900 border-t border-slate-800">
+                        <div className="flex gap-2 max-w-4xl mx-auto">
+                            <input 
+                                type="text" 
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && (handleInput(input), setInput(''))}
+                                placeholder="Type a message..." 
+                                className="flex-1 bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl focus:border-indigo-500 focus:outline-none placeholder-slate-500"
+                            />
+                            <button 
+                                onClick={() => { handleInput(input); setInput(''); }}
+                                className="bg-indigo-600 hover:bg-indigo-500 text-white w-12 rounded-xl flex items-center justify-center transition-colors"
+                            >
+                                <i className="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ChatBot />);
+    </script>
+</body>
+</html>
