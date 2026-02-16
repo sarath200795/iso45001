@@ -100,6 +100,13 @@
 
             const addUserMessage = (text) => setMessages(prev => [...prev, { sender: 'user', text }]);
 
+            // --- HELPER: SAFE STRING CHECK ---
+            // This prevents "toLowerCase is not a function" errors
+            const safeStr = (val) => {
+                if (val === null || val === undefined) return "";
+                return String(val).toLowerCase();
+            };
+
             // --- FULL SYSTEM SWEEP FUNCTION ---
             const performSweep = async (query) => {
                 setIsTyping(true);
@@ -114,21 +121,21 @@
 
                     const val = snap.val();
                     const results = [];
-                    const q = query.toLowerCase();
+                    const q = safeStr(query);
 
                     // 1. INCIDENTS
                     if (val.incidents) {
                         Object.entries(val.incidents).forEach(([k, v]) => {
-                            if ((v.description && v.description.toLowerCase().includes(q)) || (v.type && v.type.toLowerCase().includes(q)) || (v.id && v.id.toLowerCase().includes(q))) {
-                                results.push({ type: 'Incident', title: `${v.type}: ${v.description ? v.description.substring(0,30) : ''}...`, id: v.id, link: `incidents.html?site=${session.assignedSite}`, icon: 'fa-triangle-exclamation', color: 'text-orange-400' });
+                            if (safeStr(v.description).includes(q) || safeStr(v.type).includes(q) || safeStr(v.id).includes(q)) {
+                                results.push({ type: 'Incident', title: `${v.type}: ${v.description ? v.description.substring(0,30) : ''}...`, id: v.id, link: `incidents.html?site=${session.assignedSite}&highlight=${k}`, icon: 'fa-triangle-exclamation', color: 'text-orange-400' });
                             }
                         });
                     }
 
-                    // 2. DOCUMENTS / STANDARDS
+                    // 2. DOCUMENTS
                     if (val.standards) {
                         Object.entries(val.standards).forEach(([k, v]) => {
-                            if ((v.title && v.title.toLowerCase().includes(q)) || (v.category && v.category.toLowerCase().includes(q))) {
+                            if (safeStr(v.title).includes(q) || safeStr(v.category).includes(q)) {
                                 results.push({ type: 'Document', title: v.title, id: `v${v.version}`, link: v.file, external: true, icon: 'fa-file-pdf', color: 'text-blue-400' });
                             }
                         });
@@ -139,7 +146,7 @@
                          Object.entries(val.incidents).forEach(([k, v]) => {
                             if(v.capa) {
                                 v.capa.forEach(c => {
-                                    if((c.action && c.action.toLowerCase().includes(q)) || (c.assignedTo && c.assignedTo.toLowerCase().includes(q))) {
+                                    if(safeStr(c.action).includes(q) || safeStr(c.assignedTo).includes(q)) {
                                         results.push({ type: 'CAPA', title: c.action, id: c.status, link: `capa.html?site=${session.assignedSite}`, icon: 'fa-check-double', color: 'text-emerald-400' });
                                     }
                                 });
@@ -150,7 +157,7 @@
                     // 4. AUDITS
                     if (val.audits) {
                         Object.entries(val.audits).forEach(([k, v]) => {
-                            if ((v.title && v.title.toLowerCase().includes(q)) || (v.auditor && v.auditor.toLowerCase().includes(q))) {
+                            if (safeStr(v.title).includes(q) || safeStr(v.auditor).includes(q)) {
                                 results.push({ type: 'Audit', title: v.title, id: v.date, link: `audit.html?site=${session.assignedSite}`, icon: 'fa-clipboard-check', color: 'text-purple-400' });
                             }
                         });
@@ -159,7 +166,7 @@
                     // 5. TRAINING
                     if (val.trainingRecords) {
                         Object.entries(val.trainingRecords).forEach(([k, v]) => {
-                            if ((v.topic && v.topic.toLowerCase().includes(q)) || (v.user && v.user.toLowerCase().includes(q))) {
+                            if (safeStr(v.topic).includes(q) || safeStr(v.user).includes(q)) {
                                 results.push({ type: 'Training', title: `${v.topic} - ${v.user}`, id: v.date, link: `training.html?site=${session.assignedSite}`, icon: 'fa-graduation-cap', color: 'text-yellow-400' });
                             }
                         });
@@ -168,7 +175,7 @@
                     // 6. RISK ASSESSMENT (HIRA)
                     if (val.riskAssessment) {
                         Object.entries(val.riskAssessment).forEach(([k, v]) => {
-                            if ((v.activity && v.activity.toLowerCase().includes(q)) || (v.hazard && v.hazard.toLowerCase().includes(q))) {
+                            if (safeStr(v.activity).includes(q) || safeStr(v.hazard).includes(q)) {
                                 results.push({ type: 'Risk', title: v.activity, id: `Rating: ${v.riskRating}`, link: `risk.html?site=${session.assignedSite}`, icon: 'fa-shield-virus', color: 'text-red-400' });
                             }
                         });
@@ -177,7 +184,8 @@
                     // 7. CONSULTATION (Meetings)
                     if (val.consultation) {
                         Object.entries(val.consultation).forEach(([k, v]) => {
-                            if ((v.title && v.title.toLowerCase().includes(q)) || (v.minutes && v.minutes.toLowerCase().includes(q))) {
+                            // FIX APPLIED HERE: Using safeStr()
+                            if (safeStr(v.title).includes(q) || safeStr(v.minutes).includes(q)) {
                                 results.push({ type: 'Consultation', title: v.title, id: v.date, link: `consultation.html?site=${session.assignedSite}`, icon: 'fa-comments', color: 'text-teal-400' });
                             }
                         });
@@ -186,7 +194,7 @@
                     // 8. IMPROVEMENT (Kaizen)
                     if (val.improvement) {
                         Object.entries(val.improvement).forEach(([k, v]) => {
-                            if ((v.title && v.title.toLowerCase().includes(q)) || (v.description && v.description.toLowerCase().includes(q))) {
+                            if (safeStr(v.title).includes(q) || safeStr(v.description).includes(q)) {
                                 results.push({ type: 'Improvement', title: v.title, id: v.status, link: `improvement.html?site=${session.assignedSite}`, icon: 'fa-chart-line', color: 'text-blue-500' });
                             }
                         });
@@ -195,7 +203,7 @@
                     // 9. MOCK DRILLS
                     if (val.mockDrills) {
                         Object.entries(val.mockDrills).forEach(([k, v]) => {
-                            if ((v.scenario && v.scenario.toLowerCase().includes(q)) || (v.location && v.location.toLowerCase().includes(q))) {
+                            if (safeStr(v.scenario).includes(q) || safeStr(v.location).includes(q)) {
                                 results.push({ type: 'Mock Drill', title: v.scenario, id: v.date, link: `mock-drill.html?site=${session.assignedSite}`, icon: 'fa-person-running', color: 'text-pink-400' });
                             }
                         });
@@ -204,7 +212,7 @@
                     // 10. USERS
                     if (val.users) {
                         Object.values(val.users).forEach(u => {
-                            if ((u.name && u.name.toLowerCase().includes(q)) || (u.email && u.email.toLowerCase().includes(q))) {
+                            if (safeStr(u.name).includes(q) || safeStr(u.email).includes(q)) {
                                 results.push({ type: 'User', title: u.name, id: u.role, link: `users.html`, icon: 'fa-user', color: 'text-slate-300' });
                             }
                         });
@@ -213,7 +221,7 @@
                     // 11. SITES
                     if (val.sites) {
                         Object.values(val.sites).forEach(s => {
-                            if ((s.name && s.name.toLowerCase().includes(q)) || (s.location && s.location.toLowerCase().includes(q))) {
+                            if (safeStr(s.name).includes(q) || safeStr(s.location).includes(q)) {
                                 results.push({ type: 'Site', title: s.name, id: s.code, link: `sites.html`, icon: 'fa-building', color: 'text-slate-300' });
                             }
                         });
@@ -222,11 +230,12 @@
                     if (results.length > 0) {
                         addBotMessage(`I found ${results.length} matches across the system:`, null, 'search_results', results.slice(0, 15)); // Limit display
                     } else {
-                        addBotMessage(`I searched the entire database (Incidents, Docs, Training, Risk, Audits, etc.) but found nothing for "${query}".`);
+                        addBotMessage(`I searched the entire database but found nothing for "${query}".`);
                     }
 
                 } catch (e) {
                     addBotMessage("Error during system sweep: " + e.message);
+                    console.error(e);
                 }
                 setIsTyping(false);
             };
