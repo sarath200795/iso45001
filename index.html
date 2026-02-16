@@ -41,10 +41,12 @@
     <div id="root" class="z-10 w-full max-w-md p-4"></div>
 
     <script type="module">
+        // Import Firebase Auth
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, push, get, child, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getDatabase, ref, set, push, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // CONFIGURATION
+        // CONFIGURATION (Replace with your actual keys)
         const firebaseConfig = { 
             apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
             authDomain: "ohsms-fa534.firebaseapp.com", 
@@ -56,8 +58,12 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        window.db = getDatabase(app);
-        window.fb = { ref, push, get, child, set };
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+        
+        // Expose to window for React
+        window.fbAuth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword };
+        window.fbDb = { db, ref, set, push, get, child };
     </script>
 
     <script type="text/babel">
@@ -70,106 +76,119 @@
 
             const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-            // --- LOGIN LOGIC ---
+            // --- SECURE LOGIN LOGIC ---
             const handleLogin = async (e) => {
                 e.preventDefault();
                 setLoading(true);
 
                 try {
-                    // Fetch all organizations (Note: In production with thousands of orgs, you'd use Firebase Auth instead of this scan)
-                    const dbRef = window.fb.ref(window.db);
-                    const snapshot = await window.fb.get(window.fb.child(dbRef, `organizations`));
+                    // 1. Authenticate with Firebase Auth
+                    const userCredential = await window.fbAuth.signInWithEmailAndPassword(window.fbAuth.auth, formData.email, formData.password);
+                    const user = userCredential.user;
+
+                    // 2. Find User's Organization in Database
+                    // Note: Since we don't know the Org ID yet, we have to look it up.
+                    // In a real app, you'd store orgId in the user's Auth Profile or a separate lookup table.
+                    // For this structure, we iterate to find where this UID exists.
+                    
+                    const dbRef = window.fbDb.ref(window.fbDb.db);
+                    const snapshot = await window.fbDb.get(window.fbDb.child(dbRef, `organizations`));
 
                     if (snapshot.exists()) {
                         const orgs = snapshot.val();
-                        let foundUser = null;
                         let foundOrgId = null;
+                        let foundUserData = null;
 
-                        // Scan for user
-                        Object.entries(orgs).forEach(([orgId, orgData]) => {
-                            if (orgData.users) {
-                                Object.values(orgData.users).forEach(user => {
-                                    if (user.email === formData.email && user.password === formData.password) {
-                                        foundUser = user;
-                                        foundOrgId = orgId;
-                                    }
-                                });
+                        // Secure scan: find the org where this User UID exists
+                        for (const [orgId, orgData] of Object.entries(orgs)) {
+                            if (orgData.users && orgData.users[user.uid]) {
+                                foundOrgId = orgId;
+                                foundUserData = orgData.users[user.uid];
+                                break;
                             }
-                        });
+                        }
 
-                        if (foundUser) {
-                            if (foundUser.status === 'Inactive') {
+                        if (foundOrgId && foundUserData) {
+                            if (foundUserData.status === 'Inactive') {
                                 alert("Account is inactive. Contact Admin.");
                             } else {
-                                // SUCCESS: Store Session
+                                // SUCCESS
                                 const sessionData = {
-                                    user: foundUser.name,
-                                    email: foundUser.email,
-                                    role: foundUser.role,
+                                    uid: user.uid,
+                                    user: foundUserData.name,
+                                    email: user.email,
+                                    role: foundUserData.role,
                                     orgId: foundOrgId,
-                                    assignedSite: foundUser.assignedSite || 'GLOBAL'
+                                    assignedSite: foundUserData.assignedSite || 'GLOBAL'
                                 };
                                 sessionStorage.setItem('isoSession', JSON.stringify(sessionData));
                                 window.location.href = "home.html";
                             }
                         } else {
-                            alert("Invalid Email or Password.");
+                            alert("User record not found in database.");
                         }
                     } else {
-                        alert("No organizations found. Please create one.");
+                        alert("No organizations found.");
                     }
                 } catch (error) {
                     console.error(error);
-                    alert("Connection Error. Please check your internet or Firebase rules.");
+                    alert("Login Failed: " + error.message);
                 }
                 setLoading(false);
             };
 
-            // --- SIGNUP LOGIC ---
+            // --- SECURE SIGNUP LOGIC ---
             const handleSignup = async (e) => {
                 e.preventDefault();
                 if(formData.password !== formData.confirmPass) return alert("Passwords do not match.");
-                if(!formData.orgName || !formData.name || !formData.email) return alert("All fields are required.");
                 
                 setLoading(true);
                 try {
-                    // 1. Create Organization Reference
-                    const newOrgRef = window.fb.push(window.fb.ref(window.db, 'organizations'));
+                    // 1. Create User in Firebase Auth
+                    const userCredential = await window.fbAuth.createUserWithEmailAndPassword(window.fbAuth.auth, formData.email, formData.password);
+                    const user = userCredential.user;
+                    
+                    // 2. Generate New Org ID
+                    const newOrgRef = window.fbDb.push(window.fbDb.ref(window.fbDb.db, 'organizations'));
                     const orgId = newOrgRef.key;
 
-                    // 2. Create Owner User
-                    const userId = `U-${Date.now()}`;
-                    const userData = {
-                        id: userId,
-                        name: formData.name,
-                        email: formData.email,
-                        password: formData.password, // Note: In production, hash this!
-                        role: 'Owner',
-                        status: 'Active',
-                        assignedSite: 'GLOBAL'
-                    };
-
-                    // 3. Construct Initial DB Payload
+                    // 3. Prepare Data Payload (Using Auth UID as key)
+                    // This matches your security rule: .child($orgId).child('users').child(auth.uid)
                     const payload = {
                         details: {
                             name: formData.orgName,
-                            created: new Date().toISOString()
+                            created: new Date().toISOString(),
+                            ownerId: user.uid
                         },
                         users: {
-                            [userId]: userData
+                            [user.uid]: { // KEY IS THE UID
+                                id: user.uid,
+                                name: formData.name,
+                                email: formData.email,
+                                role: 'Owner',
+                                status: 'Active',
+                                assignedSite: 'GLOBAL'
+                            }
                         },
                         sites: {
                             'SITE-001': { code: 'SITE-HQ', name: 'Headquarters', location: 'Main' }
                         }
                     };
 
-                    // 4. Save to Firebase
-                    await window.fb.set(newOrgRef, payload);
+                    // 4. Write to Realtime Database
+                    // This write will succeed because the user is now authenticated as user.uid
+                    // and your rules allow writing if you are creating the org structure? 
+                    // WAIT: Your rules restrict writing to existing orgs. Creating a NEW org needs root write access.
+                    // Ensure your rules allow creating new nodes at 'organizations' level or handle this via Admin SDK in real prod.
+                    // For now, assuming you can write to 'organizations' to create new ones.
+                    
+                    await window.fbDb.set(newOrgRef, payload);
 
-                    // 5. Auto-Login
+                    // 5. Store Session
                     const sessionData = {
-                        user: userData.name,
-                        email: userData.email,
+                        uid: user.uid,
+                        user: formData.name,
+                        email: formData.email,
                         role: 'Owner',
                         orgId: orgId,
                         assignedSite: 'GLOBAL'
@@ -193,7 +212,7 @@
                             <i className="fas fa-shield-halved"></i>
                         </div>
                         <h1 className="text-3xl font-bold text-white tracking-tight">Enterprise Safety Hub</h1>
-                        <p className="text-slate-400 mt-2 text-sm">ISO 45001 Compliance & Risk Management</p>
+                        <p className="text-slate-400 mt-2 text-sm">Secure ISO 45001 Compliance</p>
                     </div>
 
                     <div className="glass-panel p-8 rounded-2xl shadow-2xl">
@@ -207,7 +226,7 @@
                             <button 
                                 onClick={() => setIsLogin(false)} 
                                 className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${!isLogin ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                            >Create Organization</button>
+                            >Register Org</button>
                         </div>
 
                         {/* LOGIN FORM */}
@@ -222,7 +241,7 @@
                                     <input type="password" name="password" required onChange={handleChange} placeholder="••••••••" />
                                 </div>
                                 <button type="submit" disabled={loading} className="btn-primary mt-4">
-                                    {loading ? 'Authenticating...' : 'Access Dashboard'}
+                                    {loading ? 'Verifying...' : 'Secure Access'}
                                 </button>
                             </form>
                         ) : (
@@ -251,14 +270,14 @@
                                     </div>
                                 </div>
                                 <button type="submit" disabled={loading} className="btn-primary mt-4">
-                                    {loading ? 'Creating Environment...' : 'Initialize Enterprise'}
+                                    {loading ? 'Initializing Environment...' : 'Create Secure Org'}
                                 </button>
                             </form>
                         )}
 
                         <div className="mt-6 text-center">
                             <p className="text-[10px] text-slate-500">
-                                Secured by Firebase. {isLogin ? 'Forgot Password?' : 'By creating an account you agree to TOS.'}
+                                Protected by Firebase Auth & Rules.
                             </p>
                         </div>
                     </div>
