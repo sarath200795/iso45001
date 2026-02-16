@@ -75,7 +75,7 @@
 
             const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-            // --- SECURE LOGIN ---
+            // --- SECURE LOGIN LOGIC ---
             const handleLogin = async (e) => {
                 e.preventDefault();
                 setLoading(true);
@@ -97,7 +97,7 @@
                         // Scan: find the org where this Auth UID exists
                         for (const [orgId, orgData] of Object.entries(orgs)) {
                             if (orgData.users && orgData.users[user.uid]) {
-                                foundOrgId = orgId;
+                                foundOrgId = orgId; // CAPTURE THE ORG ID HERE
                                 foundUserData = orgData.users[user.uid];
                                 break;
                             }
@@ -107,13 +107,13 @@
                             if (foundUserData.status === 'Inactive') {
                                 alert("Account is inactive. Contact Admin.");
                             } else {
-                                // SUCCESS
+                                // SUCCESS - Explicitly storing orgId
                                 const sessionData = {
                                     uid: user.uid,
                                     user: foundUserData.name,
                                     email: user.email,
                                     role: foundUserData.role,
-                                    orgId: foundOrgId,
+                                    orgId: foundOrgId, // CRITICAL: This allows modules to find data
                                     assignedSite: foundUserData.assignedSite || 'GLOBAL'
                                 };
                                 sessionStorage.setItem('isoSession', JSON.stringify(sessionData));
@@ -132,7 +132,7 @@
                 setLoading(false);
             };
 
-            // --- SECURE SIGNUP ---
+            // --- SECURE SIGNUP LOGIC ---
             const handleSignup = async (e) => {
                 e.preventDefault();
                 if(formData.password !== formData.confirmPass) return alert("Passwords do not match.");
@@ -146,7 +146,7 @@
                     // 2. Create New Organization in Database
                     const orgsRef = window.fbMethods.ref(window.fbDb, 'organizations');
                     const newOrgRef = window.fbMethods.push(orgsRef);
-                    const orgId = newOrgRef.key;
+                    const orgId = newOrgRef.key; // CRITICAL: Capture the generated key
 
                     // 3. Prepare Data Payload (Using Auth UID as key)
                     const payload = {
@@ -179,7 +179,7 @@
                         user: formData.name,
                         email: formData.email,
                         role: 'Owner',
-                        orgId: orgId,
+                        orgId: orgId, // CRITICAL: Store it immediately
                         assignedSite: 'GLOBAL'
                     };
                     sessionStorage.setItem('isoSession', JSON.stringify(sessionData));
