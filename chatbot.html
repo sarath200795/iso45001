@@ -100,7 +100,7 @@
 
             const addUserMessage = (text) => setMessages(prev => [...prev, { sender: 'user', text }]);
 
-            // --- UNIVERSAL SWEEP FUNCTION ---
+            // --- FULL SYSTEM SWEEP FUNCTION ---
             const performSweep = async (query) => {
                 setIsTyping(true);
                 try {
@@ -119,27 +119,27 @@
                     // 1. INCIDENTS
                     if (val.incidents) {
                         Object.entries(val.incidents).forEach(([k, v]) => {
-                            if (v.description.toLowerCase().includes(q) || v.type.toLowerCase().includes(q) || v.id.toLowerCase().includes(q)) {
-                                results.push({ type: 'Incident', title: `${v.type}: ${v.description.substring(0,30)}...`, id: v.id, link: `incidents.html?site=${session.assignedSite}&highlight=${k}`, icon: 'fa-triangle-exclamation', color: 'text-orange-400' });
+                            if ((v.description && v.description.toLowerCase().includes(q)) || (v.type && v.type.toLowerCase().includes(q)) || (v.id && v.id.toLowerCase().includes(q))) {
+                                results.push({ type: 'Incident', title: `${v.type}: ${v.description ? v.description.substring(0,30) : ''}...`, id: v.id, link: `incidents.html?site=${session.assignedSite}`, icon: 'fa-triangle-exclamation', color: 'text-orange-400' });
                             }
                         });
                     }
 
-                    // 2. DOCUMENTS
+                    // 2. DOCUMENTS / STANDARDS
                     if (val.standards) {
                         Object.entries(val.standards).forEach(([k, v]) => {
-                            if (v.title.toLowerCase().includes(q) || v.category.toLowerCase().includes(q)) {
+                            if ((v.title && v.title.toLowerCase().includes(q)) || (v.category && v.category.toLowerCase().includes(q))) {
                                 results.push({ type: 'Document', title: v.title, id: `v${v.version}`, link: v.file, external: true, icon: 'fa-file-pdf', color: 'text-blue-400' });
                             }
                         });
                     }
 
-                    // 3. CAPA (Actions)
-                    if (val.incidents) { // Searching CAPA inside incidents
+                    // 3. CAPA (Inside Incidents)
+                    if (val.incidents) { 
                          Object.entries(val.incidents).forEach(([k, v]) => {
                             if(v.capa) {
                                 v.capa.forEach(c => {
-                                    if(c.action.toLowerCase().includes(q) || c.assignedTo.toLowerCase().includes(q)) {
+                                    if((c.action && c.action.toLowerCase().includes(q)) || (c.assignedTo && c.assignedTo.toLowerCase().includes(q))) {
                                         results.push({ type: 'CAPA', title: c.action, id: c.status, link: `capa.html?site=${session.assignedSite}`, icon: 'fa-check-double', color: 'text-emerald-400' });
                                     }
                                 });
@@ -150,24 +150,79 @@
                     // 4. AUDITS
                     if (val.audits) {
                         Object.entries(val.audits).forEach(([k, v]) => {
-                            if (v.title.toLowerCase().includes(q) || v.auditor.toLowerCase().includes(q)) {
+                            if ((v.title && v.title.toLowerCase().includes(q)) || (v.auditor && v.auditor.toLowerCase().includes(q))) {
                                 results.push({ type: 'Audit', title: v.title, id: v.date, link: `audit.html?site=${session.assignedSite}`, icon: 'fa-clipboard-check', color: 'text-purple-400' });
                             }
                         });
                     }
-                     // 5. TRAINING
-                     if (val.trainingRecords) {
+                    
+                    // 5. TRAINING
+                    if (val.trainingRecords) {
                         Object.entries(val.trainingRecords).forEach(([k, v]) => {
-                            if (v.topic.toLowerCase().includes(q) || v.user.toLowerCase().includes(q)) {
+                            if ((v.topic && v.topic.toLowerCase().includes(q)) || (v.user && v.user.toLowerCase().includes(q))) {
                                 results.push({ type: 'Training', title: `${v.topic} - ${v.user}`, id: v.date, link: `training.html?site=${session.assignedSite}`, icon: 'fa-graduation-cap', color: 'text-yellow-400' });
                             }
                         });
                     }
 
+                    // 6. RISK ASSESSMENT (HIRA)
+                    if (val.riskAssessment) {
+                        Object.entries(val.riskAssessment).forEach(([k, v]) => {
+                            if ((v.activity && v.activity.toLowerCase().includes(q)) || (v.hazard && v.hazard.toLowerCase().includes(q))) {
+                                results.push({ type: 'Risk', title: v.activity, id: `Rating: ${v.riskRating}`, link: `risk.html?site=${session.assignedSite}`, icon: 'fa-shield-virus', color: 'text-red-400' });
+                            }
+                        });
+                    }
+
+                    // 7. CONSULTATION (Meetings)
+                    if (val.consultation) {
+                        Object.entries(val.consultation).forEach(([k, v]) => {
+                            if ((v.title && v.title.toLowerCase().includes(q)) || (v.minutes && v.minutes.toLowerCase().includes(q))) {
+                                results.push({ type: 'Consultation', title: v.title, id: v.date, link: `consultation.html?site=${session.assignedSite}`, icon: 'fa-comments', color: 'text-teal-400' });
+                            }
+                        });
+                    }
+
+                    // 8. IMPROVEMENT (Kaizen)
+                    if (val.improvement) {
+                        Object.entries(val.improvement).forEach(([k, v]) => {
+                            if ((v.title && v.title.toLowerCase().includes(q)) || (v.description && v.description.toLowerCase().includes(q))) {
+                                results.push({ type: 'Improvement', title: v.title, id: v.status, link: `improvement.html?site=${session.assignedSite}`, icon: 'fa-chart-line', color: 'text-blue-500' });
+                            }
+                        });
+                    }
+
+                    // 9. MOCK DRILLS
+                    if (val.mockDrills) {
+                        Object.entries(val.mockDrills).forEach(([k, v]) => {
+                            if ((v.scenario && v.scenario.toLowerCase().includes(q)) || (v.location && v.location.toLowerCase().includes(q))) {
+                                results.push({ type: 'Mock Drill', title: v.scenario, id: v.date, link: `mock-drill.html?site=${session.assignedSite}`, icon: 'fa-person-running', color: 'text-pink-400' });
+                            }
+                        });
+                    }
+
+                    // 10. USERS
+                    if (val.users) {
+                        Object.values(val.users).forEach(u => {
+                            if ((u.name && u.name.toLowerCase().includes(q)) || (u.email && u.email.toLowerCase().includes(q))) {
+                                results.push({ type: 'User', title: u.name, id: u.role, link: `users.html`, icon: 'fa-user', color: 'text-slate-300' });
+                            }
+                        });
+                    }
+
+                    // 11. SITES
+                    if (val.sites) {
+                        Object.values(val.sites).forEach(s => {
+                            if ((s.name && s.name.toLowerCase().includes(q)) || (s.location && s.location.toLowerCase().includes(q))) {
+                                results.push({ type: 'Site', title: s.name, id: s.code, link: `sites.html`, icon: 'fa-building', color: 'text-slate-300' });
+                            }
+                        });
+                    }
+
                     if (results.length > 0) {
-                        addBotMessage(`I found ${results.length} matches across the system:`, null, 'search_results', results.slice(0, 10)); // Limit to 10
+                        addBotMessage(`I found ${results.length} matches across the system:`, null, 'search_results', results.slice(0, 15)); // Limit display
                     } else {
-                        addBotMessage(`I searched Incidents, Docs, Training, and Audits but found nothing for "${query}".`);
+                        addBotMessage(`I searched the entire database (Incidents, Docs, Training, Risk, Audits, etc.) but found nothing for "${query}".`);
                     }
 
                 } catch (e) {
@@ -177,7 +232,7 @@
             };
 
             const findMyTasks = async () => {
-                performSweep(session.user); // Simple heuristic: search for own name
+                performSweep(session.user);
             };
 
             // --- MAIN LOGIC ---
@@ -186,17 +241,16 @@
                 if(text) addUserMessage(text);
                 const val = payload || text;
 
-                // GLOBAL KEYWORD INTERCEPTOR (If user types "audit" while in IDLE)
+                // GLOBAL KEYWORD INTERCEPTOR
                 if (state === SCENARIOS.IDLE && !payload) {
                     const lower = val.toLowerCase();
                     if (lower.includes('audit')) { addBotMessage("Opening Audit Module...", [{ label: 'Go to Audits', value: 'NAV_AUDIT' }]); return; }
                     if (lower.includes('risk')) { addBotMessage("Opening Risk Assessment...", [{ label: 'Go to Risk', value: 'NAV_RISK' }]); return; }
                     if (lower.includes('search') || lower.includes('find') || lower.includes('show')) {
-                        // Extract query
                         const query = lower.replace(/search|find|show|me/g, '').trim();
                         if(query) { performSweep(query); return; }
                     }
-                    if (lower.length > 3) { performSweep(lower); return; } // Default to search if it's a specific word
+                    if (lower.length > 2) { performSweep(lower); return; } 
                 }
 
                 switch(state) {
@@ -214,16 +268,14 @@
                         } else if (val === 'SHOW_TASKS') {
                             findMyTasks();
                         } else if (val.startsWith('NAV_')) {
-                            // Navigation Handler
                             const mod = val.split('_')[1].toLowerCase();
                             window.location.href = `${mod}.html?site=${session.assignedSite}`;
                         } else {
-                            performSweep(val); // Default fallback
+                            performSweep(val); 
                         }
                         break;
 
-                    // ... (Keep existing Incident/Training Flows logic here) ...
-                     case SCENARIOS.INCIDENT_TYPE:
+                    case SCENARIOS.INCIDENT_TYPE:
                         setDraft(prev => ({ ...prev, type: val })); setState(SCENARIOS.INCIDENT_DESC); addBotMessage("Describe it:"); break;
                     case SCENARIOS.INCIDENT_DESC:
                         setDraft(prev => ({ ...prev, description: val })); setState(SCENARIOS.INCIDENT_SEVERITY); addBotMessage("Severity?", [{ label: 'Minor', value: 'Level A' }, { label: 'Major', value: 'Level D' }]); break;
@@ -275,11 +327,11 @@
                                                         </div>
                                                         <span className="text-[9px] text-slate-500">{res.id}</span>
                                                     </div>
-                                                    <div className="text-xs font-bold text-white mb-2">{res.title}</div>
+                                                    <div className="text-xs font-bold text-white mb-2 truncate" title={res.title}>{res.title}</div>
                                                     {res.external ? (
                                                         <a href={res.link} download target="_blank" className="block text-center bg-slate-700 hover:bg-slate-600 text-xs py-1.5 rounded text-white font-bold transition">Download File</a>
                                                     ) : (
-                                                        <a href={res.link} className="block text-center bg-indigo-600 hover:bg-indigo-500 text-xs py-1.5 rounded text-white font-bold transition">Go to Record</a>
+                                                        <a href={res.link} className="block text-center bg-indigo-600 hover:bg-indigo-500 text-xs py-1.5 rounded text-white font-bold transition">Open Record</a>
                                                     )}
                                                 </div>
                                             ))}
