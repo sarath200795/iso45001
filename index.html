@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Hub | ISO 45001 OHSMS</title>
+    <title>Enterprise Hub | Login</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -41,12 +41,12 @@
     <div id="root" class="z-10 w-full max-w-md p-4"></div>
 
     <script type="module">
-        // Import Firebase Auth
+        // Import Firebase Auth & Database
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getDatabase, ref, set, push, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // CONFIGURATION (Replace with your actual keys)
+        // CONFIGURATION (PASTE YOUR KEYS HERE)
         const firebaseConfig = { 
             apiKey: "AIzaSyAzfoxuzRbmyrhGChfTEWB05xvyNRmvK3k", 
             authDomain: "ohsms-fa534.firebaseapp.com", 
@@ -58,12 +58,11 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getDatabase(app);
         
-        // Expose to window for React
-        window.fbAuth = { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword };
-        window.fbDb = { db, ref, set, push, get, child };
+        // Expose Firebase services to the window object for React to access
+        window.fbAuth = getAuth(app);
+        window.fbDb = getDatabase(app);
+        window.fbMethods = { signInWithEmailAndPassword, createUserWithEmailAndPassword, ref, set, push, get, child };
     </script>
 
     <script type="text/babel">
@@ -76,30 +75,26 @@
 
             const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-            // --- SECURE LOGIN LOGIC ---
+            // --- SECURE LOGIN ---
             const handleLogin = async (e) => {
                 e.preventDefault();
                 setLoading(true);
 
                 try {
                     // 1. Authenticate with Firebase Auth
-                    const userCredential = await window.fbAuth.signInWithEmailAndPassword(window.fbAuth.auth, formData.email, formData.password);
+                    const userCredential = await window.fbMethods.signInWithEmailAndPassword(window.fbAuth, formData.email, formData.password);
                     const user = userCredential.user;
 
                     // 2. Find User's Organization in Database
-                    // Note: Since we don't know the Org ID yet, we have to look it up.
-                    // In a real app, you'd store orgId in the user's Auth Profile or a separate lookup table.
-                    // For this structure, we iterate to find where this UID exists.
-                    
-                    const dbRef = window.fbDb.ref(window.fbDb.db);
-                    const snapshot = await window.fbDb.get(window.fbDb.child(dbRef, `organizations`));
+                    const dbRef = window.fbMethods.ref(window.fbDb);
+                    const snapshot = await window.fbMethods.get(window.fbMethods.child(dbRef, `organizations`));
 
                     if (snapshot.exists()) {
                         const orgs = snapshot.val();
                         let foundOrgId = null;
                         let foundUserData = null;
 
-                        // Secure scan: find the org where this User UID exists
+                        // Scan: find the org where this Auth UID exists
                         for (const [orgId, orgData] of Object.entries(orgs)) {
                             if (orgData.users && orgData.users[user.uid]) {
                                 foundOrgId = orgId;
@@ -125,10 +120,10 @@
                                 window.location.href = "home.html";
                             }
                         } else {
-                            alert("User record not found in database.");
+                            alert("Login successful, but user record missing in database.");
                         }
                     } else {
-                        alert("No organizations found.");
+                        alert("No organizations found. Please register.");
                     }
                 } catch (error) {
                     console.error(error);
@@ -137,23 +132,23 @@
                 setLoading(false);
             };
 
-            // --- SECURE SIGNUP LOGIC ---
+            // --- SECURE SIGNUP ---
             const handleSignup = async (e) => {
                 e.preventDefault();
                 if(formData.password !== formData.confirmPass) return alert("Passwords do not match.");
                 
                 setLoading(true);
                 try {
-                    // 1. Create User in Firebase Auth
-                    const userCredential = await window.fbAuth.createUserWithEmailAndPassword(window.fbAuth.auth, formData.email, formData.password);
+                    // 1. Create User in Firebase Auth System
+                    const userCredential = await window.fbMethods.createUserWithEmailAndPassword(window.fbAuth, formData.email, formData.password);
                     const user = userCredential.user;
                     
-                    // 2. Generate New Org ID
-                    const newOrgRef = window.fbDb.push(window.fbDb.ref(window.fbDb.db, 'organizations'));
+                    // 2. Create New Organization in Database
+                    const orgsRef = window.fbMethods.ref(window.fbDb, 'organizations');
+                    const newOrgRef = window.fbMethods.push(orgsRef);
                     const orgId = newOrgRef.key;
 
                     // 3. Prepare Data Payload (Using Auth UID as key)
-                    // This matches your security rule: .child($orgId).child('users').child(auth.uid)
                     const payload = {
                         details: {
                             name: formData.orgName,
@@ -161,7 +156,7 @@
                             ownerId: user.uid
                         },
                         users: {
-                            [user.uid]: { // KEY IS THE UID
+                            [user.uid]: { // THIS UID MATCHES AUTH
                                 id: user.uid,
                                 name: formData.name,
                                 email: formData.email,
@@ -175,16 +170,10 @@
                         }
                     };
 
-                    // 4. Write to Realtime Database
-                    // This write will succeed because the user is now authenticated as user.uid
-                    // and your rules allow writing if you are creating the org structure? 
-                    // WAIT: Your rules restrict writing to existing orgs. Creating a NEW org needs root write access.
-                    // Ensure your rules allow creating new nodes at 'organizations' level or handle this via Admin SDK in real prod.
-                    // For now, assuming you can write to 'organizations' to create new ones.
-                    
-                    await window.fbDb.set(newOrgRef, payload);
+                    // 4. Save to Database
+                    await window.fbMethods.set(newOrgRef, payload);
 
-                    // 5. Store Session
+                    // 5. Store Session & Redirect
                     const sessionData = {
                         uid: user.uid,
                         user: formData.name,
@@ -200,7 +189,7 @@
 
                 } catch (error) {
                     console.error(error);
-                    alert("Error creating account: " + error.message);
+                    alert("Registration Failed: " + error.message);
                 }
                 setLoading(false);
             };
@@ -217,69 +206,30 @@
 
                     <div className="glass-panel p-8 rounded-2xl shadow-2xl">
                         
-                        {/* TOGGLE TABS */}
                         <div className="flex bg-slate-900/50 p-1 rounded-lg mb-6 border border-slate-700/50">
-                            <button 
-                                onClick={() => setIsLogin(true)} 
-                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${isLogin ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                            >Login</button>
-                            <button 
-                                onClick={() => setIsLogin(false)} 
-                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${!isLogin ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                            >Register Org</button>
+                            <button onClick={() => setIsLogin(true)} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${isLogin ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Login</button>
+                            <button onClick={() => setIsLogin(false)} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${!isLogin ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Register Org</button>
                         </div>
 
-                        {/* LOGIN FORM */}
                         {isLogin ? (
                             <form onSubmit={handleLogin} className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase ml-1">Email</label>
-                                    <input type="email" name="email" required onChange={handleChange} placeholder="user@company.com" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase ml-1">Password</label>
-                                    <input type="password" name="password" required onChange={handleChange} placeholder="••••••••" />
-                                </div>
-                                <button type="submit" disabled={loading} className="btn-primary mt-4">
-                                    {loading ? 'Verifying...' : 'Secure Access'}
-                                </button>
+                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Email</label><input type="email" name="email" required onChange={handleChange} placeholder="user@company.com" /></div>
+                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Password</label><input type="password" name="password" required onChange={handleChange} placeholder="••••••••" /></div>
+                                <button type="submit" disabled={loading} className="btn-primary mt-4">{loading ? 'Verifying...' : 'Secure Access'}</button>
                             </form>
                         ) : (
-                            /* SIGNUP FORM */
                             <form onSubmit={handleSignup} className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase ml-1">Organization Name</label>
-                                    <input type="text" name="orgName" required onChange={handleChange} placeholder="e.g. Acme Corp" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase ml-1">Admin Name</label>
-                                    <input type="text" name="name" required onChange={handleChange} placeholder="Your Full Name" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase ml-1">Email</label>
-                                    <input type="email" name="email" required onChange={handleChange} placeholder="admin@company.com" />
-                                </div>
+                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Organization Name</label><input type="text" name="orgName" required onChange={handleChange} placeholder="e.g. Acme Corp" /></div>
+                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Admin Name</label><input type="text" name="name" required onChange={handleChange} placeholder="Your Full Name" /></div>
+                                <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Email</label><input type="email" name="email" required onChange={handleChange} placeholder="admin@company.com" /></div>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Password</label>
-                                        <input type="password" name="password" required onChange={handleChange} placeholder="••••••" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Confirm</label>
-                                        <input type="password" name="confirmPass" required onChange={handleChange} placeholder="••••••" />
-                                    </div>
+                                    <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Password</label><input type="password" name="password" required onChange={handleChange} placeholder="••••••" /></div>
+                                    <div><label className="text-xs font-bold text-slate-400 uppercase ml-1">Confirm</label><input type="password" name="confirmPass" required onChange={handleChange} placeholder="••••••" /></div>
                                 </div>
-                                <button type="submit" disabled={loading} className="btn-primary mt-4">
-                                    {loading ? 'Initializing Environment...' : 'Create Secure Org'}
-                                </button>
+                                <button type="submit" disabled={loading} className="btn-primary mt-4">{loading ? 'Initializing...' : 'Create Secure Org'}</button>
                             </form>
                         )}
-
-                        <div className="mt-6 text-center">
-                            <p className="text-[10px] text-slate-500">
-                                Protected by Firebase Auth & Rules.
-                            </p>
-                        </div>
+                        <div className="mt-6 text-center"><p className="text-[10px] text-slate-500">Protected by Google Firebase Auth.</p></div>
                     </div>
                 </div>
             );
